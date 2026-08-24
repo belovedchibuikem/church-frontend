@@ -1,22 +1,31 @@
+import { ministryScreens } from './ministry-routes.ts';
+
 export type AdminScreenKind =
   | 'login' | 'mfa' | 'dashboard' | 'scope-grid' | 'command' | 'feed'
   | 'tasks' | 'kpi' | 'table' | 'detail' | 'wizard' | 'profile'
   | 'permissions' | 'matrix' | 'form' | 'tree' | 'map' | 'quick-actions'
-  | 'forbidden' | 'impersonation';
+  | 'forbidden' | 'impersonation' | 'ministry-dashboard' | 'workflow'
+  | 'activation' | 'operations' | 'journey' | 'approval' | 'settings'
+  | 'finance' | 'reports' | 'restricted' | 'escalation';
 
 export type Metric = { label: string; value: string; trend?: string };
 export type Row = Record<string, string>;
 
 export type AdminScreen = {
   id: string;
-  batch: 'A' | 'B' | 'C';
+  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
   route: string;
   title: string;
   subtitle: string;
   kind: AdminScreenKind;
   permission: string | 'public';
   scope: 'global' | 'assigned' | 'self';
-  nav: 'dashboard' | 'scope' | 'command' | 'approvals' | 'alerts' | 'notifications' | 'activity' | 'audit' | 'tasks' | 'reports' | 'users' | 'access' | 'geography' | 'settings';
+  nav: 'dashboard' | 'scope' | 'command' | 'approvals' | 'alerts' | 'notifications' | 'activity' | 'audit' | 'tasks' | 'reports' | 'users' | 'access' | 'geography' | 'settings'
+    | 'applications' | 'home-churches' | 'leaders' | 'members' | 'attendance'
+    | 'activities' | 'needs' | 'finance' | 'churches' | 'departments'
+    | 'small-groups' | 'evangelism' | 'people' | 'first-timers' | 'follow-up'
+    | 'converts' | 'discipleship' | 'workers' | 'membership' | 'ministry-history'
+    | 'prayer' | 'counselling' | 'testimonies' | 'safeguarding';
   action?: string;
   tabs?: string[];
   metrics?: Metric[];
@@ -141,6 +150,7 @@ export const adminScreens: AdminScreen[] = [
   { id: 'C-14', batch: 'C', route: '/admin/geography/home-church-hierarchy', title: 'Home Church Hierarchy', subtitle: 'Structure of home churches under main churches.', kind: 'tree', permission: 'home_church.hierarchy.view', scope: 'assigned', nav: 'geography', action: 'Expand All', items: ['The Covenant Place (Main Church)', 'Home Churches', 'Victory Home Church', 'Hope Home Church', 'Blessed Home Church', 'Faith Home Church', 'Love Home Church'] },
   { id: 'C-15', batch: 'C', route: '/admin/geography/reports', title: 'Territory Reports', subtitle: 'Performance insights by geography.', kind: 'kpi', permission: 'reports.territory.view', scope: 'assigned', nav: 'reports', action: 'Export', metrics: [{ label: 'Churches', value: '45', trend: '+3' }, { label: 'Home Churches', value: '36', trend: '+2' }, { label: 'Members', value: '6,421', trend: '+245' }, { label: 'Leaders', value: '512', trend: '+18' }], items: ['Ikeja Ward A — 1,345', 'Ikeja Ward B — 1,212', 'Ikeja Ward C — 986', 'Ikeja Ward D — 842', 'Ikeja Ward E — 650'] },
   { id: 'C-16', batch: 'C', route: '/admin/geography/settings', title: 'Geography Settings', subtitle: 'Configure global geography settings.', kind: 'form', permission: 'organization.settings.update', scope: 'global', nav: 'settings', tabs: ['General', 'Levels', 'Terminology', 'Import / Export', 'Advanced'], action: 'Save Settings' },
+  ...ministryScreens,
 ];
 
 export function normalizeAdminRoute(slug?: string[]): string {

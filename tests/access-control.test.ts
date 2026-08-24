@@ -6,6 +6,8 @@ import { getAdminScreen } from '../lib/admin-routes.ts';
 const dashboard = getAdminScreen('/admin')!;
 const countryReport = getAdminScreen('/admin/reports/country-performance')!;
 const publicLogin = getAdminScreen('/admin/login')!;
+const homeChurchStatus = getAdminScreen('/admin/home-churches/grace-home-church/status')!;
+const restrictedCase = getAdminScreen('/admin/people/counselling/case-c-2024-0012')!;
 
 const context = (overrides: Partial<AccessContext> = {}): AccessContext => ({
   authenticated: true,
@@ -41,4 +43,14 @@ test('global pages require global scope', () => {
 
 test('wildcard capability and global scope allow authorized route', () => {
   assert.deepEqual(evaluateAccess(countryReport, context({ permissions: ['*'], scopes: ['global'] })), { allowed: true });
+});
+
+test('home church status mutations require their explicit permission', () => {
+  assert.deepEqual(evaluateAccess(homeChurchStatus, context({ permissions: ['home_church.view'] })), { allowed: false, reason: 'permission-denied' });
+  assert.deepEqual(evaluateAccess(homeChurchStatus, context({ permissions: ['home_church.status.update'] }), 'country:nigeria'), { allowed: true });
+});
+
+test('restricted counselling records remain permission and scope guarded', () => {
+  assert.deepEqual(evaluateAccess(restrictedCase, context({ permissions: ['counselling.case.view'] })), { allowed: false, reason: 'permission-denied' });
+  assert.deepEqual(evaluateAccess(restrictedCase, context({ permissions: ['counselling.case.restricted'] }), 'country:ghana'), { allowed: false, reason: 'scope-denied' });
 });

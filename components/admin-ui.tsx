@@ -24,6 +24,31 @@ const navByBatch = {
     ['geography', '◊', 'Church Hierarchy', '/admin/geography/church-hierarchy'], ['geography', '◊', 'Home Church Hierarchy', '/admin/geography/home-church-hierarchy'],
     ['reports', '▣', 'Reports', '/admin/geography/reports'], ['settings', '◇', 'Settings', '/admin/geography/settings'],
   ],
+  D: [
+    ['dashboard', '⌂', 'Dashboard', '/admin/home-churches/dashboard'], ['applications', '▤', 'Applications', '/admin/home-churches/applications'],
+    ['home-churches', '▣', 'Home Churches', '/admin/home-churches'], ['leaders', '♙', 'Leaders', '/admin/home-churches/grace-home-church'],
+    ['members', '◉', 'Members', '/admin/home-churches/grace-home-church/members'], ['attendance', '▦', 'Attendance', '/admin/home-churches/grace-home-church/attendance'],
+    ['activities', '◇', 'Activities', '/admin/home-churches/grace-home-church/activities'], ['needs', '□', 'Needs', '/admin/home-churches/grace-home-church/needs'],
+    ['finance', '₦', 'Finance', '/admin/home-churches/grace-home-church/finance'], ['reports', '▤', 'Reports', '/admin/home-churches/grace-home-church/finance'],
+    ['settings', '⚙', 'Settings', '/admin/home-churches/grace-home-church/status'],
+  ],
+  E: [
+    ['dashboard', '⌂', 'Dashboard', '/admin/church/dashboard'], ['churches', '▣', 'Churches', '/admin/churches'],
+    ['members', '◉', 'Members', '/admin/churches/the-covenant-place/members'], ['departments', '▦', 'Departments', '/admin/churches/the-covenant-place/departments'],
+    ['small-groups', '◎', 'Small Groups', '/admin/churches/the-covenant-place/small-groups'], ['evangelism', '◇', 'Evangelism', '/admin/churches/the-covenant-place/evangelism'],
+    ['finance', '₦', 'Finance', '/admin/churches/the-covenant-place/finance'], ['reports', '▤', 'Reports', '/admin/churches/the-covenant-place/reports'],
+    ['settings', '⚙', 'Settings', '/admin/churches/the-covenant-place/settings'],
+  ],
+  F: [
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '◉', 'People', '/admin/people'], ['first-timers', '◇', 'First Timers', '/admin/people/first-timers'],
+    ['follow-up', '↻', 'Follow-Up', '/admin/people/follow-up'], ['converts', '✓', 'Converts', '/admin/people/converts/mary-okafor'],
+    ['discipleship', '◎', 'Discipleship', '/admin/people/journeys/membership/john-emmanuel'], ['membership', '▦', 'Membership', '/admin/people/journeys/membership/john-emmanuel'],
+    ['workers', '♙', 'Workers', '/admin/people/journeys/worker/blessing-friday'], ['leaders', '♛', 'Leaders', '/admin/people/journeys/leadership/peter-okafor'],
+    ['ministry-history', '▤', 'Ministry History', '/admin/people/ministry-history'], ['prayer', '◇', 'Prayer', '/admin/people/prayer-requests/healing-for-my-mother/assign'],
+    ['needs', '□', 'Needs', '/admin/people/needs'], ['counselling', '◌', 'Counselling', '/admin/people/counselling'],
+    ['testimonies', '✦', 'Testimonies', '/admin/people/testimonies'], ['safeguarding', '!', 'Safeguarding', '/admin/people/safeguarding/escalation'],
+    ['reports', '▣', 'Reports', '/admin/reports/country-performance'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
+  ],
 } as const;
 
 function Brand({ dark = true }: { dark?: boolean }) {
@@ -49,7 +74,8 @@ function StatusBadge({ value }: { value: string }) {
 
 function PageHeader({ screen }: { screen: AdminScreen }) {
   const showNigeriaFlag = screen.id === 'C-03' || screen.id === 'C-11';
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && <Tabs tabs={screen.tabs} />}</>;
+  const showHeaderAction = !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind);
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
@@ -74,7 +100,8 @@ function SearchBar({ placeholder = 'Search by name, email, phone or ID...' }: { 
 
 function DataTable({ screen }: { screen: AdminScreen }) {
   const columns = screen.columns ?? [];
-  return <><MetricCards metrics={screen.metrics} /><div className="table-toolbar"><SearchBar placeholder={screen.batch === 'C' ? 'Search records...' : undefined} /></div><div className="card table-card"><table><thead><tr>{columns.map(column=><th key={column}>{column}</th>)}<th>Actions</th></tr></thead><tbody>{(screen.rows ?? []).map((row,index)=><tr key={index}>{columns.map(column=><td key={column}>{column === 'Status' || column === 'Growth' || column === 'Required' ? <StatusBadge value={row[column]} /> : <>{column === 'User' && <span className="mini-avatar">{row[column].split(' ').map(part=>part[0]).slice(0,2).join('')}</span>}{row[column]}</>}</td>)}<td className="actions-cell">⊙　⋯</td></tr>)}</tbody></table><div className="pagination"><span>Showing 1 to {(screen.rows ?? []).length} of {screen.metrics?.[0]?.value ?? (screen.rows ?? []).length} records</span><span>‹　<b>1</b>　2　3　›</span></div></div></>;
+  const ministryBatch = ['D','E','F'].includes(screen.batch);
+  return <><MetricCards metrics={screen.metrics} /><div className="table-toolbar"><SearchBar placeholder={screen.batch === 'C' ? 'Search records...' : undefined} /></div><div className="card table-card"><table><thead><tr>{columns.map(column=><th key={column}>{column}</th>)}<th>Actions</th></tr></thead><tbody>{(screen.rows ?? []).map((row,index)=><tr key={index}>{columns.map(column=><td key={column}>{column === 'Status' || column === 'Growth' || column === 'Required' ? <StatusBadge value={row[column]} /> : <>{['User','Name','Applicant Name','Home Church','Church Name'].includes(column) && <span className="mini-avatar">{row[column].split(' ').map(part=>part[0]).slice(0,2).join('')}</span>}{row[column]}</>}</td>)}<td className="actions-cell">{ministryBatch ? <button className="table-action">{screen.nav === 'applications' ? 'Review' : 'View'}</button> : <>⊙　⋯</>}</td></tr>)}</tbody></table><div className="pagination"><span>Showing 1 to {(screen.rows ?? []).length} of {screen.metrics?.[0]?.value ?? (screen.rows ?? []).length} records</span><span>‹　<b>1</b>　2　3　›</span></div></div></>;
 }
 
 function FeedView({ screen }: { screen: AdminScreen }) {
@@ -102,6 +129,16 @@ function KpiView({ screen }: { screen: AdminScreen }) {
 
 function DetailView({ screen }: { screen: AdminScreen }) {
   const entries = Object.entries(screen.details ?? {});
+  if (['D','E','F'].includes(screen.batch)) {
+    const personDetail = screen.batch === 'F';
+    return <div className={`ministry-detail ${personDetail ? 'person-detail' : ''}`}>
+      {personDetail && <article className="card person-summary"><div className="portrait">{screen.title.split(' ').map(part=>part[0]).slice(0,2).join('')}</div><div><h2>{screen.title}</h2><StatusBadge value={screen.subtitle}/><p>☎ +234 810 123 4487　 ✉ {screen.title.toLowerCase().replaceAll(' ', '.')}@email.com</p></div></article>}
+      <article className="card details-card ministry-information"><h2 className="card-title">{personDetail ? 'Personal Information' : 'Information'}</h2><dl>{entries.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article>
+      <article className="card details-card ministry-about"><h2 className="card-title">{screen.nav === 'applications' ? 'About Us' : personDetail ? 'First Visit Information' : 'About Us'}</h2><p>{screen.nav === 'applications' ? 'We are a group of believers meeting at home for fellowship, worship, and the study of God’s Word. Our heart is to reach our neighbors and make disciples of Jesus Christ.' : personDetail ? 'A complete record of first contact, interests, spiritual decisions and next steps.' : 'A growing community committed to fellowship, discipleship, service and meaningful impact.'}</p>{(screen.items ?? []).map(item=><div className="document-row" key={item}><span>▧　{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1] ?? 'View'}</strong></div>)}</article>
+      {!personDetail && <article className="card ministry-stat-strip">{(screen.items ?? ['Total Members — 98','Leaders — 6','Small Groups — 3']).slice(0,4).map(item=><div key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</article>}
+      {screen.action && <button className="primary-button ministry-detail-action">{screen.action}</button>}
+    </div>;
+  }
   return <div className="detail-grid"><article className="card identity-card"><div className="portrait">{screen.title.split(' ').map(part=>part[0]).slice(0,2).join('')}</div><h2>{screen.title}</h2><StatusBadge value="Active" /><button className="ghost-button">Change Photo</button></article><article className="card details-card"><h2 className="card-title">{screen.batch === 'C' ? 'Information' : 'Details'}</h2><dl>{entries.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card details-card"><h2 className="card-title">{screen.batch === 'C' ? 'Statistics' : 'Roles'}</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1] ?? 'Member'}</strong></div>)}</article><ChartCard title="Growth (Last 12 Months)" /></div>;
 }
 
@@ -111,7 +148,8 @@ function FormFields() {
 }
 
 function WizardView({ screen }: { screen: AdminScreen }) {
-  return <><div className="stepper">{(screen.tabs ?? []).map((step,index)=><div className={`step ${index===0?'active':''}`} key={step}><span>{index+1}</span><strong>{step}</strong></div>)}</div><div className="card form-card"><h2 className="section-title">{screen.title.includes('Role')?'Role Information':'Personal Information'}</h2><FormFields /><div className="form-footer"><button className="ghost-button">Cancel</button><button className="primary-button">{screen.action}</button></div></div></>;
+  const churchFields = ['Church Name','Short Name','Church Type','Denomination (Optional)','Established Date','Region','Administrative Level','Status'];
+  return <><div className="stepper">{(screen.tabs ?? []).map((step,index)=><div className={`step ${index===0?'active':''}`} key={step}><span>{index+1}</span><strong>{step}</strong></div>)}</div><div className="card form-card"><h2 className="section-title">{screen.batch === 'E' ? 'Basic Information' : screen.title.includes('Role')?'Role Information':'Personal Information'}</h2>{screen.batch === 'E' ? <div className="form-grid">{churchFields.map((field,index)=><label key={field}><span>{field}{index<1?' *':''}</span>{index>1?<select defaultValue=""><option value="" disabled>Select {field}</option><option>Active</option><option>Nigeria</option></select>:<input placeholder={`Enter ${field.toLowerCase()}`} />}</label>)}</div> : <FormFields />}<div className="form-footer"><button className="ghost-button">Cancel</button><button className="primary-button">{screen.action}</button></div></div></>;
 }
 
 function ProfileView({ screen }: { screen: AdminScreen }) {
@@ -138,6 +176,59 @@ function TreeView({ screen }: { screen: AdminScreen }) {
 
 function MapView({ screen }: { screen: AdminScreen }) {
   return <><div className="map-filters"><button>All Countries⌄</button><button>All Levels⌄</button><button>All Status⌄</button><span><i className="high"/>High Activity</span><span><i/>Medium Activity</span><span><i className="low"/>Low Activity</span></div><div className={`card map-card ${screen.details?'location-map':''}`}><Image src={screen.details?'/assets/ikeja-map.png':'/assets/world-map.png'} width={1200} height={680} unoptimized alt={screen.details?'Map of Ikeja Ward A':'World activity map'} />{screen.details&&<aside className="map-info"><h2>Location Information</h2><dl>{Object.entries(screen.details).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></aside>}</div></>;
+}
+
+function DonutVisual({ value = '726', label = 'Average' }: { value?: string; label?: string }) {
+  return <div className="donut-wrap"><div className="donut-chart"><div><strong>{value}</strong><span>{label}</span></div></div><ul><li><i/>Adults <b>64%</b></li><li><i/>Youth <b>21%</b></li><li><i/>Children <b>15%</b></li></ul></div>;
+}
+
+function MinistryDashboardView({ screen }: { screen: AdminScreen }) {
+  return <><MetricCards metrics={screen.metrics}/><div className="ministry-dashboard-grid"><ChartCard title={screen.batch === 'D' ? 'Home Churches Growth (6 Months)' : 'Membership Growth'} /><article className="card dashboard-donut"><h2 className="card-title">{screen.batch === 'D' ? 'Application Status' : 'Attendance Overview'}</h2><DonutVisual value={screen.batch === 'D' ? '24' : '726'} label={screen.batch === 'D' ? 'Total' : 'Average'}/></article><article className="card compact-list"><h2 className="card-title">Quick Actions</h2>{(screen.items ?? []).slice(0,4).map((item,index)=><button key={item}><span>{['▣','▦','◇','▤'][index]}</span>{item}</button>)}</article><article className="card compact-list"><h2 className="card-title">Recent Activities</h2>{['New member added','Attendance recorded','Application reviewed','First timer registered'].map((item,index)=><div className="activity-row" key={item}><span>●</span><b>{item}</b><time>{index+1}h ago</time></div>)}</article></div></>;
+}
+
+function WorkflowView({ screen }: { screen: AdminScreen }) {
+  const decision = screen.details?.Decision;
+  return <div className="workflow-layout"><aside className="workflow-steps">{(screen.tabs ?? []).map((step,index)=><div className={`${index === (decision ? 2 : 0) ? 'active' : ''}`} key={step}><span>{index+1}</span><b>{step}</b></div>)}</aside><article className="card workflow-card">{decision ? <><h2>Decision</h2><div className="decision-box danger"><span>⊖</span><div><strong>{decision}</strong><p>This application does not meet the requirements.</p></div></div><div className="workflow-form">{Object.entries(screen.details ?? {}).filter(([key])=>key!=='Decision').map(([key,value])=><label key={key}><span>{key}</span>{key === 'Comments' ? <textarea defaultValue={value}/> : key === 'Notify Applicant' ? <input type="checkbox" defaultChecked/> : <select defaultValue={value}><option>{value}</option></select>}</label>)}</div></> : <><h2>Review Checklist</h2><div className="checklist">{(screen.items ?? []).map((item,index)=><div key={item}><span>{item.split(' — ')[0]}</span><StatusBadge value={item.split(' — ')[1]}/>{index>4&&<i/>}</div>)}</div><label className="comment-label"><span>Comments</span><textarea placeholder="Enter review comments..."/></label></>}<div className="form-footer"><button className="ghost-button">Back</button><button className={decision ? 'danger-button' : 'primary-button'}>{screen.action}</button></div></article></div>;
+}
+
+function ActivationView({ screen }: { screen: AdminScreen }) {
+  return <div className="card activation-card"><div className="approval-hero"><span>✓</span><h2>Application Approved!</h2><p>The home church has been approved. Activate their ID and grant access.</p></div><dl>{Object.entries(screen.details ?? {}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key === 'Access Status' ? <StatusBadge value={value}/> : value}</dd></div>)}</dl><button className="primary-button">{screen.action}</button></div>;
+}
+
+function OperationsView({ screen }: { screen: AdminScreen }) {
+  const activityMode = screen.id === 'D-11';
+  return <><MetricCards metrics={screen.metrics}/>{activityMode ? <div className="card activity-stack">{(screen.items ?? []).map((item,index)=>{const parts=item.split(' — ');return <article key={item}><time><b>{['May 25','May 19','May 12','May 5','Apr 28'][index]}</b></time><div><strong>{parts[0]}</strong><span>{parts[1]}</span></div><b>♙ {parts[2]}</b><StatusBadge value="Completed"/></article>})}<button className="ghost-button">View all activities</button></div> : <div className="operations-grid"><ChartCard title="Attendance Trend"/><article className="card dashboard-donut"><h2 className="card-title">Attendance by Service</h2><DonutVisual value={screen.id === 'D-10' ? '22' : '726'} label="Total"/></article><article className="card list-card operation-ranking"><h2 className="card-title">Top Services by Attendance</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</article></div>}</>;
+}
+
+function JourneyView({ screen }: { screen: AdminScreen }) {
+  const details = screen.details ?? {};
+  return <><div className="journey-rail">{(screen.items ?? []).map((item,index)=><div className={index<2?'complete':index===2?'active':''} key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b></div>)}</div><article className="card journey-card"><header><div className="portrait">{details.Name?.split(' ').map(part=>part[0]).slice(0,2).join('')}</div><div><h2>{details.Name}</h2><p>Current {details.Stage}</p></div><strong>{details.Progress}</strong></header><div className="progress-track"><i style={{width:details.Progress}}/></div><div className="journey-list">{(screen.items ?? []).map((item,index)=><div key={item}><span className={index<2?'done':index===2?'doing':''}>{index<2?'✓':'●'}</span><b>{item.split(' — ')[0]}</b><StatusBadge value={item.split(' — ')[1]}/></div>)}</div><button className="primary-button">View Journey Details</button></article></>;
+}
+
+function ApprovalView({ screen }: { screen: AdminScreen }) {
+  const entries = Object.entries(screen.details ?? {});
+  return <div className="approval-grid"><article className="card approval-details"><h2>{screen.title.includes('Prayer') ? 'Request' : 'Need Details'}</h2>{entries.slice(0,Math.ceil(entries.length/2)).map(([key,value])=><div key={key}><span>{key}</span><strong>{value}</strong></div>)}</article><article className="card approval-review"><h2>{screen.title.includes('Prayer') ? 'Assign To' : 'Review'}</h2>{entries.slice(Math.ceil(entries.length/2)).map(([key,value])=><label key={key}><span>{key}</span>{/Details|Notes/.test(key)?<textarea defaultValue={value}/>:<div className="token-input"><b>{value}</b></div>}</label>)}<div className="form-footer"><button className="danger-button">Reject</button><button className="primary-button">{screen.action}</button></div></article></div>;
+}
+
+function SettingsView({ screen }: { screen: AdminScreen }) {
+  const destructive = screen.id === 'D-14';
+  return <div className="card settings-card ministry-settings"><div className="form-grid">{Object.entries(screen.details ?? {}).map(([key,value],index)=><label className={index>2?'full':''} key={key}><span>{key}</span>{/Notes/.test(key)?<textarea defaultValue={value}/>:key.includes('Allow')||key.includes('Enable')||key.includes('Auto')?<span className="setting-toggle"><input type="checkbox" defaultChecked={value==='Yes'}/><i/></span>:<select defaultValue={value}><option>{value}</option></select>}</label>)}</div><div className="form-footer"><button className="ghost-button">Cancel</button><button className={destructive?'danger-button':'primary-button'}>{screen.action}</button></div></div>;
+}
+
+function FinanceView({ screen }: { screen: AdminScreen }) {
+  return <><MetricCards metrics={screen.metrics}/><div className="finance-grid"><article className="card dashboard-donut"><h2 className="card-title">Income by Category</h2><DonutVisual value="100%" label="Income"/></article>{screen.batch === 'E' ? <ChartCard title="Income vs Expense" bars/> : <article className="card compact-list"><h2 className="card-title">Recent Transactions</h2>{['Tithes — ₦80,000','Offering — ₦70,000','Seed — ₦10,000','Giving — ₦10,000'].map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</article>}</div><button className="ghost-button wide-report">View Full Finance Report</button></>;
+}
+
+function ReportsView({ screen }: { screen: AdminScreen }) {
+  return <div className="reports-grid"><article className="card report-list"><h2>Popular Reports</h2>{(screen.items ?? []).map(item=><button key={item}>▧　{item}</button>)}</article><article className="card report-list"><h2>Recent Reports</h2>{['Membership Report · May 2024','Attendance Report · May 2024','First Timers Report · May 2024','Tithes Report · May 2024'].map(item=><div key={item}><span>▧</span><b>{item}</b></div>)}</article><button className="primary-button">{screen.action}</button></div>;
+}
+
+function RestrictedView({ screen }: { screen: AdminScreen }) {
+  return <><div className="restricted-heading"><span>Restricted Case</span><StatusBadge value="In Progress"/></div><div className="card restricted-card"><div><h2>Case Information</h2>{Object.entries(screen.details ?? {}).slice(0,5).map(([key,value])=><p key={key}><span>{key}</span><b>{value}</b></p>)}</div><div><h2>Client Information</h2>{Object.entries(screen.details ?? {}).slice(5).map(([key,value])=><p key={key}><span>{key}</span><b>{value}</b></p>)}</div></div><div className="restricted-warning">⊘　This case contains restricted information. Unauthorized access is prohibited and will be logged.</div></>;
+}
+
+function EscalationView({ screen }: { screen: AdminScreen }) {
+  return <div className="escalation-grid"><article className="card details-card"><h2>Report Details</h2><dl>{Object.entries(screen.details ?? {}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card escalation-actions"><h2>Actions</h2>{(screen.items ?? []).map(item=><div key={item}><span>◇</span><b>{item.split(' — ')[0]}</b><StatusBadge value={item.split(' — ')[1]}/></div>)}</article><button className="danger-button">{screen.action}</button></div>;
 }
 
 function QuickActions({ screen }: { screen: AdminScreen }) {
@@ -176,6 +267,17 @@ function ScreenContent({ screen }: { screen: AdminScreen }) {
     case 'map': return <MapView screen={screen}/>;
     case 'quick-actions': return <QuickActions screen={screen}/>;
     case 'impersonation': return <Impersonation screen={screen}/>;
+    case 'ministry-dashboard': return <MinistryDashboardView screen={screen}/>;
+    case 'workflow': return <WorkflowView screen={screen}/>;
+    case 'activation': return <ActivationView screen={screen}/>;
+    case 'operations': return <OperationsView screen={screen}/>;
+    case 'journey': return <JourneyView screen={screen}/>;
+    case 'approval': return <ApprovalView screen={screen}/>;
+    case 'settings': return <SettingsView screen={screen}/>;
+    case 'finance': return <FinanceView screen={screen}/>;
+    case 'reports': return <ReportsView screen={screen}/>;
+    case 'restricted': return <RestrictedView screen={screen}/>;
+    case 'escalation': return <EscalationView screen={screen}/>;
     case 'forbidden': return <ForbiddenView/>;
     default: return null;
   }
