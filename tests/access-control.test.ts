@@ -9,6 +9,45 @@ const publicLogin = getAdminScreen('/admin/login')!;
 const homeChurchStatus = getAdminScreen('/admin/home-churches/grace-home-church/status')!;
 const restrictedCase = getAdminScreen('/admin/people/counselling/case-c-2024-0012')!;
 
+const newMinistryRoutes = [
+  {
+    batch: 'G',
+    screen: getAdminScreen('/admin/kca')!,
+    permission: 'kca.dashboard.view',
+  },
+  {
+    batch: 'H',
+    screen: getAdminScreen('/admin/kca/students')!,
+    permission: 'kca.student.view',
+  },
+  {
+    batch: 'I',
+    screen: getAdminScreen('/admin/mission')!,
+    permission: 'mission.dashboard.view',
+  },
+] as const;
+
+const highRiskRoutes = [
+  {
+    id: 'G-12',
+    screen: getAdminScreen('/admin/kca/applications/samuel-david/decision')!,
+    permission: 'kca.application.decide',
+    lowerPrivilege: 'kca.application.view',
+  },
+  {
+    id: 'H-10',
+    screen: getAdminScreen('/admin/kca/modules/new')!,
+    permission: 'kca.module.create',
+    lowerPrivilege: 'kca.module.view',
+  },
+  {
+    id: 'I-06',
+    screen: getAdminScreen('/admin/mission/crusades/lagos-mega-crusade/invitations/rccg-city-chapel')!,
+    permission: 'mission.invitation.review',
+    lowerPrivilege: 'mission.invitation.view',
+  },
+] as const;
+
 const context = (overrides: Partial<AccessContext> = {}): AccessContext => ({
   authenticated: true,
   mfaVerified: true,
@@ -54,3 +93,51 @@ test('restricted counselling records remain permission and scope guarded', () =>
   assert.deepEqual(evaluateAccess(restrictedCase, context({ permissions: ['counselling.case.view'] })), { allowed: false, reason: 'permission-denied' });
   assert.deepEqual(evaluateAccess(restrictedCase, context({ permissions: ['counselling.case.restricted'] }), 'country:ghana'), { allowed: false, reason: 'scope-denied' });
 });
+
+for (const { batch, screen, permission } of newMinistryRoutes) {
+  test(`${batch} routes enforce authentication, MFA, permission, and scope`, () => {
+    assert.ok(screen, `${batch} representative route must exist`);
+    assert.deepEqual(
+      evaluateAccess(screen, context({ authenticated: false, permissions: [permission] }), 'country:nigeria'),
+      { allowed: false, reason: 'unauthenticated' },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ mfaVerified: false, permissions: [permission] }), 'country:nigeria'),
+      { allowed: false, reason: 'mfa-required' },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: ['unrelated.permission'] }), 'country:nigeria'),
+      { allowed: false, reason: 'permission-denied' },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: [permission] }), 'country:ghana'),
+      { allowed: false, reason: 'scope-denied' },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: [permission] }), 'country:nigeria'),
+      { allowed: true },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: ['*'], scopes: ['global'] }), 'country:ghana'),
+      { allowed: true },
+    );
+  });
+}
+
+for (const { id, screen, permission, lowerPrivilege } of highRiskRoutes) {
+  test(`${id} high-risk action requires its explicit capability and assigned scope`, () => {
+    assert.ok(screen, `${id} route must exist`);
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: [lowerPrivilege] }), 'country:nigeria'),
+      { allowed: false, reason: 'permission-denied' },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: [permission] }), 'country:ghana'),
+      { allowed: false, reason: 'scope-denied' },
+    );
+    assert.deepEqual(
+      evaluateAccess(screen, context({ permissions: [permission] }), 'country:nigeria'),
+      { allowed: true },
+    );
+  });
+}

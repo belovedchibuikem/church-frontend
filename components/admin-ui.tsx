@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { AccessDecision } from '../lib/access-control';
-import type { AdminScreen, Metric } from '../lib/admin-routes';
+import { adminScreens, type AdminScreen, type Metric } from '../lib/admin-routes';
+import { KcaScreenContent } from './kca-ui';
+import { MissionScreenContent } from './mission-ui';
 
 const navByBatch = {
   A: [
@@ -49,6 +51,30 @@ const navByBatch = {
     ['testimonies', '✦', 'Testimonies', '/admin/people/testimonies'], ['safeguarding', '!', 'Safeguarding', '/admin/people/safeguarding/escalation'],
     ['reports', '▣', 'Reports', '/admin/reports/country-performance'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
   ],
+  G: [
+    ['dashboard', '⌂', 'Dashboard', '/admin/kca'], ['kca-applications', '▤', 'Applications', '/admin/kca/applications'],
+    ['kca-review', '↻', 'Review Queue', '/admin/kca/review-queue'], ['kca-decisions', '✓', 'Decisions', '/admin/kca/applications/samuel-david/decision'],
+    ['kca-students', '♙', 'Students', '/admin/kca/students'], ['kca-cohorts', '◎', 'Cohorts', '/admin/kca/cohorts'],
+    ['kca-mentors', '♛', 'Mentors', '/admin/kca/mentors'], ['kca-lecturers', '▦', 'Lecturers', '/admin/kca/lecturers'],
+    ['kca-modules', '◇', 'Modules', '/admin/kca/modules'], ['kca-learning', '▣', 'Learning', '/admin/kca/attendance'],
+    ['kca-assessments', '□', 'Assessments', '/admin/kca/assessments/final'], ['kca-certification', '✓', 'Certifications', '/admin/kca/certificates'],
+    ['kca-alumni', '♙', 'Alumni', '/admin/kca/alumni'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
+  ],
+  H: [
+    ['dashboard', '⌂', 'Dashboard', '/admin/kca'], ['kca-students', '♙', 'Students', '/admin/kca/students'],
+    ['kca-cohorts', '◎', 'Cohorts', '/admin/kca/cohorts'], ['kca-years', '▥', 'KCA Years', '/admin/kca/years'],
+    ['kca-mentors', '♛', 'Mentors', '/admin/kca/mentors'], ['kca-lecturers', '▦', 'Lecturers', '/admin/kca/lecturers'],
+    ['kca-modules', '◇', 'Modules', '/admin/kca/modules'], ['kca-learning', '▣', 'Learning', '/admin/kca/attendance'],
+    ['kca-assessments', '□', 'Assessments', '/admin/kca/assessments/final'], ['kca-certification', '✓', 'Certification', '/admin/kca/certificates'],
+    ['kca-alumni', '♙', 'Alumni', '/admin/kca/alumni'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
+  ],
+  I: [
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['mission', '◇', 'Mission', '/admin/mission'],
+    ['crusades', '▣', 'Crusades', '/admin/mission/crusades'], ['souls', '♙', 'Souls', '/admin/mission/souls'],
+    ['mission-follow-up', '↻', 'Follow-Up', '/admin/mission/follow-up'], ['partners', '◎', 'Partners', '/admin/mission/partners'],
+    ['reports', '▤', 'Reports', '/admin/mission/reports'], ['ai-assistant', '✦', 'AI Assistant', '/admin/mission/ai-assistant'],
+    ['settings', '⚙', 'Settings', '/admin/geography/settings'],
+  ],
 } as const;
 
 function Brand({ dark = true }: { dark?: boolean }) {
@@ -64,7 +90,7 @@ function Sidebar({ screen }: { screen: AdminScreen }) {
 }
 
 function Topbar() {
-  return <header className="topbar"><button className="top-icon" aria-label="Notifications">♧</button><button className="top-icon" aria-label="Unread alerts">♧<span className="dot" /></button><Link href="/admin/profile" className="avatar" aria-label="Admin profile">JD</Link></header>;
+  return <header className="topbar"><Link href="/admin/screens" className="screen-index-link" aria-label="All designed screens" title="All designed screens">▦</Link><button className="top-icon" aria-label="Notifications">♧</button><button className="top-icon" aria-label="Unread alerts">♧<span className="dot" /></button><Link href="/admin/profile" className="avatar" aria-label="Admin profile">JD</Link></header>;
 }
 
 function StatusBadge({ value }: { value: string }) {
@@ -74,7 +100,7 @@ function StatusBadge({ value }: { value: string }) {
 
 function PageHeader({ screen }: { screen: AdminScreen }) {
   const showNigeriaFlag = screen.id === 'C-03' || screen.id === 'C-11';
-  const showHeaderAction = !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind);
+  const showHeaderAction = ['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind);
   return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && <Tabs tabs={screen.tabs} />}</>;
 }
 
@@ -249,6 +275,8 @@ function AuthView({ screen }: { screen: AdminScreen }) {
 }
 
 function ScreenContent({ screen }: { screen: AdminScreen }) {
+  if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen}/>;
+  if (screen.batch === 'I') return <MissionScreenContent screen={screen}/>;
   switch(screen.kind){
     case 'dashboard': return <DashboardView screen={screen}/>;
     case 'scope-grid': return <ScopeGrid screen={screen}/>;
@@ -285,5 +313,24 @@ function ScreenContent({ screen }: { screen: AdminScreen }) {
 
 export function AdminScreenView({ screen, decision, requestedScope }: { screen: AdminScreen; decision: AccessDecision; requestedScope: string }) {
   if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen}/>;
-  return <div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()}`}><PageHeader screen={screen}/><ScreenContent screen={screen}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div>;
+  const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id);
+  const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
+  return <div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}>{!rendererOwnsHeader && <PageHeader screen={screen}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div>;
+}
+
+const batchNames = {
+  A: 'Global Administration',
+  B: 'Identity & Access',
+  C: 'Geography & Organization',
+  D: 'Home Church Administration',
+  E: 'Church Operations',
+  F: 'People & Ministry Care',
+  G: 'KCA Admissions',
+  H: 'KCA Learning',
+  I: 'Mission Operations',
+} as const;
+
+export function AdminScreenIndex() {
+  const batches = Object.keys(batchNames) as Array<keyof typeof batchNames>;
+  return <div className="admin-shell"><main className="screen-library"><header className="screen-library-header"><div><Brand dark={false}/><span className="preview-pill">Static design preview</span></div><Link href="/admin" className="primary-button link-button">Open Dashboard</Link></header><section className="screen-library-intro"><p className="eyebrow">Family House Connect · Admin Portal</p><h1>All Designed Screens</h1><p>Open any of the {adminScreens.length} front-end screens below. Every page uses static fixture data and is available directly from this directory.</p><div className="library-summary"><strong>{adminScreens.length}</strong><span>reference screens</span><strong>{batches.length}</strong><span>design groups</span></div></section>{batches.map(batch => { const screens = adminScreens.filter(screen => screen.batch === batch); return <section className="screen-group" key={batch}><div className="screen-group-title"><span>{batch}</span><div><h2>{batchNames[batch]}</h2><p>{screens.length} screens</p></div></div><div className="screen-card-grid">{screens.map(screen => <Link href={screen.route} className="screen-link-card" key={screen.id}><span className="screen-id">{screen.id}</span><strong>{screen.title}</strong><small>{screen.subtitle}</small><code>{screen.route}</code><i>Open screen →</i></Link>)}</div></section>; })}</main></div>;
 }

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { AdminScreenView } from '../../../components/admin-ui';
+import { AdminScreenIndex, AdminScreenView } from '../../../components/admin-ui';
 import { evaluateAccess } from '../../../lib/access-control';
 import { getAdminScreen, normalizeAdminRoute } from '../../../lib/admin-routes';
 import { getServerAccessContext } from '../../../lib/server-access';
@@ -15,6 +15,7 @@ export default async function AdminPage({
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const route = normalizeAdminRoute(slug);
+  if (route === '/admin/screens') return <AdminScreenIndex />;
   const screen = getAdminScreen(route);
   if (!screen) notFound();
 

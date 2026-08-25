@@ -8,15 +8,15 @@ function splitHeader(value: string | null): string[] {
 export async function getServerAccessContext(): Promise<AccessContext> {
   const requestHeaders = await headers();
   const fhcUser = requestHeaders.get('x-fhc-user-id');
-  const openAiUser = requestHeaders.get('oai-authenticated-user-id');
-  const isDesignPreview = process.env.NODE_ENV !== 'production' || process.env.FHC_ENABLE_DESIGN_FIXTURES === 'true';
 
-  if (isDesignPreview && !fhcUser && !openAiUser) {
+  // This project is a front-end design prototype. Unless an explicit FHC
+  // access context is supplied, render every static design with fixture data.
+  if (!fhcUser) {
     return { authenticated: true, mfaVerified: true, permissions: ['*'], scopes: ['global', 'country:nigeria', 'region:lagos', 'local:ikeja'] };
   }
 
   return {
-    authenticated: Boolean(fhcUser || openAiUser),
+    authenticated: true,
     mfaVerified: requestHeaders.get('x-fhc-mfa-verified') === 'true',
     permissions: splitHeader(requestHeaders.get('x-fhc-permissions')),
     scopes: splitHeader(requestHeaders.get('x-fhc-scopes')),

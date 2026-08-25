@@ -1,4 +1,7 @@
 import { ministryScreens } from './ministry-routes.ts';
+import { kcaAdmissionsScreens } from './kca-admissions-routes.ts';
+import { kcaLearningScreens } from './kca-learning-routes.ts';
+import { missionScreens } from './mission-routes.ts';
 
 export type AdminScreenKind =
   | 'login' | 'mfa' | 'dashboard' | 'scope-grid' | 'command' | 'feed'
@@ -13,7 +16,7 @@ export type Row = Record<string, string>;
 
 export type AdminScreen = {
   id: string;
-  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I';
   route: string;
   title: string;
   subtitle: string;
@@ -25,7 +28,12 @@ export type AdminScreen = {
     | 'activities' | 'needs' | 'finance' | 'churches' | 'departments'
     | 'small-groups' | 'evangelism' | 'people' | 'first-timers' | 'follow-up'
     | 'converts' | 'discipleship' | 'workers' | 'membership' | 'ministry-history'
-    | 'prayer' | 'counselling' | 'testimonies' | 'safeguarding';
+    | 'prayer' | 'counselling' | 'testimonies' | 'safeguarding'
+    | 'kca' | 'kca-applications' | 'kca-review' | 'kca-decisions' | 'kca-students' | 'kca-cohorts'
+    | 'kca-years' | 'kca-mentors' | 'kca-lecturers' | 'kca-modules' | 'kca-learning'
+    | 'kca-assessments' | 'kca-certification' | 'kca-alumni' | 'missions'
+    | 'crusades' | 'souls' | 'mission-partners' | 'mission-follow-up' | 'mission-ai'
+    | 'mission' | 'partners' | 'ai-assistant';
   action?: string;
   tabs?: string[];
   metrics?: Metric[];
@@ -151,6 +159,9 @@ export const adminScreens: AdminScreen[] = [
   { id: 'C-15', batch: 'C', route: '/admin/geography/reports', title: 'Territory Reports', subtitle: 'Performance insights by geography.', kind: 'kpi', permission: 'reports.territory.view', scope: 'assigned', nav: 'reports', action: 'Export', metrics: [{ label: 'Churches', value: '45', trend: '+3' }, { label: 'Home Churches', value: '36', trend: '+2' }, { label: 'Members', value: '6,421', trend: '+245' }, { label: 'Leaders', value: '512', trend: '+18' }], items: ['Ikeja Ward A — 1,345', 'Ikeja Ward B — 1,212', 'Ikeja Ward C — 986', 'Ikeja Ward D — 842', 'Ikeja Ward E — 650'] },
   { id: 'C-16', batch: 'C', route: '/admin/geography/settings', title: 'Geography Settings', subtitle: 'Configure global geography settings.', kind: 'form', permission: 'organization.settings.update', scope: 'global', nav: 'settings', tabs: ['General', 'Levels', 'Terminology', 'Import / Export', 'Advanced'], action: 'Save Settings' },
   ...ministryScreens,
+  ...kcaAdmissionsScreens,
+  ...kcaLearningScreens,
+  ...missionScreens,
 ];
 
 export function normalizeAdminRoute(slug?: string[]): string {
