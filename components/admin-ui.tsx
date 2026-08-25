@@ -4,6 +4,7 @@ import type { AccessDecision } from '../lib/access-control';
 import { adminScreens, type AdminScreen, type Metric } from '../lib/admin-routes';
 import { KcaScreenContent } from './kca-ui';
 import { MissionScreenContent } from './mission-ui';
+import { PlatformScreenContent } from './platform-ui';
 
 const navByBatch = {
   A: [
@@ -75,16 +76,57 @@ const navByBatch = {
     ['reports', '▤', 'Reports', '/admin/mission/reports'], ['ai-assistant', '✦', 'AI Assistant', '/admin/mission/ai-assistant'],
     ['settings', '⚙', 'Settings', '/admin/geography/settings'],
   ],
+  J: [
+    ['press', '⌂', 'Dashboard', '/admin/press'], ['publications', '▣', 'Publications', '/admin/press/publications'],
+    ['authors', '♙', 'Authors', '/admin/press/authors'], ['manuscripts', '▤', 'Manuscripts', '/admin/press/manuscripts'],
+    ['manuscripts', '✓', 'Reviews', '/admin/press/manuscripts/power-of-covenant/editorial-review'], ['assets', '◇', 'Design', '/admin/press/assets'],
+    ['distribution', '◎', 'Distribution', '/admin/press/distribution'], ['publications', '▦', 'Catalogue', '/admin/press/catalogue'],
+    ['press-sales', '₦', 'Sales', '/admin/press/sales'], ['press-analytics', '▤', 'Analytics', '/admin/press/analytics'],
+    ['settings', '⚙', 'Settings', '/admin/settings/press'],
+  ],
+  K: [
+    ['finance', '⌂', 'Dashboard', '/admin/finance'], ['finance-transactions', '▤', 'Transactions', '/admin/finance/transactions'],
+    ['finance-reconciliation', '✓', 'Reconciliation', '/admin/finance/reconciliation'], ['finance-payments', '₦', 'Payments', '/admin/finance/event-payments'],
+    ['finance-transactions', '▧', 'Receipts', '/admin/finance/receipts'], ['finance-transactions', '↻', 'Refunds', '/admin/finance/refunds'],
+    ['finance-transactions', '!', 'Disputes', '/admin/finance/disputes'], ['finance-reports', '▤', 'Reports', '/admin/finance/reports'],
+    ['finance-alerts', '◇', 'Alerts', '/admin/finance/alerts'], ['settings', '⚙', 'Settings', '/admin/settings/payments'],
+  ],
+  L: [
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '♙', 'People', '/admin/people'], ['churches', '▣', 'Churches', '/admin/churches'],
+    ['home-churches', '◎', 'Home Churches', '/admin/home-churches'], ['mission', '◇', 'Missions', '/admin/mission'], ['kca', '▦', 'KCA', '/admin/kca'],
+    ['press', '▤', 'Press', '/admin/press'], ['finance', '₦', 'Finance', '/admin/finance'], ['communications', '◉', 'Communications', '/admin/communications'],
+    ['reports', '▣', 'Reports & Analytics', '/admin/reports'], ['security', '!', 'Security', '/admin/security'], ['platform-settings', '⚙', 'Platform Settings', '/admin/settings/platform'],
+  ],
+  M: [
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '♙', 'People', '/admin/people'], ['churches', '▣', 'Churches', '/admin/churches'],
+    ['communications', '◉', 'Communications', '/admin/communications'], ['communications', '▤', 'Notifications', '/admin/communications/notifications'],
+    ['templates', '▦', 'Templates', '/admin/communications/templates'], ['communications', '↻', 'Delivery Queue', '/admin/communications/delivery-queue'],
+    ['communications', '▣', 'Reports', '/admin/communications/delivery-report'], ['settings', '⚙', 'Settings', '/admin/communications/settings'],
+  ],
+  N: [
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['reports', '▣', 'Reports & Analytics', '/admin/reports'], ['reports', '▤', 'Official Reports', '/admin/reports'],
+    ['reports', '◇', 'Analytics', '/admin/reports/churches'], ['report-ai', '✦', 'AI Assistant', '/admin/reports/pastoral-ai'], ['settings', '⚙', 'Settings', '/admin/settings/platform'],
+  ],
+  O: [
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['security', '!', 'Security', '/admin/security'], ['audit', '▤', 'Audit Logs', '/admin/security/audit-logs'],
+    ['security', '✓', 'Access Decisions', '/admin/security/access-decisions'], ['safeguarding', '◇', 'Safeguarding', '/admin/security/safeguarding'],
+    ['privacy', '▦', 'Privacy', '/admin/security/privacy-requests'], ['settings', '⚙', 'Settings', '/admin/security/configuration'],
+  ],
 } as const;
 
-function Brand({ dark = true }: { dark?: boolean }) {
-  return <div className={`brand ${dark ? '' : 'brand-light'}`}><span className="brand-mark">◆</span><span className="brand-copy">Family House<br />Connect</span></div>;
+function Brand({ dark = true, label = 'Family House Connect' }: { dark?: boolean; label?: string }) {
+  const words = label.split(' ');
+  const breakAt = Math.max(1, Math.ceil(words.length / 2));
+  return <div className={`brand ${dark ? '' : 'brand-light'}`}><span className="brand-mark">◆</span><span className="brand-copy">{words.slice(0, breakAt).join(' ')}<br />{words.slice(breakAt).join(' ')}</span></div>;
 }
 
 function Sidebar({ screen }: { screen: AdminScreen }) {
-  return <aside className="admin-sidebar"><Brand /><nav className="nav-list" aria-label="Administration">{navByBatch[screen.batch].map(([key, icon, label, href], index) => {
+  const entries = navByBatch[screen.batch];
+  const brandLabel = screen.batch === 'J' ? 'Kingdom Press' : screen.batch === 'K' ? 'Kingdom Finance' : ['L','M','N','O'].includes(screen.batch) ? 'Kingdom Platform' : 'Family House Connect';
+  const uniqueActiveIndex = ['J','K','L','M','N','O'].includes(screen.batch) ? entries.findIndex(([key]) => key === screen.nav) : -1;
+  return <aside className="admin-sidebar"><Brand label={brandLabel} /><nav className="nav-list" aria-label="Administration">{entries.map(([key, icon, label, href], index) => {
     const nested = screen.batch === 'C' && index >= 4 && index <= 8;
-    const active = screen.batch === 'C' ? index !== 3 && screen.route === href : screen.nav === key;
+    const active = screen.batch === 'C' ? index !== 3 && screen.route === href : uniqueActiveIndex >= 0 ? index === uniqueActiveIndex : screen.nav === key;
     return <Link className={`nav-item ${nested ? 'nav-nested' : ''} ${active ? 'active' : ''}`} href={href} key={`${href}-${index}`}><span className="nav-icon">{icon}</span><span className="nav-label">{label}</span></Link>;
   })}</nav></aside>;
 }
@@ -100,8 +142,10 @@ function StatusBadge({ value }: { value: string }) {
 
 function PageHeader({ screen }: { screen: AdminScreen }) {
   const showNigeriaFlag = screen.id === 'C-03' || screen.id === 'C-11';
-  const showHeaderAction = ['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind);
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && <Tabs tabs={screen.tabs} />}</>;
+  const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
+  const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
+  const showHeaderAction = !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && !platformBatch && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
@@ -277,6 +321,7 @@ function AuthView({ screen }: { screen: AdminScreen }) {
 function ScreenContent({ screen }: { screen: AdminScreen }) {
   if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen}/>;
   if (screen.batch === 'I') return <MissionScreenContent screen={screen}/>;
+  if (['J','K','L','M','N','O'].includes(screen.batch)) return <PlatformScreenContent screen={screen}/>;
   switch(screen.kind){
     case 'dashboard': return <DashboardView screen={screen}/>;
     case 'scope-grid': return <ScopeGrid screen={screen}/>;
@@ -328,6 +373,12 @@ const batchNames = {
   G: 'KCA Admissions',
   H: 'KCA Learning',
   I: 'Mission Operations',
+  J: 'Kingdom Press',
+  K: 'Finance Operations',
+  L: 'Platform Settings',
+  M: 'Communications',
+  N: 'Reports & Analytics',
+  O: 'Security & Privacy',
 } as const;
 
 export function AdminScreenIndex() {

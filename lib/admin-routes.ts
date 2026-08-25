@@ -2,6 +2,7 @@ import { ministryScreens } from './ministry-routes.ts';
 import { kcaAdmissionsScreens } from './kca-admissions-routes.ts';
 import { kcaLearningScreens } from './kca-learning-routes.ts';
 import { missionScreens } from './mission-routes.ts';
+import { platformScreens } from './platform-routes.ts';
 
 export type AdminScreenKind =
   | 'login' | 'mfa' | 'dashboard' | 'scope-grid' | 'command' | 'feed'
@@ -16,7 +17,7 @@ export type Row = Record<string, string>;
 
 export type AdminScreen = {
   id: string;
-  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I';
+  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O';
   route: string;
   title: string;
   subtitle: string;
@@ -33,7 +34,10 @@ export type AdminScreen = {
     | 'kca-years' | 'kca-mentors' | 'kca-lecturers' | 'kca-modules' | 'kca-learning'
     | 'kca-assessments' | 'kca-certification' | 'kca-alumni' | 'missions'
     | 'crusades' | 'souls' | 'mission-partners' | 'mission-follow-up' | 'mission-ai'
-    | 'mission' | 'partners' | 'ai-assistant';
+    | 'mission' | 'partners' | 'ai-assistant'
+    | 'press' | 'publications' | 'authors' | 'manuscripts' | 'distribution' | 'assets' | 'translations' | 'press-sales' | 'press-analytics'
+    | 'finance-transactions' | 'finance-payments' | 'finance-reconciliation' | 'finance-providers' | 'finance-reports' | 'finance-alerts'
+    | 'platform-settings' | 'communications' | 'templates' | 'report-ai' | 'security' | 'privacy';
   action?: string;
   tabs?: string[];
   metrics?: Metric[];
@@ -162,6 +166,7 @@ export const adminScreens: AdminScreen[] = [
   ...kcaAdmissionsScreens,
   ...kcaLearningScreens,
   ...missionScreens,
+  ...platformScreens,
 ];
 
 export function normalizeAdminRoute(slug?: string[]): string {

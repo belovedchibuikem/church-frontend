@@ -25,6 +25,12 @@ const newMinistryRoutes = [
     screen: getAdminScreen('/admin/mission')!,
     permission: 'mission.dashboard.view',
   },
+  { batch: 'J', screen: getAdminScreen('/admin/press')!, permission: 'press.dashboard.view' },
+  { batch: 'K', screen: getAdminScreen('/admin/finance')!, permission: 'finance.dashboard.view' },
+  { batch: 'L', screen: getAdminScreen('/admin/settings/platform')!, permission: 'settings.platform.manage' },
+  { batch: 'M', screen: getAdminScreen('/admin/communications')!, permission: 'communications.dashboard.view' },
+  { batch: 'N', screen: getAdminScreen('/admin/reports')!, permission: 'reports.global.view' },
+  { batch: 'O', screen: getAdminScreen('/admin/security')!, permission: 'security.dashboard.view' },
 ] as const;
 
 const highRiskRoutes = [
