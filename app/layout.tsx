@@ -3,8 +3,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
-  title: 'Family House Connect — Admin Portal',
-  description: 'Permission-aware administration for the global Family House Connect ministry.',
+  title: { default: 'Family House Connect', template: '%s | Family House Connect' },
+  description: 'One family. One mission. Connect, grow, worship, learn, serve, and give with Family House Connect.',
   openGraph: {
     title: 'Family House Connect — Admin Portal',
     description: 'Global ministry administration with permission-aware access and scope governance.',
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     description: 'Global ministry administration with permission-aware access and scope governance.',
     images: ['/og.png'],
   },
-  robots: { index: false, follow: false },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
