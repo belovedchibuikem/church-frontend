@@ -25,8 +25,12 @@ function FilterBar({ screen }: { screen: AdminScreen }) {
   return <div className="platform-filter-bar"><button type="button">All Status⌄</button><button type="button">All Categories⌄</button><label><span aria-hidden="true">⌕</span><input aria-label={`Search ${screen.title}`} placeholder={`Search ${screen.title.toLowerCase()}...`}/></label><button type="button">☷ Filters</button></div>;
 }
 
+function PlatformTabs({ tabs = [] }: { tabs?: string[] }) {
+  return <div className="platform-tabs" role="tablist" aria-label="Page sections">{tabs.map((tab,index)=><button type="button" role="tab" aria-selected={index===0} className={index===0?'active':''} key={tab}>{tab}</button>)}</div>;
+}
+
 function DenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [] }: { screen: AdminScreen; rows?: Row[]; columns?: string[] }) {
-  return <article className="platform-card platform-table-card"><FilterBar screen={screen}/><div className="platform-table-scroll"><table aria-label={`${screen.title} records`}><thead><tr>{columns.map(column=><th scope="col" key={column}>{column}</th>)}<th scope="col">Action</th></tr></thead><tbody>{rows.map((row,index)=><tr key={`${screen.id}-${index}`}>{columns.map((column,columnIndex)=>{const value=row[column]??'—';return <td key={column}>{columnIndex===0?<span className="platform-leading"><i>{value.slice(0,2).toUpperCase()}</i><b>{value}</b></span>:/status|priority/i.test(column)?<Badge value={value}/>:value}</td>})}<td><button className="platform-row-action" type="button" aria-label={`View ${row[columns[0]]??'record'}`}>View</button></td></tr>)}</tbody></table></div><footer><span>Showing 1 to {rows.length} of {rows.length>5?'256':rows.length} records</span><nav aria-label={`${screen.title} pagination`}><button type="button">‹</button><button className="active" type="button">1</button><button type="button">2</button><button type="button">3</button><button type="button">›</button></nav></footer></article>;
+  return <article className="platform-card platform-table-card"><FilterBar screen={screen}/><div className="platform-table-scroll"><table aria-label={`${screen.title} records`}><thead><tr>{columns.map(column=><th scope="col" key={column}>{column}</th>)}<th scope="col">Action</th></tr></thead><tbody>{rows.map((row,index)=><tr key={`${screen.id}-${index}`}>{columns.map((column,columnIndex)=>{const value=row[column]??'—';return <td key={column}>{columnIndex===0?<span className="platform-leading"><i>{value.slice(0,2).toUpperCase()}</i><b>{value}</b></span>:/status|priority/i.test(column)?<Badge value={value}/>:value}</td>})}<td><button className="platform-row-action" type="button" aria-label={`View ${row[columns[0]]??'record'}`}>View</button></td></tr>)}</tbody></table></div><footer><span>Showing 1 to {rows.length} of {rows.length>5?'256':rows.length} records</span><nav aria-label={`${screen.title} pagination`}><button type="button" aria-label="Previous page">‹</button><button className="active" type="button" aria-label="Page 1" aria-current="page">1</button><button type="button" aria-label="Page 2">2</button><button type="button" aria-label="Page 3">3</button><button type="button" aria-label="Next page">›</button></nav></footer></article>;
 }
 
 function Dashboard({ screen }: { screen: AdminScreen }) {
@@ -35,7 +39,7 @@ function Dashboard({ screen }: { screen: AdminScreen }) {
 
 function Detail({ screen }: { screen: AdminScreen }) {
   const publication = screen.batch==='J';
-  return <div className="platform-detail"><article className="platform-card platform-detail-hero">{publication&&<div className="publication-cover small"><span>WALKING IN</span><strong>DOMINION</strong></div>}<div><span className="platform-overline">{publication?'Publication':'Record'} detail</span><h2>{screen.title}</h2><p>{screen.subtitle}</p><Badge value={screen.details?.Status??'Active'}/></div></article>{screen.tabs&&<div className="platform-tabs" role="tablist">{screen.tabs.map((tab,index)=><button type="button" role="tab" aria-selected={index===0} className={index===0?'active':''} key={tab}>{tab}</button>)}</div>}<div className="platform-detail-grid"><article className="platform-card platform-definition"><h3>Information</h3><dl>{Object.entries(screen.details??{}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key==='Status'?<Badge value={value}/>:value}</dd></div>)}</dl></article><article className="platform-card platform-detail-chart"><h3>Summary</h3>{screen.metrics&&<Metrics metrics={screen.metrics}/>}<Bars compact/><button className="platform-primary" type="button">{screen.action??'View Report'}</button></article></div></div>;
+  return <div className="platform-detail"><article className="platform-card platform-detail-hero">{publication&&<div className="publication-cover small"><span>WALKING IN</span><strong>DOMINION</strong></div>}<div><span className="platform-overline">{publication?'Publication':'Record'} detail</span><h2>{screen.title}</h2><p>{screen.subtitle}</p><Badge value={screen.details?.Status??'Active'}/></div></article>{screen.tabs&&<PlatformTabs tabs={screen.tabs}/>}<div className="platform-detail-grid"><article className="platform-card platform-definition"><h3>Information</h3><dl>{Object.entries(screen.details??{}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key==='Status'?<Badge value={value}/>:value}</dd></div>)}</dl></article><article className="platform-card platform-detail-chart"><h3>Summary</h3>{screen.metrics&&<Metrics metrics={screen.metrics}/>}<Bars compact/><button className="platform-primary" type="button">{screen.action??'View Report'}</button></article></div></div>;
 }
 
 function Workflow({ screen }: { screen: AdminScreen }) {
@@ -67,17 +71,20 @@ function Restricted({ screen }: { screen: AdminScreen }) {
 }
 
 export function PlatformScreenContent({ screen }: { screen: AdminScreen }) {
+  let content;
   switch(screen.kind){
-    case 'dashboard': return <Dashboard screen={screen}/>;
-    case 'table': return <><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>;
+    case 'dashboard': content=<Dashboard screen={screen}/>; break;
+    case 'table': content=<><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>; break;
     case 'detail': case 'profile': return <Detail screen={screen}/>;
-    case 'workflow': case 'approval': return <Workflow screen={screen}/>;
-    case 'form': case 'wizard': return <Form screen={screen}/>;
-    case 'settings': return <Settings screen={screen}/>;
-    case 'operations': return <Operations screen={screen}/>;
-    case 'reports': case 'finance': return <Analytics screen={screen}/>;
-    case 'feed': return <DenseTable screen={{...screen,columns:['Item','Detail','Time']}} rows={screen.rows} columns={['Item','Detail','Time']}/>;
-    case 'restricted': return <Restricted screen={screen}/>;
-    default: return <Analytics screen={screen}/>;
+    case 'workflow': case 'approval': content=<Workflow screen={screen}/>; break;
+    case 'form': case 'wizard': content=<Form screen={screen}/>; break;
+    case 'settings': content=<Settings screen={screen}/>; break;
+    case 'operations': content=<Operations screen={screen}/>; break;
+    case 'reports': case 'finance': content=<Analytics screen={screen}/>; break;
+    case 'feed': content=<DenseTable screen={{...screen,columns:['Item','Detail','Time']}} rows={screen.rows} columns={['Item','Detail','Time']}/>; break;
+    case 'restricted': content=<Restricted screen={screen}/>; break;
+    default: content=<Analytics screen={screen}/>;
   }
+  const needsTabs = Boolean(screen.tabs?.length && ['operations','feed','restricted','table','reports','finance'].includes(screen.kind));
+  return <>{needsTabs&&<PlatformTabs tabs={screen.tabs}/>} {content}</>;
 }

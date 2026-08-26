@@ -11,7 +11,7 @@ export default async function AdminPage({
   searchParams,
 }: {
   params: Promise<{ slug?: string[] }>;
-  searchParams: Promise<{ scope?: string }>;
+  searchParams: Promise<{ scope?: string; returnTo?: string }>;
 }) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const route = normalizeAdminRoute(slug);
@@ -23,5 +23,5 @@ export default async function AdminPage({
   const requestedScope = query.scope ?? (screen.scope === 'global' ? 'global' : 'country:nigeria');
   const decision = evaluateAccess(screen, context, requestedScope);
 
-  return <AdminScreenView screen={screen} decision={decision} requestedScope={requestedScope} />;
+  return <AdminScreenView screen={screen} decision={decision} requestedScope={requestedScope} returnTo={query.returnTo} />;
 }

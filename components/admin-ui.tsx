@@ -5,6 +5,9 @@ import { adminScreens, type AdminScreen, type Metric } from '../lib/admin-routes
 import { KcaScreenContent } from './kca-ui';
 import { MissionScreenContent } from './mission-ui';
 import { PlatformScreenContent } from './platform-ui';
+import { AdminInteractionShell } from './admin-interaction-shell';
+import { getAdminBreadcrumbs, getInteractionRouteMap, type AdminBreadcrumb } from '../lib/admin-navigation';
+import { getAdminModuleForRoute } from '../lib/admin-modules';
 
 const navByBatch = {
   A: [
@@ -37,7 +40,10 @@ const navByBatch = {
   ],
   E: [
     ['dashboard', '⌂', 'Dashboard', '/admin/church/dashboard'], ['churches', '▣', 'Churches', '/admin/churches'],
-    ['members', '◉', 'Members', '/admin/churches/the-covenant-place/members'], ['departments', '▦', 'Departments', '/admin/churches/the-covenant-place/departments'],
+    ['leaders', '♛', 'Leadership', '/admin/churches/the-covenant-place/leadership'], ['members', '◉', 'Members', '/admin/churches/the-covenant-place/members'],
+    ['first-timers', '◇', 'First Timers', '/admin/churches/the-covenant-place/first-timers'], ['converts', '✓', 'Converts', '/admin/churches/the-covenant-place/converts'],
+    ['discipleship', '◎', 'Disciples', '/admin/churches/the-covenant-place/disciples'], ['workers', '♙', 'Workers', '/admin/churches/the-covenant-place/workers'],
+    ['departments', '▦', 'Departments', '/admin/churches/the-covenant-place/departments'],
     ['small-groups', '◎', 'Small Groups', '/admin/churches/the-covenant-place/small-groups'], ['evangelism', '◇', 'Evangelism', '/admin/churches/the-covenant-place/evangelism'],
     ['finance', '₦', 'Finance', '/admin/churches/the-covenant-place/finance'], ['reports', '▤', 'Reports', '/admin/churches/the-covenant-place/reports'],
     ['settings', '⚙', 'Settings', '/admin/churches/the-covenant-place/settings'],
@@ -81,6 +87,7 @@ const navByBatch = {
     ['authors', '♙', 'Authors', '/admin/press/authors'], ['manuscripts', '▤', 'Manuscripts', '/admin/press/manuscripts'],
     ['manuscripts', '✓', 'Reviews', '/admin/press/manuscripts/power-of-covenant/editorial-review'], ['assets', '◇', 'Design', '/admin/press/assets'],
     ['distribution', '◎', 'Distribution', '/admin/press/distribution'], ['publications', '▦', 'Catalogue', '/admin/press/catalogue'],
+    ['translations', '文', 'Translations', '/admin/press/translations'],
     ['press-sales', '₦', 'Sales', '/admin/press/sales'], ['press-analytics', '▤', 'Analytics', '/admin/press/analytics'],
     ['settings', '⚙', 'Settings', '/admin/settings/press'],
   ],
@@ -89,6 +96,7 @@ const navByBatch = {
     ['finance-reconciliation', '✓', 'Reconciliation', '/admin/finance/reconciliation'], ['finance-payments', '₦', 'Payments', '/admin/finance/event-payments'],
     ['finance-transactions', '▧', 'Receipts', '/admin/finance/receipts'], ['finance-transactions', '↻', 'Refunds', '/admin/finance/refunds'],
     ['finance-transactions', '!', 'Disputes', '/admin/finance/disputes'], ['finance-reports', '▤', 'Reports', '/admin/finance/reports'],
+    ['finance-providers', '◇', 'Providers', '/admin/finance/providers'],
     ['finance-alerts', '◇', 'Alerts', '/admin/finance/alerts'], ['settings', '⚙', 'Settings', '/admin/settings/payments'],
   ],
   L: [
@@ -100,19 +108,106 @@ const navByBatch = {
   M: [
     ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '♙', 'People', '/admin/people'], ['churches', '▣', 'Churches', '/admin/churches'],
     ['communications', '◉', 'Communications', '/admin/communications'], ['communications', '▤', 'Notifications', '/admin/communications/notifications'],
-    ['templates', '▦', 'Templates', '/admin/communications/templates'], ['communications', '↻', 'Delivery Queue', '/admin/communications/delivery-queue'],
-    ['communications', '▣', 'Reports', '/admin/communications/delivery-report'], ['settings', '⚙', 'Settings', '/admin/communications/settings'],
+    ['communications', '✉', 'Broadcast', '/admin/communications/broadcasts/create'], ['communications', '◎', 'Audience', '/admin/communications/audiences/create'],
+    ['communications', '◇', 'Announcements', '/admin/communications/announcements/create'], ['communications', '▤', 'Newsletter', '/admin/communications/newsletters/may-update'],
+    ['communications', '@', 'Email', '/admin/communications/email/create'], ['communications', '◌', 'SMS', '/admin/communications/sms/create'],
+    ['communications', '◉', 'WhatsApp', '/admin/communications/whatsapp/create'], ['communications', '↗', 'Push', '/admin/communications/push/create'],
+    ['communications', '▣', 'In-App', '/admin/communications/in-app/create'], ['templates', '▦', 'Templates', '/admin/communications/templates'],
+    ['communications', '↻', 'Delivery Queue', '/admin/communications/delivery-queue'], ['communications', '▤', 'Delivery Report', '/admin/communications/delivery-report'],
+    ['communications', '!', 'Failed Messages', '/admin/communications/failed'], ['settings', '⚙', 'Settings', '/admin/communications/settings'],
   ],
   N: [
-    ['dashboard', '⌂', 'Dashboard', '/admin'], ['reports', '▣', 'Reports & Analytics', '/admin/reports'], ['reports', '▤', 'Official Reports', '/admin/reports'],
-    ['reports', '◇', 'Analytics', '/admin/reports/churches'], ['report-ai', '✦', 'AI Assistant', '/admin/reports/pastoral-ai'], ['settings', '⚙', 'Settings', '/admin/settings/platform'],
+    ['dashboard', '⌂', 'Dashboard', '/admin'], ['reports', '▣', 'Global Reports', '/admin/reports'], ['reports', '▤', 'Church Analytics', '/admin/reports/churches'],
+    ['reports', '◎', 'Home Church Analytics', '/admin/reports/home-churches'], ['reports', '♙', 'Membership', '/admin/reports/membership'],
+    ['reports', '◇', 'First Timers', '/admin/reports/first-timers'], ['reports', '✦', 'Evangelism', '/admin/reports/evangelism'],
+    ['reports', '⌖', 'Missions', '/admin/reports/missions'], ['reports', '▦', 'KCA', '/admin/reports/kca'],
+    ['reports', '♛', 'Mentors', '/admin/reports/mentors'], ['reports', '▤', 'Press', '/admin/reports/press'],
+    ['reports', '₦', 'Finance', '/admin/reports/finance'], ['reports', '◎', 'Countries', '/admin/reports/countries'],
+    ['reports', '⌘', 'Territories', '/admin/reports/territories'], ['reports', '↗', 'Trends', '/admin/reports/trends'],
+    ['report-ai', '✦', 'Pastoral AI', '/admin/reports/pastoral-ai'], ['report-ai', '✦', 'Press AI', '/admin/reports/press-ai'],
   ],
   O: [
     ['dashboard', '⌂', 'Dashboard', '/admin'], ['security', '!', 'Security', '/admin/security'], ['audit', '▤', 'Audit Logs', '/admin/security/audit-logs'],
-    ['security', '✓', 'Access Decisions', '/admin/security/access-decisions'], ['safeguarding', '◇', 'Safeguarding', '/admin/security/safeguarding'],
-    ['privacy', '▦', 'Privacy', '/admin/security/privacy-requests'], ['settings', '⚙', 'Settings', '/admin/security/configuration'],
+    ['security', '↻', 'Login History', '/admin/security/login-history'], ['security', '✓', 'Access Decisions', '/admin/security/access-decisions'],
+    ['security', '!', 'Security Alerts', '/admin/security/alerts'], ['security', '▦', 'Data Classification', '/admin/security/data-classification'],
+    ['safeguarding', '◇', 'Safeguarding', '/admin/security/safeguarding'], ['safeguarding', '▣', 'Cases', '/admin/security/safeguarding/cases'],
+    ['safeguarding', '♙', 'Child Profiles', '/admin/security/child-profiles'], ['safeguarding', '✓', 'Guardian Consent', '/admin/security/guardian-consent'],
+    ['security', '⊘', 'Restrictions', '/admin/security/communication-restrictions'], ['security', '▤', 'Pastoral Records', '/admin/security/pastoral-records'],
+    ['security', '◉', 'Restricted Access', '/admin/security/restricted-access'], ['privacy', '↗', 'Data Exports', '/admin/security/data-export-requests'],
+    ['privacy', '×', 'Data Deletion', '/admin/security/data-deletion-requests'], ['privacy', '▦', 'Privacy Requests', '/admin/security/privacy-requests'],
+    ['settings', '⚙', 'Configuration', '/admin/security/configuration'],
   ],
 } as const;
+
+type NavBatch = keyof typeof navByBatch;
+type EnterpriseNavItem = { icon: string; label: string; href: string };
+type EnterpriseNavGroup = { id: string; icon: string; label: string; items: EnterpriseNavItem[] };
+
+function navItems(batches: NavBatch[], excludedLabels: string[] = []): EnterpriseNavItem[] {
+  const seen = new Set<string>();
+  const items: EnterpriseNavItem[] = [];
+  batches.forEach((batch) => {
+    const entries = navByBatch[batch] as readonly (readonly [string, string, string, string])[];
+    entries.forEach(([, icon, label, href]) => {
+      if (excludedLabels.includes(label) || seen.has(href)) return;
+      seen.add(href);
+      items.push({ icon, label, href });
+    });
+  });
+  return items;
+}
+
+const dashboardItems: EnterpriseNavItem[] = [
+  { icon: '◆', label: 'Global Admin', href: '/admin' },
+  { icon: '◎', label: 'Geography', href: '/admin/geography' },
+  { icon: '⌂', label: 'Home Churches', href: '/admin/home-churches/dashboard' },
+  { icon: '▣', label: 'Church', href: '/admin/church/dashboard' },
+  { icon: '◇', label: 'KCA', href: '/admin/kca' },
+  { icon: '⌖', label: 'Mission', href: '/admin/mission' },
+  { icon: '▤', label: 'Press', href: '/admin/press' },
+  { icon: '₦', label: 'Finance', href: '/admin/finance' },
+  { icon: '◉', label: 'Communications', href: '/admin/communications' },
+  { icon: '▦', label: 'Reports & Analytics', href: '/admin/reports' },
+  { icon: '!', label: 'Security', href: '/admin/security' },
+];
+
+const reportItems: EnterpriseNavItem[] = [
+  ...navItems(['N'], ['Dashboard']),
+  { icon: '⌂', label: 'Home Church Reports', href: '/admin/home-churches/grace-home-church/finance' },
+  { icon: '▣', label: 'Church Reports', href: '/admin/churches/the-covenant-place/reports' },
+  { icon: '⌖', label: 'Mission Reports', href: '/admin/mission/reports' },
+  { icon: '▤', label: 'Press Analytics', href: '/admin/press/analytics' },
+  { icon: '₦', label: 'Finance Reports', href: '/admin/finance/reports' },
+  { icon: '✉', label: 'Delivery Reports', href: '/admin/communications/delivery-report' },
+];
+
+const enterpriseNavGroups: EnterpriseNavGroup[] = [
+  { id: 'dashboards', icon: '⌂', label: 'Dashboards', items: dashboardItems },
+  { id: 'administration', icon: '◆', label: 'Administration', items: navItems(['A', 'B'], ['Dashboard', 'Reports', 'Settings', 'Churches', 'Events', 'Giving', 'Content']) },
+  { id: 'geography', icon: '◎', label: 'Geography', items: navItems(['C'], ['Dashboard', 'Users', 'Roles & Permissions', 'Reports', 'Settings']) },
+  { id: 'home-churches', icon: '⌂', label: 'Home Churches', items: navItems(['D'], ['Dashboard', 'Reports', 'Settings', 'Finance']) },
+  { id: 'churches', icon: '▣', label: 'Churches', items: navItems(['E'], ['Dashboard', 'Reports', 'Settings', 'Finance']) },
+  { id: 'people', icon: '♙', label: 'People', items: navItems(['F'], ['Dashboard', 'Reports', 'Settings']) },
+  { id: 'kca', icon: '◇', label: 'KCA', items: navItems(['G', 'H'], ['Dashboard', 'Settings']) },
+  { id: 'mission', icon: '⌖', label: 'Mission', items: navItems(['I'], ['Dashboard', 'Reports', 'Settings']) },
+  { id: 'press', icon: '▤', label: 'Press', items: navItems(['J'], ['Dashboard', 'Analytics', 'Settings']) },
+  { id: 'finance', icon: '₦', label: 'Finance', items: navItems(['K'], ['Dashboard', 'Reports', 'Settings']) },
+  { id: 'communications', icon: '✉', label: 'Communications', items: navItems(['M'], ['Dashboard', 'Delivery Report', 'Settings', 'People', 'Churches']) },
+  { id: 'reports', icon: '▦', label: 'Reports', items: reportItems },
+  { id: 'security', icon: '!', label: 'Security', items: navItems(['O'], ['Dashboard']) },
+  { id: 'settings', icon: '⚙', label: 'Settings', items: [
+    { icon: '◆', label: 'Platform', href: '/admin/settings/platform' },
+    { icon: '⌂', label: 'Home Church Rules', href: '/admin/home-churches/grace-home-church/status' },
+    { icon: '▣', label: 'Church Settings', href: '/admin/churches/the-covenant-place/settings' },
+    { icon: '◇', label: 'KCA Settings', href: '/admin/settings/kca' },
+    { icon: '⌖', label: 'Mission Settings', href: '/admin/settings/mission' },
+    { icon: '▤', label: 'Press Settings', href: '/admin/settings/press' },
+    { icon: '₦', label: 'Payment Settings', href: '/admin/settings/payments' },
+    { icon: '✉', label: 'Communication Settings', href: '/admin/communications/settings' },
+    { icon: '!', label: 'Security Configuration', href: '/admin/security/configuration' },
+    { icon: '◎', label: 'Geography Settings', href: '/admin/geography/settings' },
+  ] },
+];
 
 function Brand({ dark = true, label = 'Family House Connect' }: { dark?: boolean; label?: string }) {
   const words = label.split(' ');
@@ -121,18 +216,30 @@ function Brand({ dark = true, label = 'Family House Connect' }: { dark?: boolean
 }
 
 function Sidebar({ screen }: { screen: AdminScreen }) {
-  const entries = navByBatch[screen.batch];
-  const brandLabel = screen.batch === 'J' ? 'Kingdom Press' : screen.batch === 'K' ? 'Kingdom Finance' : ['L','M','N','O'].includes(screen.batch) ? 'Kingdom Platform' : 'Family House Connect';
-  const uniqueActiveIndex = ['J','K','L','M','N','O'].includes(screen.batch) ? entries.findIndex(([key]) => key === screen.nav) : -1;
-  return <aside className="admin-sidebar"><Brand label={brandLabel} /><nav className="nav-list" aria-label="Administration">{entries.map(([key, icon, label, href], index) => {
-    const nested = screen.batch === 'C' && index >= 4 && index <= 8;
-    const active = screen.batch === 'C' ? index !== 3 && screen.route === href : uniqueActiveIndex >= 0 ? index === uniqueActiveIndex : screen.nav === key;
-    return <Link className={`nav-item ${nested ? 'nav-nested' : ''} ${active ? 'active' : ''}`} href={href} key={`${href}-${index}`}><span className="nav-icon">{icon}</span><span className="nav-label">{label}</span></Link>;
+  const allItems = enterpriseNavGroups.flatMap((group) => group.items);
+  const exact = allItems.filter((item) => item.href === screen.route);
+  const prefix = allItems.filter((item) => item.href !== '/admin' && screen.route.startsWith(`${item.href}/`)).sort((left, right) => right.href.length - left.href.length);
+  const activeHref = (exact[0] ?? prefix[0])?.href;
+  return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label="Enterprise administration navigation">{enterpriseNavGroups.map((group) => {
+    const groupActive = group.items.some((item) => item.href === activeHref);
+    return <details className={`enterprise-nav-group ${groupActive ? 'active' : ''}`} data-nav-group={group.id} data-nav-active={groupActive ? 'true' : 'false'} open={groupActive} key={group.id}>
+      <summary data-nav-group-summary={group.id} aria-label={`${group.label} menu`}><span className="nav-icon" aria-hidden="true">{group.icon}</span><span className="nav-group-label">{group.label}</span><span className="nav-chevron" aria-hidden="true">⌄</span></summary>
+      <div className="enterprise-nav-items">{group.items.map((item) => {
+        const active = item.href === activeHref;
+        return <Link className={`nav-item nav-subitem ${active ? 'active' : ''}`} href={item.href} key={`${group.id}-${item.href}`} aria-label={`${group.label}: ${item.label}`} aria-current={active ? 'page' : undefined}><span className="nav-icon nav-subicon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></Link>;
+      })}</div>
+    </details>;
   })}</nav></aside>;
 }
 
-function Topbar() {
-  return <header className="topbar"><Link href="/admin/screens" className="screen-index-link" aria-label="All designed screens" title="All designed screens">▦</Link><button className="top-icon" aria-label="Notifications">♧</button><button className="top-icon" aria-label="Unread alerts">♧<span className="dot" /></button><Link href="/admin/profile" className="avatar" aria-label="Admin profile">JD</Link></header>;
+function Topbar({ screen }: { screen: AdminScreen }) {
+  const adminModule = getAdminModuleForRoute(screen.route);
+  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label="Toggle navigation" aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label="All modules" data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>All modules</b></button><span className="current-module-label"><small>Current module</small><strong>{adminModule.label}</strong></span><span className="topbar-spacer"/><Link href="/admin/screens" className="screen-index-link" aria-label="Preview-only screen directory" title="Preview-only screen directory">Preview directory</Link><button className="top-icon" type="button" aria-label="Notifications">♧</button><button className="top-icon" type="button" aria-label="Unread alerts">♧<span className="dot" /></button><button className="avatar" type="button" aria-label="Admin profile menu" data-admin-intent="profile-menu">JD</button></header>;
+}
+
+function Breadcrumbs({ items }: { items: AdminBreadcrumb[] }) {
+  if (items.length < 2) return null;
+  return <nav className="admin-breadcrumbs" aria-label="Breadcrumb">{items.map((item, index) => index === items.length - 1 ? <span aria-current="page" key={item.route}>{item.label}</span> : <Link href={item.route} key={item.route}>{item.label}</Link>)}</nav>;
 }
 
 function StatusBadge({ value }: { value: string }) {
@@ -140,11 +247,11 @@ function StatusBadge({ value }: { value: string }) {
   return <span className={`status-badge ${tone}`}>{value}</span>;
 }
 
-function PageHeader({ screen }: { screen: AdminScreen }) {
+function PageHeader({ screen, hideAction = false }: { screen: AdminScreen; hideAction?: boolean }) {
   const showNigeriaFlag = screen.id === 'C-03' || screen.id === 'C-11';
   const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
   const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
-  const showHeaderAction = !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
+  const showHeaderAction = !hideAction && !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
   return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && !platformBatch && <Tabs tabs={screen.tabs} />}</>;
 }
 
@@ -314,8 +421,8 @@ export function ForbiddenView({ scope = 'Global', reason = 'permission-denied' }
 }
 
 function AuthView({ screen }: { screen: AdminScreen }) {
-  if(screen.kind==='mfa') return <main className="auth-page"><header className="auth-header"><Brand dark={false}/><span>Admin Portal</span></header><section className="card mfa-card"><div className="mfa-icon">◇</div><h1>{screen.title}</h1><p>{screen.subtitle}</p><div className="otp-row">{'371942'.split('').map((digit,index)=><input aria-label={`Digit ${index+1}`} defaultValue={digit} maxLength={1} key={index}/>)}</div><strong>Code expires in 00:45</strong><div className="auth-links"><button>Can’t access your authenticator?</button><button>Use backup code</button></div><Link href="/admin" className="primary-button link-button">Back to login</Link></section></main>;
-  return <main className="login-page"><aside className="login-visual"><Brand/><div className="login-copy"><h1>Admin Portal</h1><p>Kingdom. Connection. Impact.</p><blockquote>“Go and make disciples<br/>of all nations.”<small>Matthew 28:19</small></blockquote></div><div className="city-lights"/></aside><section className="login-form"><div><h1>{screen.title}</h1><p>{screen.subtitle}</p><label>Email Address<input defaultValue="admin@fhconnect.org" /></label><label>Password<input type="password" defaultValue="password" /></label><div className="remember"><label><input type="checkbox" defaultChecked/> Remember me</label><Link href="#">Forgot password?</Link></div><Link href="/admin/mfa" className="primary-button link-button">Sign In</Link><small>Need help? <b>Contact Support</b></small></div></section></main>;
+  if(screen.kind==='mfa') return <main className="auth-page"><header className="auth-header"><Brand dark={false}/><span>Admin Portal</span></header><section className="card mfa-card"><div className="mfa-icon">◇</div><h1>{screen.title}</h1><p>{screen.subtitle}</p><div className="otp-row">{'371942'.split('').map((digit,index)=><input aria-label={`Digit ${index+1}`} defaultValue={digit} maxLength={1} key={index}/>)}</div><strong>Code expires in 00:45</strong><div className="auth-links"><button type="button">Can’t access your authenticator?</button><button type="button">Use backup code</button></div><Link href="/admin" className="primary-button link-button">Verify &amp; Continue</Link></section></main>;
+  return <main className="login-page"><aside className="login-visual"><Brand/><div className="login-copy"><h1>Admin Portal</h1><p>Kingdom. Connection. Impact.</p><blockquote>“Go and make disciples<br/>of all nations.”<small>Matthew 28:19</small></blockquote></div><div className="city-lights"/></aside><section className="login-form"><div><h1>{screen.title}</h1><p>{screen.subtitle}</p><label>Email Address<input defaultValue="admin@fhconnect.org" /></label><label>Password<input type="password" defaultValue="password" /></label><div className="remember"><label><input type="checkbox" defaultChecked/> Remember me</label><button type="button">Forgot password?</button></div><Link href="/admin/mfa" className="primary-button link-button">Sign In</Link><small>Need help? <b>Contact Support</b></small></div></section></main>;
 }
 
 function ScreenContent({ screen }: { screen: AdminScreen }) {
@@ -356,11 +463,14 @@ function ScreenContent({ screen }: { screen: AdminScreen }) {
   }
 }
 
-export function AdminScreenView({ screen, decision, requestedScope }: { screen: AdminScreen; decision: AccessDecision; requestedScope: string }) {
-  if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen}/>;
+export function AdminScreenView({ screen, decision, requestedScope, returnTo }: { screen: AdminScreen; decision: AccessDecision; requestedScope: string; returnTo?: string }) {
+  const breadcrumbs = getAdminBreadcrumbs(screen);
+  const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
+  if(screen.kind==='login'||screen.kind==='mfa') return <AdminInteractionShell {...interactionProps}><AuthView screen={screen}/></AdminInteractionShell>;
   const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id);
   const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
-  return <div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}>{!rendererOwnsHeader && <PageHeader screen={screen}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div>;
+  const rendererOwnsAction = new Set(['G-01','G-17','H-11','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20']).has(screen.id);
+  return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
 }
 
 const batchNames = {
