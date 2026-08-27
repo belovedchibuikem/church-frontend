@@ -29,11 +29,8 @@ import {
 import { isPublicApiConfigured, publicRequest, PublicApiError } from '@/lib/public-api';
 import type { JsonObject } from '@/lib/api-types';
 import type { MapMarker, MapsBootstrap, MapProvider } from '@/components/interactive-map';
-import {
-  createPublicApiClient,
-  GeneratedPublicApiError,
-  type HealthData,
-} from '@/lib/generated-api';
+
+export type HealthData = { status: 'ok'; service: 'family-house-connect-api' };
 
 /** Fixtures are allowed only when explicitly enabled (server or NEXT_PUBLIC mirror). */
 export function designFixturesEnabled(): boolean {
@@ -297,30 +294,12 @@ async function withFixtureFallback<T>(loader: () => Promise<T>, fixtures: () => 
   }
 }
 
-function rethrowAsPublicApiError(error: unknown): never {
-  if (error instanceof GeneratedPublicApiError) {
-    throw new PublicApiError(
-      error.status,
-      error.envelope.error.code,
-      error.envelope.error.message,
-      error.envelope.error.details ?? {},
-      error.envelope.correlation_id,
-    );
-  }
-  throw error;
-}
-
-/** Thin proof that the generated public client is wired (`GET /api/v1/health`). */
+/** Health check through the deployment-safe public API transport. */
 export async function loadHealth(): Promise<{ data: HealthData; source: 'api' }> {
   if (!isPublicApiConfigured()) {
     throw new PublicApiError(503, 'API_NOT_CONFIGURED', 'The public API base URL is not configured.');
   }
-  try {
-    const envelope = await createPublicApiClient().getHealth();
-    return { data: envelope.data, source: 'api' };
-  } catch (error) {
-    rethrowAsPublicApiError(error);
-  }
+  return { data: await publicRequest<HealthData>('health'), source: 'api' };
 }
 
 export async function loadChurches(query?: Record<string, string | number | undefined>): Promise<{ data: ContentCard[]; source: 'api' | 'fixtures' }> {

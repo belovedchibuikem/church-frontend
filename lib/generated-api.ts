@@ -1,35 +1,59 @@
 /**
  * Generated Family House Connect API clients.
  *
- * Instantiates `FamilyHousePublicApiClient` / `FamilyHouseProtectedApiClient`
- * from `api/clients/typescript`. Existing wrappers (`public-api.ts`,
- * `api-client.ts`, `*-api.ts`) stay the app-facing surface.
- *
- * Relative imports are used instead of a `file:` package: the TypeScript
- * client package (`@family-house-connect/public-api-client`) has no exports
- * map for public vs protected entrypoints.
+ * This adapter intentionally lives within the web deployment root. Importing
+ * TypeScript sources from `api/clients` crosses the Vercel/Vite project
+ * boundary and fails SSR bundling; the app-facing API wrappers remain the
+ * canonical integration surface.
  */
-import { FamilyHousePublicApiClient } from '../../../../api/clients/typescript/src/public-api.ts';
-import { FamilyHouseProtectedApiClient } from '../../../../api/clients/typescript/src/protected-api.ts';
 import {
   browserProtectedOptions,
   requireGeneratedClientBaseUrl,
 } from './api-client.ts';
-import type { BrowserProtectedOptions } from './api-types.ts';
+import type { BrowserProtectedOptions, JsonObject } from './api-types.ts';
 
-export {
-  FamilyHousePublicApiClient,
-  PublicApiError as GeneratedPublicApiError,
-  type HealthData,
-  type PublicApiRequestOptions,
-  type SuccessEnvelope as PublicSuccessEnvelope,
-} from '../../../../api/clients/typescript/src/public-api.ts';
+export type HealthData = { status: 'ok'; service: 'family-house-connect-api' };
+export type PublicApiRequestOptions = { signal?: AbortSignal };
+export type ProtectedRequestOptions = BrowserProtectedOptions;
+export type PublicSuccessEnvelope<T> = { data: T; meta: JsonObject; correlation_id: string };
 
-export {
-  FamilyHouseProtectedApiClient,
-  ProtectedApiError as GeneratedProtectedApiError,
-  type ProtectedRequestOptions,
-} from '../../../../api/clients/typescript/src/protected-api.ts';
+export class GeneratedPublicApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly envelope: { error: { code: string; message: string; details?: JsonObject }; correlation_id: string },
+  ) {
+    super(envelope.error.message);
+  }
+}
+
+export class GeneratedProtectedApiError extends Error {}
+
+export class FamilyHousePublicApiClient {
+  constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch = globalThis.fetch) {}
+
+  async getHealth(options: PublicApiRequestOptions = {}): Promise<PublicSuccessEnvelope<HealthData>> {
+    const response = await this.fetcher(`${this.baseUrl.replace(/\/$/, '')}/api/v1/health`, {
+      headers: { Accept: 'application/json' },
+      signal: options.signal,
+    });
+    const body = await response.json() as PublicSuccessEnvelope<HealthData> | { error?: { code?: string; message?: string; details?: JsonObject }; correlation_id?: string };
+    if (!response.ok || !('data' in body)) {
+      throw new GeneratedPublicApiError(response.status, {
+        error: {
+          code: body.error?.code ?? 'PUBLIC_API_ERROR',
+          message: body.error?.message ?? 'The public API request failed.',
+          details: body.error?.details,
+        },
+        correlation_id: body.correlation_id ?? '',
+      });
+    }
+    return body;
+  }
+}
+
+export class FamilyHouseProtectedApiClient {
+  constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch = globalThis.fetch) {}
+}
 
 export { browserProtectedOptions };
 

@@ -1618,8 +1618,8 @@ function PermissionsView({ screen, requestedScope }: { screen: AdminScreen; requ
   }, [live, requestedScope]);
 
   if (!live) {
-    const actions=['View','Create','Edit','Delete'];
-    return <div className="permission-layout"><aside className="card module-list"><strong>Modules</strong>{(screen.items ?? []).map((item,index)=><button className={index===0?'active':''} key={item}>{item}</button>)}</aside><div className="card permission-table"><div className="permission-head"><strong>Permissions (42)</strong>{actions.map(action=><b key={action}>{action}</b>)}</div>{['View Users','Create Users','Edit Users','Delete Users','Reset Passwords'].map((item,row)=><div className="permission-row" key={item}><span>◉　{item}</span>{actions.map((action,col)=><input aria-label={`${action} ${item}`} type="checkbox" defaultChecked={row<3||col<2} key={action}/>)}</div>)}</div></div>;
+  const actions=['View','Create','Edit','Delete'];
+  return <div className="permission-layout"><aside className="card module-list"><strong>Modules</strong>{(screen.items ?? []).map((item,index)=><button className={index===0?'active':''} key={item}>{item}</button>)}</aside><div className="card permission-table"><div className="permission-head"><strong>Permissions (42)</strong>{actions.map(action=><b key={action}>{action}</b>)}</div>{['View Users','Create Users','Edit Users','Delete Users','Reset Passwords'].map((item,row)=><div className="permission-row" key={item}><span>◉　{item}</span>{actions.map((action,col)=><input aria-label={`${action} ${item}`} type="checkbox" defaultChecked={row<3||col<2} key={action}/>)}</div>)}</div></div>;
   }
 
   const modules = Array.from(new Set(permissions.map((permission) => permission.code.split('.')[0] || 'other'))).sort();
