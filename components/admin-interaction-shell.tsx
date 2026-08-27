@@ -4,10 +4,20 @@ import Link from 'next/link';
 import type { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AdminActionSurface, inferActionSurfaceMode, type ActionSurfaceMode } from './admin-action-surface';
+import { resolveEntityKey } from '../lib/admin-form-schemas';
+import {
+  UNREGISTERED_ADMIN_ACTION_MESSAGE,
+  UnregisteredAdminActionError,
+  executeAdminAction,
+  extractUlid,
+  formatAdminActionSuccess,
+  formatAdminMutationError,
+} from '../lib/admin-mutation-dispatcher';
+import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
 
 type Overlay =
-  | { type: 'drawer' | 'dialog'; title: string; description: string; mode: 'filters' | 'profile' | 'modules' | 'action'; actionMode?: ActionSurfaceMode; label?: string; record?: string }
+  | { type: 'drawer' | 'dialog'; title: string; description: string; mode: 'filters' | 'profile' | 'modules' | 'action'; actionMode?: ActionSurfaceMode; label?: string; record?: string; entityKey?: string }
   | null;
 
 type Props = {
@@ -16,6 +26,7 @@ type Props = {
   title: string;
   permission: string;
   scope: string;
+  screenKind?: string;
   returnTo?: string;
   tabs?: string[];
   routes: Record<string, string>;
@@ -36,8 +47,9 @@ function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-export function AdminInteractionShell({ children, route, title, permission, scope, returnTo, tabs, routes, records = [], details = {}, items = [] }: Props) {
+export function AdminInteractionShell({ children, route, title, permission, scope, screenKind, returnTo, tabs, routes, records = [], details = {}, items = [] }: Props) {
   const tabItems = tabs ?? emptyTabs;
+  const inPageWizard = isInPageWizardKind(screenKind) && tabItems.length > 1;
   const currentModule = getAdminModuleForRoute(route);
   const rootRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -152,7 +164,8 @@ export function AdminInteractionShell({ children, route, title, permission, scop
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(''), 2800);
+    const linger = /failed|error|registered|required|denied|unable|rejected/i.test(toast) ? 6000 : 3200;
+    const timer = window.setTimeout(() => setToast(''), linger);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -199,17 +212,19 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     return routes[clean];
   };
 
-  const openAction = (label: string, forcedMode?: ActionSurfaceMode) => {
+  const openAction = (label: string, forcedMode?: ActionSurfaceMode, options?: { record?: string; entityKey?: string }) => {
     const actionMode = forcedMode ?? inferActionSurfaceMode(label);
     const entity = label.replace(/[＋+]/g, '').trim() || title;
-    const recordLabel = normalize(label).replace(/^(view|open|details for|actions for)\s+/, '');
-    const selectedRecord = recordLabel ? records.find((record) => record.toLowerCase().includes(recordLabel)) : undefined;
+    const recordLabel = normalize(label).replace(/^(view|open|edit|delete|details for|actions for)\s+/, '');
+    const selectedRecord = options?.record ?? (recordLabel ? records.find((record) => record.toLowerCase().includes(recordLabel)) : undefined);
+    const entityKey = options?.entityKey ?? resolveEntityKey(route);
     setOverlay({
       type: actionMode === 'confirm' ? 'dialog' : 'drawer',
       mode: 'action',
       actionMode,
       label,
       record: selectedRecord,
+      entityKey,
       title: actionMode === 'create' ? entity : label || 'Page actions',
       description: actionMode === 'confirm' ? 'Review the scope, permission and supporting notes before continuing.' : `Complete the ${entity.toLowerCase()} workflow for ${title}.`,
     });
@@ -222,11 +237,31 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     navigate(restored ?? adminModule.homeRoute, false);
   };
 
-  const saveLocalDraft = (payload: Record<string, string>) => {
+  const executeMutation = async (payload: Record<string, string>) => {
     const action = overlay?.label || overlay?.title || 'action';
-    window.localStorage.setItem(`fhc-admin-action:${route}:${slug(action)}`, JSON.stringify({ savedAt: new Date().toISOString(), payload }));
-    setOverlay(null);
-    setToast('Draft saved on this device. No server action was simulated.');
+    const recordId = extractUlid(overlay?.record) ?? extractUlid(payload.id);
+    try {
+      const result = await executeAdminAction({
+        route,
+        label: action,
+        payload,
+        recordId,
+        scope,
+      });
+      setOverlay(null);
+      setToast(formatAdminActionSuccess(result));
+    } catch (error) {
+      if (error instanceof UnregisteredAdminActionError) {
+        window.localStorage.setItem(
+          `fhc-admin-action:${route}:${slug(action)}`,
+          JSON.stringify({ savedAt: new Date().toISOString(), payload, draftOnly: true }),
+        );
+        setToast(UNREGISTERED_ADMIN_ACTION_MESSAGE);
+      } else {
+        setToast(formatAdminMutationError(error));
+      }
+      throw error;
+    }
   };
 
   const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -268,8 +303,23 @@ export function AdminInteractionShell({ children, route, title, permission, scop
 
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || button.dataset.interactionNative === 'true') return;
+    if (screenKind === 'login' || screenKind === 'mfa') return;
+    if (button.type === 'submit') return;
+    if (button.closest('form') && !button.closest('.interaction-overlay')) return;
+    if (button.closest('.branding-settings, .maps-settings') && !button.closest('.interaction-overlay')) return;
     const label = (button.getAttribute('aria-label') || button.textContent || '').trim();
     const clean = normalize(label);
+
+    if (button.dataset.adminAction) {
+      event.preventDefault();
+      const record = button.dataset.record ?? '';
+      const entityKey = button.dataset.entity ?? resolveEntityKey(route);
+      const action = button.dataset.adminAction;
+      if (action === 'view') openAction(`View ${record}`, 'preview', { record, entityKey });
+      else if (action === 'edit') openAction(`Edit ${record}`, 'edit', { record, entityKey });
+      else if (action === 'delete') openAction(`Delete ${record}`, 'confirm', { record, entityKey });
+      return;
+    }
 
     if (button.dataset.adminIntent === 'toggle-navigation') {
       event.preventDefault();
@@ -352,6 +402,11 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     }
     if (clean === 'back' || clean === 'cancel') {
       event.preventDefault();
+      if (inPageWizard && clean === 'back' && new URL(window.location.href).searchParams.get('step')) {
+        window.dispatchEvent(new CustomEvent(WIZARD_ADVANCE_EVENT, { detail: { direction: 'back' } }));
+        setToast('Previous step opened');
+        return;
+      }
       const requestedReturn = new URL(window.location.href).searchParams.get('returnTo');
       const destination = requestedReturn && isCanonicalAdminPath(requestedReturn) ? requestedReturn : routes[clean] ?? currentModule.homeRoute;
       navigate(destination, false);
@@ -363,14 +418,22 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       setToast('Draft preserved on this device');
       return;
     }
-    if (clean.startsWith('next') && !resolveRoute(label) && tabItems.length > 1) {
-      event.preventDefault();
-      const currentIndex = Math.max(0, tabItems.indexOf(activeTab));
-      const nextTab = tabItems[Math.min(currentIndex + 1, tabItems.length - 1)];
-      setActiveTab(nextTab);
-      updateUrlState('tab', slug(nextTab));
-      setToast(`${nextTab} opened`);
-      return;
+    if ((clean.startsWith('next') || clean === 'save & next') && !resolveRoute(label)) {
+      if (inPageWizard) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent(WIZARD_ADVANCE_EVENT, { detail: { direction: 'next' } }));
+        setToast('Next step opened');
+        return;
+      }
+      if (tabItems.length > 1) {
+        event.preventDefault();
+        const currentIndex = Math.max(0, tabItems.indexOf(activeTab));
+        const nextTab = tabItems[Math.min(currentIndex + 1, tabItems.length - 1)];
+        setActiveTab(nextTab);
+        updateUrlState('tab', slug(nextTab));
+        setToast(`${nextTab} opened`);
+        return;
+      }
     }
     if (clean === 'expand all') {
       event.preventDefault();
@@ -445,7 +508,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
   return <div ref={rootRef} className={`interaction-shell ${collapsed ? 'sidebar-collapsed' : ''} ${navigationOpen ? 'navigation-open' : ''}`} onClickCapture={handleClick} onInput={handleInput} onKeyDownCapture={handleRootKeyDown}>
     {children}
     {contextualReturn && contextualModule && <button className="interaction-return-button" type="button" data-interaction-native="true" onClick={() => navigate(contextualReturn, false)}>← Back to {contextualModule.label}</button>}
-    {activeTab && activeTab !== tabItems[0] && <section className="interaction-tab-workspace" role="tabpanel" aria-live="polite"><header><div><span>{currentModule.label}</span><h2>{activeTab}</h2><p>{title} · {scope} scope</p></div><button type="button" data-interaction-native="true" onClick={showOverview}>Back to overview</button></header><div className="interaction-tab-metrics"><article><small>Visible records</small><strong>{records.length || items.length || Object.keys(details).length}</strong></article><article><small>Permission</small><strong>{permission}</strong></article><article><small>Section</small><strong>{activeTab}</strong></article></div><div className="interaction-tab-grid"><article><h3>{activeTab} overview</h3><dl>{Object.entries(details).slice(0, 8).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}{Object.keys(details).length === 0 && <div><dt>Context</dt><dd>Records and actions for {activeTab.toLowerCase()} are shown below.</dd></div>}</dl></article><article><h3>Records</h3>{records.slice(0, 8).map((record, index) => <button type="button" key={`${record}-${index}`} aria-label={`View ${record.split(' · ')[0]}`}><span>{String(index + 1).padStart(2, '0')}</span>{record}</button>)}{records.length === 0 && items.slice(0, 8).map((item, index) => <button type="button" key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</button>)}</article></div></section>}
+    {!inPageWizard && activeTab && activeTab !== tabItems[0] && <section className="interaction-tab-workspace" role="tabpanel" aria-live="polite"><header><div><span>{currentModule.label}</span><h2>{activeTab}</h2><p>{title} · {scope} scope</p></div><button type="button" data-interaction-native="true" onClick={showOverview}>Back to overview</button></header><div className="interaction-tab-metrics"><article><small>Visible records</small><strong>{records.length || items.length || Object.keys(details).length}</strong></article><article><small>Permission</small><strong>{permission}</strong></article><article><small>Section</small><strong>{activeTab}</strong></article></div><div className="interaction-tab-grid"><article><h3>{activeTab} overview</h3><dl>{Object.entries(details).slice(0, 8).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}{Object.keys(details).length === 0 && <div><dt>Context</dt><dd>Records and actions for {activeTab.toLowerCase()} are shown below.</dd></div>}</dl></article><article><h3>Records</h3>{records.slice(0, 8).map((record, index) => <button type="button" key={`${record}-${index}`} aria-label={`View ${record.split(' · ')[0]}`}><span>{String(index + 1).padStart(2, '0')}</span>{record}</button>)}{records.length === 0 && items.slice(0, 8).map((item, index) => <button type="button" key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</button>)}</article></div></section>}
     {query && records.length > 0 && <section className="interaction-search-results" aria-label="Filtered results"><header><strong>{matchingRecords.length} matching record{matchingRecords.length === 1 ? '' : 's'}</strong><span>Search: {query}</span></header>{matchingRecords.slice(0, 5).map((record, index) => <button type="button" key={`${record}-${index}`} aria-label={`View search result ${index + 1}`}>{record}</button>)}{matchingRecords.length === 0 && <p>No records match this search.</p>}</section>}
     {matches !== null && records.length === 0 && <div className="interaction-result-count" role="status">{matches} matching record{matches === 1 ? '' : 's'}</div>}
     {navigationOpen && <button className="interaction-nav-backdrop" type="button" aria-label="Close navigation" data-interaction-native="true" onClick={() => setNavigationOpen(false)}/>} 
@@ -457,7 +520,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><Link href="/admin/profile">Open Admin Profile</Link><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
         {overlay.mode === 'modules' && <div className="interaction-module-grid">{adminModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
         {overlay.mode === 'modules' && <div className="interaction-directory-link"><Link href="/admin/screens">Preview-only screen directory</Link></div>}
-        {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} details={details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onDraft={saveLocalDraft}/>} 
+        {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 
       </section>
     </div>}
     {toast && <div className="interaction-toast" role="status" aria-live="polite">{toast}</div>}

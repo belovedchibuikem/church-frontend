@@ -13,7 +13,7 @@ export type AdminModule = {
 
 export const adminModules: AdminModule[] = [
   { id: 'dashboard', label: 'Global Administration', description: 'Command centre, approvals, tasks and global KPIs', icon: '⌂', homeRoute: '/admin', prefixes: ['/admin/command', '/admin/scope', '/admin/approvals', '/admin/alerts', '/admin/notifications', '/admin/activity', '/admin/audit', '/admin/tasks', '/admin/kpi', '/admin/profile'] },
-  { id: 'identity', label: 'Identity & Access', description: 'Users, roles, permissions and controlled access', icon: '◉', homeRoute: '/admin/users', prefixes: ['/admin/users', '/admin/roles', '/admin/access', '/admin/sessions'] },
+  { id: 'identity', label: 'Identity & Access', description: 'Users, roles, permissions and controlled access', icon: '◉', homeRoute: '/admin/users', prefixes: ['/admin/users', '/admin/roles', '/admin/permissions', '/admin/access', '/admin/sessions'] },
   { id: 'geography', label: 'Geography', description: 'Countries, regions, areas and hierarchy', icon: '◎', homeRoute: '/admin/geography', prefixes: ['/admin/geography'] },
   { id: 'home-churches', label: 'Home Churches', description: 'Applications, leaders, attendance and needs', icon: '◇', homeRoute: '/admin/home-churches/dashboard', prefixes: ['/admin/home-churches'] },
   { id: 'churches', label: 'Church Operations', description: 'Churches, members, departments and groups', icon: '▣', homeRoute: '/admin/church/dashboard', prefixes: ['/admin/church/dashboard', '/admin/churches'] },

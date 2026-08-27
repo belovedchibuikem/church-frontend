@@ -1,13 +1,94 @@
+'use client';
+
 import Link from 'next/link';
-import Image from 'next/image';
-import type { AccessDecision } from '../lib/access-control';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { hasAdministratorCapabilities, type AccessDecision } from '../lib/access-control';
+import {
+  challengeMfa,
+  formatAuthError,
+  isAuthApiConfigured,
+  loginBrowserUser,
+  logoutBrowserUser,
+} from '../lib/auth-api';
+import { fetchUserCapabilities } from '../lib/user-api';
 import { adminScreens, type AdminScreen, type Metric } from '../lib/admin-routes';
+import {
+  AdminIdentityApiError,
+  type AdminAccessDecision,
+  type AdminAuditEvent,
+  type AdminPermission,
+  type AdminProfile,
+  type AdminRole,
+  type AdminScopeAssignment,
+  type AdminUser,
+  assignAdminRoleAssignmentScope,
+  assignAdminUserRole,
+  defaultAdminScope,
+  fetchAdminProfile,
+  formatAccountStatus,
+  formatTimestamp,
+  grantAdminRolePermission,
+  identityApiConfigured,
+  listAdminAccessDecisions,
+  listAdminAuditEvents,
+  listAdminPermissions,
+  listAdminRoles,
+  listAdminScopeAssignments,
+  listAdminUsers,
+  reactivateAdminUser,
+  shouldUseDesignFixtures,
+  suspendAdminUser,
+} from '../lib/admin-identity-api';
 import { KcaScreenContent } from './kca-ui';
 import { MissionScreenContent } from './mission-ui';
-import { PlatformScreenContent } from './platform-ui';
+import { PlatformScreenContent, DemoDatasetBanner } from './platform-ui';
 import { AdminInteractionShell } from './admin-interaction-shell';
 import { getAdminBreadcrumbs, getInteractionRouteMap, type AdminBreadcrumb } from '../lib/admin-navigation';
+import { AppBrand } from './app-brand';
+import { BrandingSettingsPanel } from './branding-settings-panel';
+import { MapsSettingsPanel } from './maps-settings-panel';
+import { InteractiveMap } from './interactive-map';
+import { HierarchyTreeView } from './hierarchy-tree-view';
+import { SearchSelect } from './search-select';
+import { TableRowActions } from './table-row-actions';
+import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
+import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { getAdminModuleForRoute } from '../lib/admin-modules';
+import { resolveEntityKey } from '../lib/admin-form-schemas';
+import { catalogOptions, churchTypeOptions, statusOptions } from '../lib/form-catalogs';
+import {
+  completeFollowUpTask,
+  createChurch,
+  defaultOpsScope,
+  loadOpsDataset,
+  operationsErrorMessage,
+  opsRecordsToRows,
+  registerFirstTimer,
+  resolveOpsDataset,
+  shouldUseOperationsLiveData,
+  transitionHomeChurchApplication,
+  type OpsDatasetKey,
+} from '../lib/admin-operations-api';
+import {
+  countriesToSelectOptions,
+  listCountries,
+  listUnits,
+  organizationErrorMessage,
+  shouldUseOrganizationFixtures,
+  unitsToSelectOptions,
+  type AdminCountry,
+  type AdminAdministrativeUnit,
+} from '../lib/admin-organization-api';
+import {
+  catalogErrorMessage,
+  catalogRecordsToRows,
+  listCatalogDomain,
+  resolveCatalogDataset,
+  shouldUseCatalogLiveData,
+} from '../lib/admin-catalog-api';
+
+const CATALOG_FEED_COLUMNS = ['Item', 'Detail', 'Time'];
 
 const navByBatch = {
   A: [
@@ -197,6 +278,7 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
   { id: 'security', icon: '!', label: 'Security', items: navItems(['O'], ['Dashboard']) },
   { id: 'settings', icon: '⚙', label: 'Settings', items: [
     { icon: '◆', label: 'Platform', href: '/admin/settings/platform' },
+    { icon: '▣', label: 'Branding', href: '/admin/settings/branding' },
     { icon: '⌂', label: 'Home Church Rules', href: '/admin/home-churches/grace-home-church/status' },
     { icon: '▣', label: 'Church Settings', href: '/admin/churches/the-covenant-place/settings' },
     { icon: '◇', label: 'KCA Settings', href: '/admin/settings/kca' },
@@ -209,10 +291,8 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
   ] },
 ];
 
-function Brand({ dark = true, label = 'Family House Connect' }: { dark?: boolean; label?: string }) {
-  const words = label.split(' ');
-  const breakAt = Math.max(1, Math.ceil(words.length / 2));
-  return <div className={`brand ${dark ? '' : 'brand-light'}`}><span className="brand-mark">◆</span><span className="brand-copy">{words.slice(0, breakAt).join(' ')}<br />{words.slice(breakAt).join(' ')}</span></div>;
+function Brand({ dark = true }: { dark?: boolean }) {
+  return <AppBrand variant="admin" dark={dark} />;
 }
 
 function Sidebar({ screen }: { screen: AdminScreen }) {
@@ -252,7 +332,7 @@ function PageHeader({ screen, hideAction = false }: { screen: AdminScreen; hideA
   const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
   const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
   const showHeaderAction = !hideAction && !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && !platformBatch && <Tabs tabs={screen.tabs} />}</>;
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && !platformBatch && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
@@ -268,20 +348,989 @@ function ChartCard({ title, value, green = false, bars = false }: { title: strin
 }
 
 function DashboardView({ screen }: { screen: AdminScreen }) {
-  return <><MetricCards metrics={screen.metrics} /><div className="dashboard-grid"><ChartCard title="New Registrations" value="12,842" /><ChartCard title="Giving (USD)" value="$1,246,830" /><ChartCard title="Active Users" value="95,221" green /></div></>;
+  return <><DemoDatasetBanner /><MetricCards metrics={screen.metrics} /><div className="dashboard-grid"><ChartCard title="New Registrations" value="12,842" /><ChartCard title="Giving (USD)" value="$1,246,830" /><ChartCard title="Active Users" value="95,221" green /></div></>;
 }
 
 function SearchBar({ placeholder = 'Search by name, email, phone or ID...' }: { placeholder?: string }) {
   return <div className="search-row"><label className="search-box"><span>⌕</span><input aria-label="Search" placeholder={placeholder} /></label><button className="filter-button">▽ Filters</button></div>;
 }
 
-function DataTable({ screen }: { screen: AdminScreen }) {
+function identityErrorMessage(error: unknown): string {
+  if (error instanceof AdminIdentityApiError) {
+    if (error.status === 401) return 'Sign in with an admin session to load this directory.';
+    if (error.status === 403) return error.message || 'Permission or recent MFA verification required for this action.';
+    return error.message + (error.correlationId ? ` (${error.correlationId})` : '');
+  }
+  return 'Unable to reach the admin identity API.';
+}
+
+const IDENTITY_SCOPE_TYPE_VALUES = [
+  { value: 'administrative_unit', label: 'Administrative unit' },
+  { value: 'country', label: 'Country' },
+  { value: 'church', label: 'Church' },
+  { value: 'home_church', label: 'Home church' },
+] as const;
+
+function mapIdentityScopeType(value: string): string {
+  const normalized = value.trim();
+  if (normalized === 'Administrative Scope') return 'administrative_unit';
+  if (normalized === 'Church Scope') return 'church';
+  if (normalized === 'Home Church Scope') return 'home_church';
+  return normalized;
+}
+
+function resolveIdentityScopeId(form: FormData, scopeType: string): string {
+  if (scopeType === 'country') return String(form.get('country_id') ?? '').trim();
+  if (scopeType === 'church') return String(form.get('church_id') ?? '').trim();
+  if (scopeType === 'home_church') return String(form.get('home_church_id') ?? '').trim();
+  return String(form.get('administrative_unit_id') ?? form.get('scope_id') ?? '').trim();
+}
+
+function roleAssignmentOptions(users: AdminUser[]): Array<{ value: string; label: string }> {
+  return users.flatMap((user) =>
+    (user.roles ?? [])
+      .filter((role) => Boolean(role.assignment_id))
+      .map((role) => ({
+        value: role.assignment_id,
+        label: `${user.name} · ${role.name || role.code}`,
+      })),
+  );
+}
+
+function IdentityLoadState({ message, tone = 'neutral' }: { message: string; tone?: 'neutral' | 'danger' }) {
+  return <p className={`field-help${tone === 'danger' ? ' identity-error' : ''}`} role="status" style={tone === 'danger' ? { color: '#dc2626' } : undefined}>{message}</p>;
+}
+
+function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const suspendedOnly = screen.route.includes('/suspended');
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [message, setMessage] = useState('Loading users…');
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const scope = defaultAdminScope(requestedScope);
+    setError(null);
+    try {
+      const result = await listAdminUsers({
+        scope,
+        status: suspendedOnly ? 'suspended' : undefined,
+        perPage: 25,
+        sort: '-created_at',
+      });
+      setUsers(result.data);
+      setTotal(result.pagination.total);
+      setMessage(`Showing ${result.data.length} of ${result.pagination.total} users`);
+    } catch (err) {
+      setUsers([]);
+      setTotal(0);
+      setError(identityErrorMessage(err));
+      setMessage('Live user directory unavailable');
+    }
+  }, [requestedScope, suspendedOnly]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function onSuspend(user: AdminUser) {
+    const reason = window.prompt(`Suspension reason code for ${user.name} (e.g. security.review):`, 'security.review');
+    if (!reason) return;
+    if (!window.confirm(`Suspend ${user.name}? They will lose access until reactivated.`)) return;
+    setBusyId(user.id);
+    setError(null);
+    try {
+      await suspendAdminUser(user.id, reason.trim(), defaultAdminScope(requestedScope));
+      await refresh();
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onReactivate(user: AdminUser) {
+    if (!window.confirm(`Reactivate ${user.name}?`)) return;
+    setBusyId(user.id);
+    setError(null);
+    try {
+      await reactivateAdminUser(user.id, defaultAdminScope(requestedScope));
+      await refresh();
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const metrics = [
+    { label: suspendedOnly ? 'Suspended' : 'Loaded', value: String(total) },
+    { label: 'Active (page)', value: String(users.filter((user) => user.account_status === 'active').length) },
+    { label: 'Suspended (page)', value: String(users.filter((user) => user.account_status === 'suspended').length) },
+    { label: 'Verified email', value: String(users.filter((user) => Boolean(user.email_verified_at)).length) },
+  ];
+
+  return (
+    <>
+      <MetricCards metrics={metrics} />
+      <div className="table-toolbar"><SearchBar /></div>
+      {error && <IdentityLoadState message={error} tone="danger" />}
+      <div className="card table-card">
+        <table>
+          <thead>
+            <tr>
+              {(suspendedOnly ? ['User', 'Email', 'Reason', 'Suspended On', 'Status'] : ['User', 'Email', 'Role', 'Status', 'Created']).map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr><td colSpan={6}>{error ? 'No users loaded.' : 'No users match this scope.'}</td></tr>
+            ) : users.map((user) => {
+              const role = user.roles?.[0]?.name ?? user.roles?.[0]?.code ?? '—';
+              return (
+                <tr key={user.id}>
+                  <td><span className="mini-avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>{user.name}</td>
+                  <td>{user.email}</td>
+                  {suspendedOnly ? (
+                    <>
+                      <td>{user.suspension_reason ?? '—'}</td>
+                      <td>{formatTimestamp(user.suspended_at)}</td>
+                    </>
+                  ) : (
+                    <td>{role}</td>
+                  )}
+                  <td><StatusBadge value={formatAccountStatus(user.account_status)} /></td>
+                  {!suspendedOnly && <td>{formatTimestamp(user.created_at)}</td>}
+                  <td className="actions-cell">
+                    <div className="row-actions">
+                      {user.account_status === 'suspended' ? (
+                        <button type="button" className="table-action" disabled={busyId === user.id} onClick={() => void onReactivate(user)}>Reactivate</button>
+                      ) : (
+                        <button type="button" className="table-action is-danger" disabled={busyId === user.id} onClick={() => void onSuspend(user)}>Suspend</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="pagination"><span>{message}</span></div>
+      </div>
+    </>
+  );
+}
+
+function IdentityRolesTable({ requestedScope }: { requestedScope?: string }) {
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listAdminRoles({ scope: defaultAdminScope(requestedScope), perPage: 50, sort: 'code' });
+        if (cancelled) return;
+        setRoles(result.data);
+        setTotal(result.pagination.total);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setRoles([]);
+        setError(identityErrorMessage(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestedScope]);
+
+  return (
+    <>
+      <MetricCards metrics={[{ label: 'Total Roles', value: String(total) }, { label: 'Loaded', value: String(roles.length) }, { label: 'System catalogue', value: 'Read-only' }, { label: 'Source', value: 'API' }]} />
+      {error && <IdentityLoadState message={error} tone="danger" />}
+      <div className="card table-card">
+        <table>
+          <thead><tr><th>Role Name</th><th>Code</th><th>Permissions</th><th>Status</th></tr></thead>
+          <tbody>
+            {roles.length === 0 ? (
+              <tr><td colSpan={4}>{error ? 'Roles unavailable.' : 'No roles returned.'}</td></tr>
+            ) : roles.map((role) => (
+              <tr key={role.id}>
+                <td>{role.name}</td>
+                <td><code>{role.code}</code></td>
+                <td>{role.permissions?.length ?? '—'}</td>
+                <td><StatusBadge value="Active" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="pagination"><span>Showing {roles.length} of {total} roles (create/update not exposed by API)</span></div>
+      </div>
+    </>
+  );
+}
+
+function IdentityAccessDecisionsTable({ requestedScope }: { requestedScope?: string }) {
+  const [rows, setRows] = useState<AdminAccessDecision[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listAdminAccessDecisions({ scope: defaultAdminScope(requestedScope), perPage: 25 });
+        if (cancelled) return;
+        setRows(result.data);
+        setTotal(result.pagination.total);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setError(identityErrorMessage(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestedScope]);
+
+  return (
+    <>
+      {error && <IdentityLoadState message={error} tone="danger" />}
+      <div className="card table-card">
+        <table>
+          <thead><tr><th>Date &amp; Time</th><th>Actor</th><th>Permission</th><th>Scope</th><th>Result</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={5}>{error ? 'Access decisions unavailable.' : 'No access decisions yet.'}</td></tr>
+            ) : rows.map((row) => (
+              <tr key={row.id}>
+                <td>{formatTimestamp(row.decided_at)}</td>
+                <td>{row.actor_user_id ?? '—'}</td>
+                <td><code>{row.permission_code}</code></td>
+                <td>{row.scope_type ? `${row.scope_type}:${row.scope_id ?? ''}` : '—'}</td>
+                <td><StatusBadge value={row.allowed ? 'Allowed' : 'Denied'} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="pagination"><span>Showing {rows.length} of {total} access decisions</span></div>
+      </div>
+    </>
+  );
+}
+
+function IdentityAuditEventsPanel({ compact = false, requestedScope }: { compact?: boolean; requestedScope?: string }) {
+  const [rows, setRows] = useState<AdminAuditEvent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listAdminAuditEvents({ scope: defaultAdminScope(requestedScope), perPage: compact ? 8 : 25 });
+        if (cancelled) return;
+        setRows(result.data);
+        setTotal(result.pagination.total);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setError(identityErrorMessage(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [compact, requestedScope]);
+
+  if (compact) {
+    return (
+      <div className="card list-card">
+        <h2 className="card-title">Recent Audit Events</h2>
+        {error && <IdentityLoadState message={error} tone="danger" />}
+        {(rows.length ? rows : []).map((row) => (
+          <div className="rank-row" key={row.id}>
+            <span>{row.action}</span>
+            <strong>{formatTimestamp(row.occurred_at)}</strong>
+          </div>
+        ))}
+        {!error && rows.length === 0 && <p className="field-help">No audit events yet.</p>}
+        <p className="field-help">Total recorded: {total}</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {error && <IdentityLoadState message={error} tone="danger" />}
+      <div className="card table-card">
+        <table>
+          <thead><tr><th>Occurred</th><th>Actor</th><th>Action</th><th>Target</th><th>Scope</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={5}>{error ? 'Audit events unavailable.' : 'No audit events yet.'}</td></tr>
+            ) : rows.map((row) => (
+              <tr key={row.id}>
+                <td>{formatTimestamp(row.occurred_at)}</td>
+                <td>{row.actor_user_id ?? '—'}</td>
+                <td><code>{row.action}</code></td>
+                <td>{row.target_type ? `${row.target_type}:${row.target_id ?? ''}` : '—'}</td>
+                <td>{row.scope_type ? `${row.scope_type}:${row.scope_id ?? ''}` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="pagination"><span>Showing {rows.length} of {total} audit events</span></div>
+      </div>
+    </>
+  );
+}
+
+function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: string }) {
+  const [rows, setRows] = useState<AdminScopeAssignment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const apiReady = identityApiConfigured();
+  const assignments = roleAssignmentOptions(users);
+
+  const refresh = useCallback(async () => {
+    const scope = defaultAdminScope(requestedScope);
+    try {
+      const [result, userResult] = await Promise.all([
+        listAdminScopeAssignments({ scope, perPage: 25 }),
+        listAdminUsers({ scope, perPage: 50, sort: '-created_at' }),
+      ]);
+      setRows(result.data);
+      setTotal(result.pagination.total);
+      setUsers(userResult.data);
+      setError(null);
+    } catch (err) {
+      setRows([]);
+      setUsers([]);
+      setError(identityErrorMessage(err));
+    }
+  }, [requestedScope]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function onAssignScope(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!apiReady) {
+      setMessage('The Laravel API is not configured.');
+      return;
+    }
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    const roleAssignmentId = String(form.get('role_assignment_id') ?? '').trim();
+    const scopeType = mapIdentityScopeType(String(form.get('scope_type') ?? ''));
+    const scopeId = resolveIdentityScopeId(form, scopeType);
+    if (!roleAssignmentId || !scopeType || !scopeId) {
+      setMessage('Role assignment, scope type, and a live scope record ULID are required.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const created = await assignAdminRoleAssignmentScope(
+        roleAssignmentId,
+        { scope_type: scopeType, scope_id: scopeId },
+        defaultAdminScope(requestedScope),
+      );
+      setMessage(`Assigned ${created.scope_type ?? scopeType}:${created.scope_key ?? scopeId} (${created.id}).`);
+      formEl.reset();
+      await refresh();
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <form className="card settings-card" onSubmit={(event) => void onAssignScope(event)}>
+        <p className="maps-settings-lead">
+          {apiReady
+            ? 'Assign a scope to an existing role assignment. Scope record values must be live ULIDs.'
+            : 'The Laravel API is not configured; scope assignment submit is blocked.'}
+        </p>
+        <div className="form-grid">
+          <label>
+            <span>Role assignment *</span>
+            <select name="role_assignment_id" defaultValue="" required disabled={!apiReady || assignments.length === 0}>
+              <option value="" disabled>
+                {assignments.length ? 'Select a live role assignment' : 'No live role assignments loaded'}
+              </option>
+              {assignments.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Scope Type *</span>
+            <select name="scope_type" defaultValue="administrative_unit" disabled={!apiReady}>
+              {IDENTITY_SCOPE_TYPE_VALUES.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="full">
+            <span>Country</span>
+            <SearchSelect name="country_id" catalog="country" options={catalogOptions.country} placeholder="Search country" disabled={!apiReady} />
+          </label>
+          <label className="full">
+            <span>Administrative Unit</span>
+            <SearchSelect name="administrative_unit_id" catalog="administrativeUnit" options={catalogOptions.administrativeUnit} placeholder="Search administrative unit" disabled={!apiReady} />
+          </label>
+          <label>
+            <span>Church</span>
+            <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder="Search church" disabled={!apiReady} />
+          </label>
+          <label>
+            <span>Home church</span>
+            <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder="Search home church" disabled={!apiReady} />
+          </label>
+        </div>
+        {message ? <p className="field-help" role="status">{message}</p> : null}
+        <div className="form-footer">
+          <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : 'The Laravel API is not configured'}>
+            {busy ? 'Assigning…' : 'Assign Scope'}
+          </button>
+        </div>
+      </form>
+      {error && <IdentityLoadState message={error} tone="danger" />}
+      <div className="card table-card">
+        <table>
+          <thead><tr><th>User</th><th>Role</th><th>Scope</th><th>Assigned</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4}>{error ? 'Scope assignments unavailable.' : 'No scope assignments in this scope.'}</td></tr>
+            ) : rows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.role_assignment?.user.name ?? '—'}<br /><small>{row.role_assignment?.user.email}</small></td>
+                <td>{row.role_assignment?.role.name ?? row.role_assignment?.role.code ?? '—'}</td>
+                <td><code>{row.scope.type}:{row.scope.id}</code></td>
+                <td>{formatTimestamp(row.assigned_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="pagination"><span>Showing {rows.length} of {total} assignments</span></div>
+      </div>
+    </>
+  );
+}
+
+function isOpsPublicId(value: string): boolean {
+  return /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(value.trim());
+}
+
+function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset: OpsDatasetKey }) {
   const columns = screen.columns ?? [];
-  const ministryBatch = ['D','E','F'].includes(screen.batch);
-  return <><MetricCards metrics={screen.metrics} /><div className="table-toolbar"><SearchBar placeholder={screen.batch === 'C' ? 'Search records...' : undefined} /></div><div className="card table-card"><table><thead><tr>{columns.map(column=><th key={column}>{column}</th>)}<th>Actions</th></tr></thead><tbody>{(screen.rows ?? []).map((row,index)=><tr key={index}>{columns.map(column=><td key={column}>{column === 'Status' || column === 'Growth' || column === 'Required' ? <StatusBadge value={row[column]} /> : <>{['User','Name','Applicant Name','Home Church','Church Name'].includes(column) && <span className="mini-avatar">{row[column].split(' ').map(part=>part[0]).slice(0,2).join('')}</span>}{row[column]}</>}</td>)}<td className="actions-cell">{ministryBatch ? <button className="table-action">{screen.nav === 'applications' ? 'Review' : 'View'}</button> : <>⊙　⋯</>}</td></tr>)}</tbody></table><div className="pagination"><span>Showing 1 to {(screen.rows ?? []).length} of {screen.metrics?.[0]?.value ?? (screen.rows ?? []).length} records</span><span>‹　<b>1</b>　2　3　›</span></div></div></>;
+  const entityKey = resolveEntityKey(screen.route, screen.id);
+  const reviewLabel = screen.nav === 'applications' ? 'Review' : undefined;
+  const [rows, setRows] = useState<Array<Record<string, string>>>([]);
+  const [total, setTotal] = useState(0);
+  const [message, setMessage] = useState('Loading…');
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [registerBusy, setRegisterBusy] = useState(false);
+  const [registerMessage, setRegisterMessage] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    setMessage('Loading…');
+    try {
+      const result = await loadOpsDataset(dataset, { scope: defaultOpsScope(screen.scope), perPage: 25 });
+      setRows(opsRecordsToRows(dataset, result.items, columns));
+      setTotal(result.pagination.total);
+      setMessage(
+        result.pagination.total === 0
+          ? 'No records in this scope.'
+          : `Showing ${result.items.length} of ${result.pagination.total} records`,
+      );
+    } catch (err) {
+      setRows([]);
+      setTotal(0);
+      setError(operationsErrorMessage(err, 'Unable to load church/mission operations.'));
+      setMessage('Live operations data unavailable');
+    }
+  }, [columns, dataset, screen.scope]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function onRegisterFirstTimer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    const personId = String(form.get('person_id') ?? '').trim();
+    const churchId = String(form.get('church_id') ?? '').trim();
+    const homeChurchId = String(form.get('home_church_id') ?? '').trim();
+    const followUpPersonId = String(form.get('assigned_follow_up_person_id') ?? '').trim();
+    const registeredAtRaw = String(form.get('registered_at') ?? '').trim();
+    if (!personId || !churchId) {
+      setRegisterMessage('Person id and church id are required live public ids.');
+      return;
+    }
+    if (!isOpsPublicId(personId) || !isOpsPublicId(churchId)) {
+      setRegisterMessage('Person id and church id must be live public ids (ULID).');
+      return;
+    }
+    if (homeChurchId && !isOpsPublicId(homeChurchId)) {
+      setRegisterMessage('Home church id must be a live public id (ULID).');
+      return;
+    }
+    if (followUpPersonId && !isOpsPublicId(followUpPersonId)) {
+      setRegisterMessage('Follow-up person id must be a live public id (ULID).');
+      return;
+    }
+    let registeredAt: string | null = null;
+    if (registeredAtRaw) {
+      const parsed = new Date(registeredAtRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        setRegisterMessage('registered_at must be a valid date.');
+        return;
+      }
+      registeredAt = parsed.toISOString();
+    }
+    setRegisterBusy(true);
+    setRegisterMessage(null);
+    setError(null);
+    try {
+      const record = await registerFirstTimer(
+        {
+          person_id: personId,
+          church_id: churchId,
+          home_church_id: homeChurchId || null,
+          assigned_follow_up_person_id: followUpPersonId || null,
+          registered_at: registeredAt,
+        },
+        defaultOpsScope(screen.scope),
+      );
+      setRegisterMessage(`Registered first timer ${record.id}.`);
+      formEl.reset();
+      await refresh();
+    } catch (err) {
+      setRegisterMessage(operationsErrorMessage(err, 'First-timer registration failed.'));
+    } finally {
+      setRegisterBusy(false);
+    }
+  }
+
+  async function onCompleteFollowUp(row: Record<string, string>) {
+    const taskId = row.__id;
+    if (!taskId || taskId === '—') return;
+    const reason = window.prompt('Completion reason code (e.g. contacted_successfully):', 'contacted_successfully');
+    if (!reason) return;
+    setBusyId(taskId);
+    setError(null);
+    try {
+      await completeFollowUpTask(taskId, reason.trim(), defaultOpsScope(screen.scope));
+      await refresh();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Follow-up completion failed.'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onTransitionApplication(row: Record<string, string>) {
+    const applicationId = row.__id;
+    if (!applicationId || applicationId === '—') return;
+    const status = window.prompt(
+      'Transition status (draft|submitted|under_review|interview_orientation|approved|active|rejected|suspended|closed):',
+      'submitted',
+    );
+    if (!status) return;
+    const reason = window.prompt('Reason code (e.g. application_received):', 'application_received');
+    if (!reason) return;
+    setBusyId(applicationId);
+    setError(null);
+    try {
+      await transitionHomeChurchApplication(
+        applicationId,
+        { status: status.trim(), reason_code: reason.trim() },
+        defaultOpsScope(screen.scope),
+      );
+      await refresh();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Application transition failed.'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      <MetricCards metrics={[{ label: 'Total', value: String(total) }, ...(screen.metrics ?? []).slice(1, 4)]} />
+      {dataset === 'first-timers' ? (
+        <form className="card form-card" onSubmit={(event) => void onRegisterFirstTimer(event)}>
+          <h2 className="section-title">Register first timer</h2>
+          <p className="page-subtitle">Uses live person and church public ids. Empty catalogs are not treated as success.</p>
+          <div className="form-grid">
+            <label>
+              <span>Person id *</span>
+              <input name="person_id" autoComplete="off" placeholder="Person public id (ULID)" />
+            </label>
+            <label>
+              <span>Church *</span>
+              <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder="Search church" />
+            </label>
+            <label>
+              <span>Home church</span>
+              <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder="Search home church" />
+            </label>
+            <label>
+              <span>Follow-up person id</span>
+              <input name="assigned_follow_up_person_id" autoComplete="off" placeholder="Optional person public id" />
+            </label>
+            <label>
+              <span>Registered at</span>
+              <input name="registered_at" type="datetime-local" />
+            </label>
+          </div>
+          {registerMessage ? <p className="field-help" role="status">{registerMessage}</p> : null}
+          <div className="form-footer">
+            <button className="primary-button" type="submit" disabled={registerBusy}>
+              {registerBusy ? 'Registering…' : 'Register first timer'}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      <div className="table-toolbar"><SearchBar placeholder="Search records…" /></div>
+      {error ? <p className="field-help identity-error" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      <div className="card table-card">
+        <table>
+          <thead>
+            <tr>{columns.map((column) => <th key={column}>{column}</th>)}<th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={columns.length + 1}>{error ? 'Unable to load records.' : message}</td></tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.__id}>
+                  {columns.map((column) => (
+                    <td key={column}>
+                      {column === 'Status' ? (
+                        <StatusBadge value={row[column] ?? '—'} />
+                      ) : (
+                        <>
+                          {['User', 'Name', 'Applicant Name', 'Home Church', 'Church Name'].includes(column) ? (
+                            <span className="mini-avatar">{(row[column] ?? '?').split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
+                          ) : null}
+                          {row[column]}
+                        </>
+                      )}
+                    </td>
+                  ))}
+                  <td className="actions-cell">
+                    <div className="row-actions">
+                      <TableRowActions record={String(row[columns[0]] ?? row.__id)} entityKey={entityKey} reviewLabel={reviewLabel} />
+                      {dataset === 'home-church-applications' ? (
+                        <button
+                          type="button"
+                          className="table-action"
+                          disabled={busyId === row.__id}
+                          onClick={() => void onTransitionApplication(row)}
+                        >
+                          Transition
+                        </button>
+                      ) : null}
+                      {dataset === 'follow-up-tasks' ? (
+                        <button
+                          type="button"
+                          className="table-action"
+                          disabled={busyId === row.__id}
+                          onClick={() => void onCompleteFollowUp(row)}
+                        >
+                          Complete
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <div className="pagination"><span>{message}</span></div>
+      </div>
+    </>
+  );
+}
+
+function isOrganizationCatalogRoute(route: string): boolean {
+  return (
+    route === '/admin/geography/countries' ||
+    (route.includes('/geography/countries/') &&
+      (route.includes('/levels') || route.includes('/regions') || route.includes('/local-areas')))
+  );
+}
+
+function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
+  const [countries, setCountries] = useState<AdminCountry[]>([]);
+  const [units, setUnits] = useState<AdminAdministrativeUnit[]>([]);
+  const [message, setMessage] = useState('Loading organization catalog…');
+  const [error, setError] = useState<string | null>(null);
+  const isCountries = screen.route === '/admin/geography/countries' || screen.route.includes('/levels');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setMessage('Loading organization catalog…');
+      try {
+        if (isCountries) {
+          const next = await listCountries();
+          if (cancelled) return;
+          setCountries(next);
+          setUnits([]);
+          setMessage(next.length === 0 ? 'No countries yet. Open Hierarchy Tree to create one.' : `Showing ${next.length} countries`);
+        } else {
+          const next = await listUnits();
+          if (cancelled) return;
+          setUnits(next);
+          setCountries([]);
+          setMessage(next.length === 0 ? 'No administrative units yet. Open Hierarchy Tree to create one.' : `Showing ${next.length} units`);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setCountries([]);
+        setUnits([]);
+        setError(organizationErrorMessage(err));
+        setMessage('Organization catalog unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCountries, screen.route]);
+
+  return (
+    <>
+      <p className="maps-settings-lead">{error ?? message}</p>
+      <div className="card table-card">
+        {isCountries ? (
+          <table>
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th>Code</th>
+                <th>Id</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {countries.length === 0 ? (
+                <tr>
+                  <td colSpan={4}>{error ? 'Countries unavailable.' : 'No countries returned.'}</td>
+                </tr>
+              ) : (
+                countries.map((country) => (
+                  <tr key={country.id}>
+                    <td>{country.name}</td>
+                    <td>{country.iso_code}</td>
+                    <td>
+                      <code>{country.id}</code>
+                    </td>
+                    <td>{country.created_at ?? '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Level</th>
+                <th>Code</th>
+                <th>Parent</th>
+                <th>Country</th>
+              </tr>
+            </thead>
+            <tbody>
+              {units.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>{error ? 'Units unavailable.' : 'No units returned.'}</td>
+                </tr>
+              ) : (
+                units.map((unit) => (
+                  <tr key={unit.id}>
+                    <td>{unit.name}</td>
+                    <td>{unit.administrative_level?.name ?? '—'}</td>
+                    <td>{unit.reference_code ?? '—'}</td>
+                    <td>{unit.parent?.name ?? '—'}</td>
+                    <td>{unit.country?.name ?? '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
+        <div className="pagination">
+          <span>Use Hierarchy Tree to create countries, levels, units, and locations</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
+  const columns = screen.columns ?? [];
+  const columnKey = columns.join('\0');
+  const dataset = resolveCatalogDataset(screen);
+  const entityKey = resolveEntityKey(screen.route, screen.id);
+  const [rows, setRows] = useState<Array<Record<string, string>>>([]);
+  const [message, setMessage] = useState('Loading catalog…');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!dataset) return;
+    const mappedColumns = columnKey ? columnKey.split('\0') : [];
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setMessage('Loading catalog…');
+      try {
+        const result = await listCatalogDomain(dataset, { perPage: 25 });
+        if (cancelled) return;
+        setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns));
+        setMessage(
+          result.pagination.total === 0
+            ? 'No catalog records in this scope.'
+            : `Showing ${result.items.length} of ${result.pagination.total} records`,
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setError(catalogErrorMessage(err, 'Unable to load domain catalog.'));
+        setMessage('Live catalog unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [columnKey, dataset]);
+
+  return (
+    <>
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {!error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      <div className="card table-card">
+        <table>
+          <thead>
+            <tr>{columns.map((column) => <th key={column}>{column}</th>)}<th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={Math.max(columns.length, 1) + 1}>{error ? 'Unable to load records.' : message}</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.__id}>
+                  {columns.map((column) => (
+                    <td key={column}>
+                      {column === 'Status' ? (
+                        <StatusBadge value={row[column] ?? '—'} />
+                      ) : (
+                        <>
+                          {['User', 'Name', 'Applicant Name', 'Home Church', 'Church Name', 'Title', 'Message', 'Item'].includes(column) ? (
+                            <span className="mini-avatar">{(row[column] ?? '?').split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
+                          ) : null}
+                          {row[column]}
+                        </>
+                      )}
+                    </td>
+                  ))}
+                  <td className="actions-cell">
+                    <TableRowActions record={String(row[columns[0]] ?? row.__id)} entityKey={entityKey} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <div className="pagination"><span>{message}</span></div>
+      </div>
+    </>
+  );
+}
+
+function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  if (!shouldUseDesignFixtures()) {
+    if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
+    if (screen.route === '/admin/roles') return <IdentityRolesTable requestedScope={requestedScope} />;
+    if (screen.route === '/admin/access/history') return <IdentityAccessDecisionsTable requestedScope={requestedScope} />;
+    const opsDataset = resolveOpsDataset(screen);
+    if (opsDataset && shouldUseOperationsLiveData()) return <OperationsLiveTable screen={screen} dataset={opsDataset} />;
+    if (screen.batch === 'C' && isOrganizationCatalogRoute(screen.route)) {
+      return <OrganizationCatalogTable screen={screen} />;
+    }
+    if (shouldUseCatalogLiveData() && resolveCatalogDataset(screen)) {
+      return <CatalogLiveTable screen={screen} />;
+    }
+    const columns = screen.columns ?? [];
+    return (
+      <>
+        <p className="maps-settings-lead" role="status">
+          No live list API is wired for this screen. Design fixtures are disabled.
+        </p>
+        <div className="card table-card">
+          <table>
+            <thead>
+              <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={Math.max(columns.length, 1)}>Live data unavailable for this route.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </>
+    );
+  }
+  if (!shouldUseOrganizationFixtures() && screen.batch === 'C' && isOrganizationCatalogRoute(screen.route)) {
+    return <OrganizationCatalogTable screen={screen} />;
+  }
+  const columns = screen.columns ?? [];
+  const entityKey = resolveEntityKey(screen.route, screen.id);
+  const reviewLabel = screen.nav === 'applications' ? 'Review' : undefined;
+  return <><MetricCards metrics={screen.metrics} /><div className="table-toolbar"><SearchBar placeholder={screen.batch === 'C' ? 'Search records...' : undefined} /></div><div className="card table-card"><table><thead><tr>{columns.map(column=><th key={column}>{column}</th>)}<th>Actions</th></tr></thead><tbody>{(screen.rows ?? []).map((row,index)=><tr key={index}>{columns.map(column=><td key={column}>{column === 'Status' || column === 'Growth' || column === 'Required' ? <StatusBadge value={row[column]} /> : <>{['User','Name','Applicant Name','Home Church','Church Name'].includes(column) && <span className="mini-avatar">{row[column].split(' ').map(part=>part[0]).slice(0,2).join('')}</span>}{row[column]}</>}</td>)}<td className="actions-cell"><TableRowActions record={String(row[columns[0]] ?? 'record')} entityKey={entityKey} reviewLabel={reviewLabel} /></td></tr>)}</tbody></table><div className="pagination"><span>Showing 1 to {(screen.rows ?? []).length} of {screen.metrics?.[0]?.value ?? (screen.rows ?? []).length} records</span><span>‹　<b>1</b>　2　3　›</span></div></div></>;
 }
 
 function FeedView({ screen }: { screen: AdminScreen }) {
+  if (!shouldUseDesignFixtures()) {
+    if (shouldUseCatalogLiveData() && resolveCatalogDataset(screen)) {
+      const columns = screen.columns?.length ? screen.columns : CATALOG_FEED_COLUMNS;
+      return <CatalogLiveTable screen={{ ...screen, columns }} />;
+    }
+    return (
+      <>
+        <p className="maps-settings-lead" role="status">
+          No live list API is wired for this screen. Design fixtures are disabled.
+        </p>
+        <div className="card feed-card">
+          <p>Live data unavailable for this route.</p>
+        </div>
+      </>
+    );
+  }
   return <div className="card feed-card">{(screen.rows ?? []).map((row,index)=><article className="feed-item" key={index}><span className={`feed-icon tone-${index%4}`}>{screen.nav === 'alerts' ? '!' : screen.nav === 'notifications' ? '•' : '✓'}</span><div><strong>{row.Item}</strong><p>{row.Detail}</p></div><time>{row.Time}</time>{screen.nav === 'approvals' && <div className="row-actions"><button>Review</button><button>Reject</button></div>}</article>)}</div>;
 }
 
@@ -297,7 +1346,10 @@ function TasksView({ screen }: { screen: AdminScreen }) {
   return <div className="card task-list">{(screen.items ?? []).map((item,index)=><label className="task-item" key={item}><input type="checkbox" /><span>{item}</span><small>Assigned to You</small><time>{index<2?'Today':index===2?'Tomorrow':'May 13, 2024'}</time></label>)}</div>;
 }
 
-function KpiView({ screen }: { screen: AdminScreen }) {
+function KpiView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  if (screen.route === '/admin/audit' && !shouldUseDesignFixtures()) {
+    return <><MetricCards metrics={screen.metrics} /><div className="analytics-grid kpi-two"><IdentityAuditEventsPanel compact requestedScope={requestedScope} /><ChartCard title="Audit Logs Trend" bars /></div></>;
+  }
   if (screen.batch === 'A') {
     return <><MetricCards metrics={screen.metrics} /><div className="analytics-grid kpi-two">{screen.id === 'A-12' ? <><ChartCard title="Member Growth" /><ChartCard title="Giving Trend (USD)" bars /></> : <><div className="card list-card"><h2 className="card-title">Top Admin Actions</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Audit Logs Trend" bars /></>}</div></>;
   }
@@ -319,23 +1371,283 @@ function DetailView({ screen }: { screen: AdminScreen }) {
   return <div className="detail-grid"><article className="card identity-card"><div className="portrait">{screen.title.split(' ').map(part=>part[0]).slice(0,2).join('')}</div><h2>{screen.title}</h2><StatusBadge value="Active" /><button className="ghost-button">Change Photo</button></article><article className="card details-card"><h2 className="card-title">{screen.batch === 'C' ? 'Information' : 'Details'}</h2><dl>{entries.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card details-card"><h2 className="card-title">{screen.batch === 'C' ? 'Statistics' : 'Roles'}</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1] ?? 'Member'}</strong></div>)}</article><ChartCard title="Growth (Last 12 Months)" /></div>;
 }
 
-const formFields = ['First Name *','Last Name *','Email Address *','Phone Number *','Gender','Date of Birth','Username','Status','Scope Type','Assign Country'];
+const formFields = [
+  { label: 'First Name *', name: 'firstName', type: 'text' as const, value: 'Grace' },
+  { label: 'Last Name *', name: 'lastName', type: 'text' as const, value: 'Ezekiel' },
+  { label: 'Email Address *', name: 'email', type: 'email' as const, value: 'grace.ezekiel@email.com' },
+  { label: 'Phone Number *', name: 'phone', type: 'tel' as const, value: '+234 803 545 6789' },
+  { label: 'Gender', name: 'gender', type: 'select' as const, options: ['Male', 'Female', 'Prefer not to say'], value: 'Female' },
+  { label: 'Date of Birth', name: 'dob', type: 'date' as const, value: '1992-06-12' },
+  { label: 'Username', name: 'username', type: 'text' as const, value: 'grace.ezekiel' },
+  { label: 'Status', name: 'status', type: 'select' as const, options: statusOptions, value: 'Active' },
+  { label: 'Scope Type', name: 'scopeType', type: 'select' as const, options: ['Administrative Scope', 'Church Scope', 'Home Church Scope'], value: 'Administrative Scope' },
+  { label: 'Assign Country', name: 'country', type: 'search-select' as const, catalog: 'country' as const, value: 'ng' },
+];
+
 function FormFields() {
-  return <div className="form-grid">{formFields.map((field,index)=><label key={field}><span>{field}</span>{index===5?<input type="date" defaultValue="1992-06-12" />:index===4||index===7||index>=8?<select defaultValue=""><option value="" disabled>Select {field.replace(' *','')}</option><option>Nigeria</option><option>Active</option></select>:<input defaultValue={index===0?'Grace':index===1?'Ezekiel':index===2?'grace.ezekiel@email.com':index===3?'+234 803 545 6789':''} />}</label>)}</div>;
+  return (
+    <div className="form-grid">
+      {formFields.map((field) => (
+        <label key={field.name}>
+          <span>{field.label}</span>
+          {field.type === 'search-select' ? (
+            <SearchSelect
+              name={field.name}
+              catalog={field.catalog}
+              options={catalogOptions[field.catalog]}
+              defaultValue={field.value}
+              placeholder={`Search ${field.label.replace(' *', '')}`}
+            />
+          ) : field.type === 'select' ? (
+            <select name={field.name} defaultValue={field.value}>
+              <option value="" disabled>
+                Select {field.label.replace(' *', '')}
+              </option>
+              {field.options?.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input name={field.name} type={field.type} defaultValue={field.value} />
+          )}
+        </label>
+      ))}
+    </div>
+  );
 }
 
 function WizardView({ screen }: { screen: AdminScreen }) {
-  const churchFields = ['Church Name','Short Name','Church Type','Denomination (Optional)','Established Date','Region','Administrative Level','Status'];
-  return <><div className="stepper">{(screen.tabs ?? []).map((step,index)=><div className={`step ${index===0?'active':''}`} key={step}><span>{index+1}</span><strong>{step}</strong></div>)}</div><div className="card form-card"><h2 className="section-title">{screen.batch === 'E' ? 'Basic Information' : screen.title.includes('Role')?'Role Information':'Personal Information'}</h2>{screen.batch === 'E' ? <div className="form-grid">{churchFields.map((field,index)=><label key={field}><span>{field}{index<1?' *':''}</span>{index>1?<select defaultValue=""><option value="" disabled>Select {field}</option><option>Active</option><option>Nigeria</option></select>:<input placeholder={`Enter ${field.toLowerCase()}`} />}</label>)}</div> : <FormFields />}<div className="form-footer"><button className="ghost-button">Cancel</button><button className="primary-button">{screen.action}</button></div></div></>;
+  const churchFields = [
+    { label: 'Church Name *', name: 'name', type: 'text' as const },
+    { label: 'Short Name', name: 'shortName', type: 'text' as const },
+    { label: 'Church Type', name: 'churchType', type: 'select' as const, options: churchTypeOptions },
+    { label: 'Denomination (Optional)', name: 'denomination', type: 'text' as const },
+    { label: 'Established Date', name: 'establishedDate', type: 'date' as const },
+    { label: 'Country', name: 'country', type: 'search-select' as const, catalog: 'country' as const },
+    { label: 'Administrative Unit', name: 'administrative_unit_id', type: 'search-select' as const, catalog: 'administrativeUnit' as const },
+    { label: 'Location', name: 'location_id', type: 'search-select' as const, catalog: 'location' as const },
+    { label: 'Status', name: 'status', type: 'select' as const, options: statusOptions },
+  ];
+  const contactFields = [
+    { label: 'Phone *', name: 'phone', type: 'text' as const },
+    { label: 'Email *', name: 'email', type: 'email' as const },
+    { label: 'Website', name: 'website', type: 'text' as const },
+    { label: 'Meeting address', name: 'address', type: 'textarea' as const },
+  ];
+  const steps = screen.tabs ?? ['Details'];
+  const wizard = useAdminWizardStep(steps);
+  const stepTitle = wizard.currentLabel || (screen.batch === 'E' ? 'Basic Information' : screen.title.includes('Role') ? 'Role Information' : 'Personal Information');
+  const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const [createBusy, setCreateBusy] = useState(false);
+  const liveChurchCreate = shouldUseOperationsLiveData() && screen.batch === 'E';
+
+  async function submitChurchCreate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!liveChurchCreate) return;
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get('name') ?? '').trim();
+    const locationId = String(form.get('location_id') ?? '').trim();
+    const unitId = String(form.get('administrative_unit_id') ?? '').trim();
+    if (!name || !locationId || !unitId) {
+      setCreateMessage('Name, location, and administrative unit are required.');
+      return;
+    }
+    setCreateBusy(true);
+    setCreateMessage(null);
+    try {
+      const church = await createChurch(
+        { name, location_id: locationId, administrative_unit_id: unitId },
+        defaultOpsScope(screen.scope),
+      );
+      setCreateMessage(`Created church ${church.name} (${church.id}).`);
+    } catch (err) {
+      setCreateMessage(operationsErrorMessage(err, 'Unable to create church.'));
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
+  return (
+    <div data-admin-wizard="true">
+      <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} />
+      <form className="card form-card" onSubmit={(event) => void submitChurchCreate(event)}>
+        <h2 className="section-title">{stepTitle}</h2>
+
+        {wizard.currentStep === 0 && (
+          screen.batch === 'E' ? (
+            <div className="form-grid">
+              {churchFields.map((field) => (
+                <label key={field.name}>
+                  <span>{field.label}</span>
+                  {field.type === 'search-select' ? (
+                    <SearchSelect name={field.name} catalog={field.catalog} options={catalogOptions[field.catalog]} placeholder={`Search ${field.label.replace(' *', '')}`} />
+                  ) : field.type === 'select' ? (
+                    <select name={field.name} defaultValue=""><option value="" disabled>Select {field.label.replace(' *', '')}</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select>
+                  ) : (
+                    <input name={field.name} type={field.type} placeholder={`Enter ${field.label.replace(' *', '').toLowerCase()}`} />
+                  )}
+                </label>
+              ))}
+            </div>
+          ) : (
+            <FormFields />
+          )
+        )}
+
+        {wizard.currentStep === 1 && (
+          <div className="form-grid">
+            {(screen.batch === 'E' ? contactFields : [{ label: 'Role name *', name: 'roleName', type: 'text' as const }, { label: 'Description', name: 'description', type: 'textarea' as const }]).map((field) => (
+              <label className={field.type === 'textarea' ? 'full' : ''} key={field.name}>
+                <span>{field.label}</span>
+                {field.type === 'textarea' ? <textarea name={field.name} rows={4} /> : <input name={field.name} type={field.type} />}
+              </label>
+            ))}
+          </div>
+        )}
+
+        {wizard.currentStep === 2 && (
+          <div className="form-grid">
+            <label className="full"><span>Leader / owner *</span><SearchSelect name="owner_id" catalog="person" options={catalogOptions.person} placeholder="Search responsible person" /></label>
+            <label className="full"><span>Scope notes</span><textarea rows={4} placeholder="Describe the assignment scope..." /></label>
+          </div>
+        )}
+
+        {wizard.currentStep >= 3 && (
+          <dl className="wizard-review-summary">
+            {Object.entries(screen.details ?? { Name: screen.title, Status: 'Draft' }).map(([key, value]) => (
+              <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
+            ))}
+          </dl>
+        )}
+
+        {createMessage ? <p className="field-help" role="status">{createMessage}</p> : null}
+        {liveChurchCreate && wizard.currentStep === 0 ? (
+          <div className="form-footer">
+            <button className="primary-button" type="submit" disabled={createBusy}>
+              {createBusy ? 'Creating…' : 'Create church'}
+            </button>
+          </div>
+        ) : (
+          <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={screen.action?.includes('Save') ? screen.action : 'Submit'} />
+        )}
+      </form>
+    </div>
+  );
+}
+
+function formatProfileDate(value?: string | null): string {
+  if (!value) return 'Not available';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 function ProfileView({ screen }: { screen: AdminScreen }) {
-  return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">{screen.title.includes('360')?'GE':'JD'}</div><h2>{screen.title.includes('360')?'Grace Ezekiel':'John Chinedu Doe'}</h2><StatusBadge value="Active" /><button className="ghost-button">Change Profile Photo</button></article><article className="card details-card profile-details"><dl>{Object.entries(screen.details ?? {}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card account-card"><h2>Account Status</h2><strong className="trend">Active</strong><p>Last Login<br/><b>May 12, 2024 · 09:24 AM</b></p><p>Member Since<br/><b>Jan 15, 2023</b></p></article>{screen.action&&<button className="primary-button profile-save">{screen.action}</button>}</div>;
+  const isOwnAdminProfile = screen.route === '/admin/profile';
+  const [user, setUser] = useState<AdminProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOwnAdminProfile) return;
+    let cancelled = false;
+    void fetchAdminProfile()
+      .then((currentUser) => {
+        if (!cancelled) setUser(currentUser);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load your profile.');
+      });
+    return () => { cancelled = true; };
+  }, [isOwnAdminProfile]);
+
+  if (!isOwnAdminProfile) {
+    return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">GE</div><h2>Profile details unavailable</h2></article></div>;
+  }
+
+  if (error) return <div className="card empty-state" role="alert">{error}</div>;
+  if (!user) return <div className="card empty-state" role="status">Loading your profile…</div>;
+
+  const legalName = [user.profile.given_name, user.profile.middle_name, user.profile.family_name]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(' ');
+  const name = user.profile.preferred_name?.trim() || legalName || user.email;
+  const status = user.account_status ?? 'unknown';
+  const details: Record<string, string> = {
+    'Full Name': name,
+    'Email Address': user.email,
+    Role: user.roles?.join(', ') || 'No role assigned',
+    'Time Zone': user.preferences?.timezone || 'Not provided',
+    Language: user.preferences?.locale || 'Not provided',
+    'Account Status': status,
+    'Last Active': formatProfileDate(user.last_active_at),
+    'Member Since': formatProfileDate(user.member_since),
+  };
+
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'ME';
+
+  return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">{initials}</div><h2>{name}</h2><StatusBadge value={status} /></article><article className="card details-card profile-details"><dl>{Object.entries(details).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card account-card"><h2>Account Status</h2><strong className="trend">{status}</strong><p>Last Active<br/><b>{formatProfileDate(user.last_active_at)}</b></p><p>Member Since<br/><b>{formatProfileDate(user.member_since)}</b></p></article><Link href="/account/profile" className="primary-button profile-save">Update Profile</Link></div>;
 }
 
-function PermissionsView({ screen }: { screen: AdminScreen }) {
-  const actions=['View','Create','Edit','Delete'];
-  return <div className="permission-layout"><aside className="card module-list"><strong>Modules</strong>{(screen.items ?? []).map((item,index)=><button className={index===0?'active':''} key={item}>{item}</button>)}</aside><div className="card permission-table"><div className="permission-head"><strong>Permissions (42)</strong>{actions.map(action=><b key={action}>{action}</b>)}</div>{['View Users','Create Users','Edit Users','Delete Users','Reset Passwords'].map((item,row)=><div className="permission-row" key={item}><span>◉　{item}</span>{actions.map((action,col)=><input aria-label={`${action} ${item}`} type="checkbox" defaultChecked={row<3||col<2} key={action}/>)}</div>)}</div></div>;
+function PermissionsView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const [permissions, setPermissions] = useState<AdminPermission[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [moduleFilter, setModuleFilter] = useState('all');
+  const live = !shouldUseDesignFixtures();
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listAdminPermissions({ scope: defaultAdminScope(requestedScope), perPage: 100, sort: 'code' });
+        if (cancelled) return;
+        setPermissions(result.data);
+        setTotal(result.pagination.total);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setPermissions([]);
+        setError(identityErrorMessage(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [live, requestedScope]);
+
+  if (!live) {
+    const actions=['View','Create','Edit','Delete'];
+    return <div className="permission-layout"><aside className="card module-list"><strong>Modules</strong>{(screen.items ?? []).map((item,index)=><button className={index===0?'active':''} key={item}>{item}</button>)}</aside><div className="card permission-table"><div className="permission-head"><strong>Permissions (42)</strong>{actions.map(action=><b key={action}>{action}</b>)}</div>{['View Users','Create Users','Edit Users','Delete Users','Reset Passwords'].map((item,row)=><div className="permission-row" key={item}><span>◉　{item}</span>{actions.map((action,col)=><input aria-label={`${action} ${item}`} type="checkbox" defaultChecked={row<3||col<2} key={action}/>)}</div>)}</div></div>;
+  }
+
+  const modules = Array.from(new Set(permissions.map((permission) => permission.code.split('.')[0] || 'other'))).sort();
+  const filtered = moduleFilter === 'all' ? permissions : permissions.filter((permission) => permission.code.startsWith(`${moduleFilter}.`));
+
+  return (
+    <div className="permission-layout">
+      <aside className="card module-list">
+        <strong>Modules</strong>
+        <button type="button" className={moduleFilter === 'all' ? 'active' : ''} onClick={() => setModuleFilter('all')}>All</button>
+        {modules.map((module) => (
+          <button type="button" className={moduleFilter === module ? 'active' : ''} key={module} onClick={() => setModuleFilter(module)}>{module}</button>
+        ))}
+      </aside>
+      <div className="card permission-table">
+        <div className="permission-head" style={{ gridTemplateColumns: '1fr 220px' }}><strong>Permissions ({total})</strong><b>Id</b></div>
+        {error && <IdentityLoadState message={error} tone="danger" />}
+        {filtered.map((permission) => (
+          <div className="permission-row" style={{ gridTemplateColumns: '1fr 220px' }} key={permission.id}>
+            <span>◉　{permission.code}</span>
+            <code>{permission.id}</code>
+          </div>
+        ))}
+        {!error && filtered.length === 0 && <IdentityLoadState message="No permissions in this module." />}
+        <IdentityRoleGrantForm requestedScope={requestedScope} permissions={permissions} />
+      </div>
+    </div>
+  );
 }
 
 function MatrixView() {
@@ -343,16 +1655,453 @@ function MatrixView() {
   return <div className="card matrix-card"><div className="matrix-row matrix-head"><strong>Permission</strong>{roles.map(role=><b key={role}>{role}</b>)}</div>{['View Churches','Create Church','Edit Church','Delete Church','Approve Church','Assign Church Admin'].map((permission,row)=><div className="matrix-row" key={permission}><span>{permission}</span>{roles.map((role,col)=><i className={col+row<7?'yes':'no'} key={role}>{col+row<7?'●':'○'}</i>)}</div>)}</div>;
 }
 
-function FormView({ screen }: { screen: AdminScreen }) {
-  return <div className="card settings-card"><div className="form-grid"><label><span>Select User *</span><select><option>John Chinedu Doe</option></select></label><label><span>Scope Type *</span><select><option>Administrative Scope</option></select></label><label className="full"><span>Scope *</span><div className="token-input"><b>Nigeria ×</b><b>Lagos State ×</b><b>Ikeja LGA ×</b></div></label><label className="full"><span>Access Level</span><select><option>Full Access</option></select></label><label className="full switch-row"><input type="checkbox" defaultChecked /><span>Allow Manage Users in this Scope</span></label></div><div className="form-footer"><button className="ghost-button">Cancel</button><button className="primary-button">{screen.action}</button></div></div>;
+function IdentityRoleGrantForm({
+  requestedScope,
+  permissions,
+}: {
+  requestedScope?: string;
+  permissions: AdminPermission[];
+}) {
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const apiReady = identityApiConfigured();
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listAdminRoles({ scope: defaultAdminScope(requestedScope), perPage: 50, sort: 'code' });
+        if (cancelled) return;
+        setRoles(result.data);
+      } catch (err) {
+        if (cancelled) return;
+        setRoles([]);
+        setError(identityErrorMessage(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestedScope]);
+
+  async function onGrant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!apiReady) {
+      setError('The Laravel API is not configured.');
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    const roleId = String(form.get('role_id') ?? '').trim();
+    const permissionId = String(form.get('permission_id') ?? '').trim();
+    if (!roleId || !permissionId) {
+      setError('A live role ULID and permission ULID are required.');
+      setMessage(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const grant = await grantAdminRolePermission(
+        roleId,
+        { permission_id: permissionId },
+        defaultAdminScope(requestedScope),
+      );
+      setMessage(`Granted ${grant.permission_code ?? permissionId} on role ${grant.role_id ?? roleId} (${grant.id}).`);
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="form-grid" style={{ marginTop: 16 }} onSubmit={(event) => void onGrant(event)}>
+      <label>
+        <span>Role *</span>
+        <select name="role_id" defaultValue="" required disabled={!apiReady || roles.length === 0}>
+          <option value="" disabled>{roles.length ? 'Select a live role' : 'No live roles loaded'}</option>
+          {roles.map((role) => (
+            <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Permission *</span>
+        <select name="permission_id" defaultValue="" required disabled={!apiReady || permissions.length === 0}>
+          <option value="" disabled>{permissions.length ? 'Select a live permission' : 'No live permissions loaded'}</option>
+          {permissions.map((permission) => (
+            <option key={permission.id} value={permission.id}>{permission.code}</option>
+          ))}
+        </select>
+      </label>
+      {error ? <IdentityLoadState message={error} tone="danger" /> : null}
+      {message ? <p className="field-help" role="status">{message}</p> : null}
+      <div className="form-footer">
+        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : 'The Laravel API is not configured'}>
+          {busy ? 'Granting…' : 'Grant permission'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const apiReady = identityApiConfigured();
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const scope = defaultAdminScope(requestedScope);
+      try {
+        const [userResult, roleResult] = await Promise.all([
+          listAdminUsers({ scope, perPage: 50, sort: '-created_at' }),
+          listAdminRoles({ scope, perPage: 50, sort: 'code' }),
+        ]);
+        if (cancelled) return;
+        setUsers(userResult.data);
+        setRoles(roleResult.data);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setUsers([]);
+        setRoles([]);
+        setError(identityErrorMessage(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [requestedScope]);
+
+  async function onAssign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!apiReady) {
+      setError('The Laravel API is not configured.');
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    const userId = String(form.get('user_id') ?? '').trim();
+    const roleId = String(form.get('role_id') ?? '').trim();
+    const expiresRaw = String(form.get('expires_at') ?? '').trim();
+    const expiresAt = expiresRaw ? new Date(expiresRaw) : null;
+    if (!userId || !roleId) {
+      setError('A live user ULID and role ULID are required.');
+      setMessage(null);
+      return;
+    }
+    if (expiresRaw && (!expiresAt || Number.isNaN(expiresAt.getTime()))) {
+      setError('expires_at must be a valid date.');
+      setMessage(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const assignment = await assignAdminUserRole(
+        userId,
+        { role_id: roleId, expires_at: expiresAt ? expiresAt.toISOString() : null },
+        defaultAdminScope(requestedScope),
+      );
+      setMessage(`Assigned role ${assignment.role_code ?? assignment.role_id ?? roleId} (${assignment.id}).`);
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="card settings-card" onSubmit={(event) => void onAssign(event)}>
+      <p className="maps-settings-lead">
+        {apiReady
+          ? 'Assign a live catalogue role to a live user. Submit calls POST /admin/users/{user}/role-assignments.'
+          : 'The Laravel API is not configured; role assignment submit is blocked.'}
+      </p>
+      <div className="form-grid">
+        <label>
+          <span>User *</span>
+          <select name="user_id" defaultValue="" required disabled={!apiReady || users.length === 0}>
+            <option value="" disabled>{users.length ? 'Select a live user' : 'No live users loaded'}</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Role *</span>
+          <select name="role_id" defaultValue="" required disabled={!apiReady || roles.length === 0}>
+            <option value="" disabled>{roles.length ? 'Select a live role' : 'No live roles loaded'}</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Expires at</span>
+          <input name="expires_at" type="datetime-local" disabled={!apiReady} />
+        </label>
+      </div>
+      {error ? <IdentityLoadState message={error} tone="danger" /> : null}
+      {message ? <p className="field-help" role="status">{message}</p> : null}
+      <div className="form-footer">
+        <button className="ghost-button" type="button">Cancel</button>
+        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : 'The Laravel API is not configured'}>
+          {busy ? 'Saving…' : screen.action ?? 'Save Assignments'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function OrganizationScopeForm({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const [countryOptions, setCountryOptions] = useState(catalogOptions.country);
+  const [unitOptions, setUnitOptions] = useState(catalogOptions.administrativeUnit);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [message, setMessage] = useState('Loading organization catalogs…');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const apiReady = identityApiConfigured();
+  const assignments = roleAssignmentOptions(users);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [countries, units, userResult] = await Promise.all([
+          listCountries(),
+          listUnits(),
+          listAdminUsers({ scope: defaultAdminScope(requestedScope), perPage: 50, sort: '-created_at' }),
+        ]);
+        if (cancelled) return;
+        setCountryOptions(countriesToSelectOptions(countries));
+        setUnitOptions(unitsToSelectOptions(units));
+        setUsers(userResult.data);
+        setMessage(
+          countries.length || units.length
+            ? 'Live organization catalogs loaded. Submit assigns a scope to a live role assignment.'
+            : 'No organization records yet. Scope submit still requires a live role assignment ULID and scope record ULID.',
+        );
+        setError(null);
+      } catch (caught) {
+        if (cancelled) return;
+        setMessage(organizationErrorMessage(caught));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedScope]);
+
+  async function onAssignScope(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!apiReady) {
+      setError('The Laravel API is not configured.');
+      return;
+    }
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    const roleAssignmentId = String(form.get('role_assignment_id') ?? '').trim();
+    const scopeType = mapIdentityScopeType(String(form.get('scope_type') ?? ''));
+    const scopeId = resolveIdentityScopeId(form, scopeType);
+    if (!roleAssignmentId || !scopeType || !scopeId) {
+      setError('Role assignment, scope type, and a live scope record ULID are required.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await assignAdminRoleAssignmentScope(
+        roleAssignmentId,
+        { scope_type: scopeType, scope_id: scopeId },
+        defaultAdminScope(requestedScope),
+      );
+      setMessage(`Assigned ${created.scope_type ?? scopeType}:${created.scope_key ?? scopeId} (${created.id}).`);
+      formEl.reset();
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="card settings-card" onSubmit={(event) => void onAssignScope(event)}>
+      <p className="maps-settings-lead">{message}</p>
+      <div className="form-grid">
+        <label>
+          <span>Role assignment *</span>
+          <select name="role_assignment_id" defaultValue="" required disabled={!apiReady || assignments.length === 0}>
+            <option value="" disabled>
+              {assignments.length ? 'Select a live role assignment' : 'No live role assignments loaded'}
+            </option>
+            {assignments.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Scope Type *</span>
+          <select name="scope_type" defaultValue="administrative_unit" disabled={!apiReady}>
+            {IDENTITY_SCOPE_TYPE_VALUES.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="full">
+          <span>Country</span>
+          <SearchSelect name="country_id" catalog="country" options={countryOptions} placeholder="Search country" disabled={!apiReady} />
+        </label>
+        <label className="full">
+          <span>Administrative Unit *</span>
+          <SearchSelect name="administrative_unit_id" catalog="administrativeUnit" options={unitOptions} placeholder="Search administrative unit" disabled={!apiReady} />
+        </label>
+        <label>
+          <span>Church</span>
+          <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder="Search church" disabled={!apiReady} />
+        </label>
+        <label>
+          <span>Home church</span>
+          <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder="Search home church" disabled={!apiReady} />
+        </label>
+        <label className="full">
+          <span>Access Level</span>
+          <select name="access_level" defaultValue="Full Access" disabled>
+            <option>Full Access</option>
+            <option>Read Only</option>
+            <option>Manage Users</option>
+          </select>
+        </label>
+        <label className="full switch-row">
+          <input type="checkbox" name="allow_manage_users" defaultChecked disabled />
+          <span>Allow Manage Users in this Scope (not sent; API has no access-level field)</span>
+        </label>
+      </div>
+      {error ? <IdentityLoadState message={error} tone="danger" /> : null}
+      <div className="form-footer">
+        <button className="ghost-button" type="button">Cancel</button>
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={!apiReady || busy}
+          title={apiReady ? undefined : 'The Laravel API is not configured'}
+        >
+          {busy ? 'Assigning…' : screen.action ?? 'Assign Scope'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function FormView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  if (screen.route === '/admin/access/scope-assignments' && !shouldUseDesignFixtures()) {
+    return <IdentityScopeAssignmentsView requestedScope={requestedScope} />;
+  }
+  if (screen.route === '/admin/access/user-role-assignment' && !shouldUseDesignFixtures()) {
+    return <IdentityUserRoleAssignForm screen={screen} requestedScope={requestedScope} />;
+  }
+  if (!shouldUseOrganizationFixtures() && (screen.route.includes('/geography/scope') || screen.id === 'C-12')) {
+    return <OrganizationScopeForm screen={screen} requestedScope={requestedScope} />;
+  }
+  const fixtures = shouldUseDesignFixtures();
+  return (
+    <div className="card settings-card">
+      {!fixtures ? (
+        <p className="maps-settings-lead" role="status">
+          No live create/update API is wired for this form. Design fixtures are disabled; submit is blocked.
+        </p>
+      ) : null}
+      <div className="form-grid">
+        <label>
+          <span>Select User *</span>
+          <SearchSelect
+            name="user_id"
+            catalog="person"
+            options={catalogOptions.person}
+            defaultValue={fixtures ? '01JPERSONJOHN' : undefined}
+            placeholder="Search people"
+            disabled={!fixtures}
+          />
+        </label>
+        <label>
+          <span>Scope Type *</span>
+          <select name="scope_type" defaultValue="Administrative Scope" disabled={!fixtures}>
+            <option>Administrative Scope</option>
+            <option>Church Scope</option>
+            <option>Home Church Scope</option>
+          </select>
+        </label>
+        <label className="full">
+          <span>Administrative Unit *</span>
+          <SearchSelect
+            name="administrative_unit_id"
+            catalog="administrativeUnit"
+            options={catalogOptions.administrativeUnit}
+            defaultValue={fixtures ? '01JADMINIKEJA' : undefined}
+            placeholder="Search administrative unit"
+            disabled={!fixtures}
+          />
+        </label>
+        <label className="full">
+          <span>Access Level</span>
+          <select name="access_level" defaultValue="Full Access" disabled={!fixtures}>
+            <option>Full Access</option>
+            <option>Read Only</option>
+            <option>Manage Users</option>
+          </select>
+        </label>
+        <label className="full switch-row">
+          <input type="checkbox" name="allow_manage_users" defaultChecked disabled={!fixtures} />
+          <span>Allow Manage Users in this Scope</span>
+        </label>
+      </div>
+      <div className="form-footer">
+        <button className="ghost-button" type="button">Cancel</button>
+        <button className="primary-button" type="button" disabled={!fixtures} title={fixtures ? undefined : 'No live mutation API for this form'}>
+          {screen.action}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function TreeView({ screen }: { screen: AdminScreen }) {
-  return <div className="tree-layout"><div className="card tree-card">{(screen.items ?? []).map((item,index)=><div className={`tree-node level-${Math.min(index,5)}`} key={item}><span>{index<4?'▣':'□'}</span>{item}</div>)}</div><div className="card tree-detail"><h2 className="card-title">Selected Node</h2><h3>{screen.items?.[3]}</h3><dl><div><dt>Level</dt><dd>Ward</dd></div><div><dt>Code</dt><dd>IKEJA_WA</dd></div><div><dt>Parent</dt><dd>Ikeja LGA</dd></div><div><dt>Churches</dt><dd>8</dd></div><div><dt>Members</dt><dd>1,345</dd></div></dl><button className="ghost-button">View Details</button></div></div>;
+  return <HierarchyTreeView route={screen.route} title={screen.title} />;
 }
 
 function MapView({ screen }: { screen: AdminScreen }) {
-  return <><div className="map-filters"><button>All Countries⌄</button><button>All Levels⌄</button><button>All Status⌄</button><span><i className="high"/>High Activity</span><span><i/>Medium Activity</span><span><i className="low"/>Low Activity</span></div><div className={`card map-card ${screen.details?'location-map':''}`}><Image src={screen.details?'/assets/ikeja-map.png':'/assets/world-map.png'} width={1200} height={680} unoptimized alt={screen.details?'Map of Ikeja Ward A':'World activity map'} />{screen.details&&<aside className="map-info"><h2>Location Information</h2><dl>{Object.entries(screen.details).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></aside>}</div></>;
+  return (
+    <>
+      <div className="map-filters">
+        <button type="button">All Countries⌄</button>
+        <button type="button">All Levels⌄</button>
+        <button type="button">All Status⌄</button>
+        <span><i className="high"/>High Activity</span>
+        <span><i/>Medium Activity</span>
+        <span><i className="low"/>Low Activity</span>
+      </div>
+      <div className={`card map-card ${screen.details ? 'location-map' : ''}`}>
+        <InteractiveMap height={520} className="admin-interactive-map" />
+        {screen.details ? (
+          <aside className="map-info">
+            <h2>Location Information</h2>
+            <dl>
+              {Object.entries(screen.details).map(([key, value]) => (
+                <div key={key}>
+                  <dt>{key}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </aside>
+        ) : null}
+      </div>
+    </>
+  );
 }
 
 function DonutVisual({ value = '726', label = 'Average' }: { value?: string; label?: string }) {
@@ -365,7 +2114,112 @@ function MinistryDashboardView({ screen }: { screen: AdminScreen }) {
 
 function WorkflowView({ screen }: { screen: AdminScreen }) {
   const decision = screen.details?.Decision;
-  return <div className="workflow-layout"><aside className="workflow-steps">{(screen.tabs ?? []).map((step,index)=><div className={`${index === (decision ? 2 : 0) ? 'active' : ''}`} key={step}><span>{index+1}</span><b>{step}</b></div>)}</aside><article className="card workflow-card">{decision ? <><h2>Decision</h2><div className="decision-box danger"><span>⊖</span><div><strong>{decision}</strong><p>This application does not meet the requirements.</p></div></div><div className="workflow-form">{Object.entries(screen.details ?? {}).filter(([key])=>key!=='Decision').map(([key,value])=><label key={key}><span>{key}</span>{key === 'Comments' ? <textarea defaultValue={value}/> : key === 'Notify Applicant' ? <input type="checkbox" defaultChecked/> : <select defaultValue={value}><option>{value}</option></select>}</label>)}</div></> : <><h2>Review Checklist</h2><div className="checklist">{(screen.items ?? []).map((item,index)=><div key={item}><span>{item.split(' — ')[0]}</span><StatusBadge value={item.split(' — ')[1]}/>{index>4&&<i/>}</div>)}</div><label className="comment-label"><span>Comments</span><textarea placeholder="Enter review comments..."/></label></>}<div className="form-footer"><button className="ghost-button">Back</button><button className={decision ? 'danger-button' : 'primary-button'}>{screen.action}</button></div></article></div>;
+  const steps = screen.tabs ?? [];
+  const wizard = useAdminWizardStep(steps);
+  const [applicationId, setApplicationId] = useState('');
+  const [transitionStatus, setTransitionStatus] = useState('submitted');
+  const [reasonCode, setReasonCode] = useState('application_received');
+  const [workflowMessage, setWorkflowMessage] = useState<string | null>(null);
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const liveWorkflow = shouldUseOperationsLiveData() && screen.nav === 'applications';
+
+  async function submitTransition() {
+    if (!applicationId.trim()) {
+      setWorkflowMessage('Enter the home church application public id (ULID).');
+      return;
+    }
+    setWorkflowBusy(true);
+    setWorkflowMessage(null);
+    try {
+      const updated = await transitionHomeChurchApplication(
+        applicationId.trim(),
+        { status: transitionStatus, reason_code: reasonCode.trim() },
+        defaultOpsScope(screen.scope),
+      );
+      setWorkflowMessage(`Transitioned to ${updated.status}.`);
+    } catch (err) {
+      setWorkflowMessage(operationsErrorMessage(err, 'Application transition failed.'));
+    } finally {
+      setWorkflowBusy(false);
+    }
+  }
+
+  return (
+    <div className="workflow-layout" data-admin-wizard="true">
+      <aside className="workflow-steps">
+        <AdminWizardStepper steps={steps} currentStep={decision ? 2 : wizard.currentStep} itemClassName="" activeClassName="active" completeClassName="done" />
+      </aside>
+      <article className="card workflow-card">
+        {liveWorkflow ? (
+          <>
+            <h2>Application transition</h2>
+            <p className="page-subtitle">Call `POST /admin/church/home-church-applications/&#123;id&#125;/transitions` with credentials and scope.</p>
+            <div className="form-grid">
+              <label className="full"><span>Application id *</span><input value={applicationId} onChange={(event) => setApplicationId(event.target.value)} placeholder="01J…" /></label>
+              <label>
+                <span>Status *</span>
+                <select value={transitionStatus} onChange={(event) => setTransitionStatus(event.target.value)}>
+                  {['draft', 'submitted', 'under_review', 'interview_orientation', 'approved', 'active', 'rejected', 'suspended', 'closed'].map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
+              <label><span>Reason code *</span><input value={reasonCode} onChange={(event) => setReasonCode(event.target.value)} /></label>
+            </div>
+            {workflowMessage ? <p className="field-help" role="status">{workflowMessage}</p> : null}
+            <div className="form-footer">
+              <button className="primary-button" type="button" disabled={workflowBusy} onClick={() => void submitTransition()}>
+                {workflowBusy ? 'Submitting…' : 'Submit transition'}
+              </button>
+            </div>
+          </>
+        ) : decision ? (
+          <>
+            <h2>Decision</h2>
+            <div className="decision-box danger"><span>⊖</span><div><strong>{decision}</strong><p>This application does not meet the requirements.</p></div></div>
+            <div className="workflow-form">{Object.entries(screen.details ?? {}).filter(([key]) => key !== 'Decision').map(([key, value]) => <label key={key}><span>{key}</span>{key === 'Comments' ? <textarea defaultValue={value} /> : key === 'Notify Applicant' ? <input type="checkbox" defaultChecked /> : <select defaultValue={value}><option>{value}</option></select>}</label>)}</div>
+          </>
+        ) : (
+          <>
+            {wizard.currentStep === 0 && (
+              <>
+                <h2>Review Checklist</h2>
+                <div className="checklist">{(screen.items ?? []).map((item, index) => <div key={item}><span>{item.split(' — ')[0]}</span><StatusBadge value={item.split(' — ')[1]} />{index > 4 && <i />}</div>)}</div>
+                <label className="comment-label"><span>Comments</span><textarea placeholder="Enter review comments..." /></label>
+              </>
+            )}
+            {wizard.currentStep === 1 && (
+              <>
+                <h2>Interview / Orientation</h2>
+                <div className="form-grid">
+                  <label><span>Interview date</span><input type="date" defaultValue="2024-05-30" /></label>
+                  <label><span>Interviewer</span><SearchSelect name="interviewer_id" catalog="person" options={catalogOptions.person} placeholder="Search interviewer" /></label>
+                  <label className="full"><span>Orientation notes</span><textarea rows={4} placeholder="Record interview outcomes..." /></label>
+                </div>
+              </>
+            )}
+            {wizard.currentStep === 2 && (
+              <>
+                <h2>Approval Decision</h2>
+                <div className="form-grid">
+                  <label><span>Decision</span><select defaultValue="Approve"><option>Approve</option><option>Defer</option><option>Reject</option></select></label>
+                  <label className="full"><span>Decision notes</span><textarea rows={4} placeholder="Explain the decision..." /></label>
+                </div>
+              </>
+            )}
+            {wizard.currentStep >= 3 && (
+              <>
+                <h2>Activation</h2>
+                <dl className="wizard-review-summary">{Object.entries(screen.details ?? { Status: 'Ready to activate' }).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+              </>
+            )}
+          </>
+        )}
+        {!liveWorkflow && !decision && <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel="Activate home church" />}
+        {!liveWorkflow && decision && <div className="form-footer"><button className="ghost-button">Back</button><button className="danger-button">{screen.action}</button></div>}
+      </article>
+    </div>
+  );
 }
 
 function ActivationView({ screen }: { screen: AdminScreen }) {
@@ -388,8 +2242,56 @@ function ApprovalView({ screen }: { screen: AdminScreen }) {
 }
 
 function SettingsView({ screen }: { screen: AdminScreen }) {
+  if (screen.route.includes('/settings/maps')) {
+    return <MapsSettingsPanel />;
+  }
+  if (screen.route.includes('/settings/branding')) {
+    return <BrandingSettingsPanel />;
+  }
+  if (screen.route.includes('/geography/settings') && !shouldUseOrganizationFixtures()) {
+    return <HierarchyTreeView route="/admin/geography/hierarchy" title={screen.title} />;
+  }
   const destructive = screen.id === 'D-14';
-  return <div className="card settings-card ministry-settings"><div className="form-grid">{Object.entries(screen.details ?? {}).map(([key,value],index)=><label className={index>2?'full':''} key={key}><span>{key}</span>{/Notes/.test(key)?<textarea defaultValue={value}/>:key.includes('Allow')||key.includes('Enable')||key.includes('Auto')?<span className="setting-toggle"><input type="checkbox" defaultChecked={value==='Yes'}/><i/></span>:<select defaultValue={value}><option>{value}</option></select>}</label>)}</div><div className="form-footer"><button className="ghost-button">Cancel</button><button className={destructive?'danger-button':'primary-button'}>{screen.action}</button></div></div>;
+  const fixtures = shouldUseDesignFixtures();
+  return (
+    <div className="card settings-card ministry-settings">
+      {!fixtures ? (
+        <p className="maps-settings-lead" role="status">
+          No dedicated live settings endpoint for this screen. Changes are not persisted; platform maps/config/flags/storage use their wired admin APIs.
+        </p>
+      ) : null}
+      <div className="form-grid">
+        {Object.entries(screen.details ?? {}).map(([key, value], index) => (
+          <label className={index > 2 ? 'full' : ''} key={key}>
+            <span>{key}</span>
+            {/Notes/.test(key) ? (
+              <textarea defaultValue={value} disabled={!fixtures} />
+            ) : key.includes('Allow') || key.includes('Enable') || key.includes('Auto') ? (
+              <span className="setting-toggle">
+                <input type="checkbox" defaultChecked={value === 'Yes'} disabled={!fixtures} />
+                <i />
+              </span>
+            ) : (
+              <select defaultValue={value} disabled={!fixtures}>
+                <option>{value}</option>
+              </select>
+            )}
+          </label>
+        ))}
+      </div>
+      <div className="form-footer">
+        <button className="ghost-button" type="button">Cancel</button>
+        <button
+          className={destructive ? 'danger-button' : 'primary-button'}
+          type="button"
+          disabled={!fixtures}
+          title={fixtures ? undefined : 'No live settings API for this screen'}
+        >
+          {screen.action}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function FinanceView({ screen }: { screen: AdminScreen }) {
@@ -417,15 +2319,143 @@ function Impersonation({ screen }: { screen: AdminScreen }) {
 }
 
 export function ForbiddenView({ scope = 'Global', reason = 'permission-denied' }: { scope?: string; reason?: string }) {
+  if (reason === 'unauthenticated') {
+    return <div className="forbidden-view"><div className="shield-lock">▣</div><h1>Sign in required</h1><p>Sign in with an administrator account to continue.</p><Link href="/admin/login?returnTo=%2Fadmin" className="primary-button link-button">Admin Sign In</Link></div>;
+  }
   return <div className="forbidden-view"><div className="shield-lock">▣</div><h1>Permission Denied</h1><p>You don’t have permission to access this resource<br/>in the current scope.</p><dl><div><dt>Current Scope:</dt><dd>{scope}</dd></div><div><dt>Access Result:</dt><dd>{reason.replace('-', ' ')}</dd></div></dl><Link href="/admin" className="primary-button link-button">Back to Dashboard</Link></div>;
 }
 
-function AuthView({ screen }: { screen: AdminScreen }) {
-  if(screen.kind==='mfa') return <main className="auth-page"><header className="auth-header"><Brand dark={false}/><span>Admin Portal</span></header><section className="card mfa-card"><div className="mfa-icon">◇</div><h1>{screen.title}</h1><p>{screen.subtitle}</p><div className="otp-row">{'371942'.split('').map((digit,index)=><input aria-label={`Digit ${index+1}`} defaultValue={digit} maxLength={1} key={index}/>)}</div><strong>Code expires in 00:45</strong><div className="auth-links"><button type="button">Can’t access your authenticator?</button><button type="button">Use backup code</button></div><Link href="/admin" className="primary-button link-button">Verify &amp; Continue</Link></section></main>;
-  return <main className="login-page"><aside className="login-visual"><Brand/><div className="login-copy"><h1>Admin Portal</h1><p>Kingdom. Connection. Impact.</p><blockquote>“Go and make disciples<br/>of all nations.”<small>Matthew 28:19</small></blockquote></div><div className="city-lights"/></aside><section className="login-form"><div><h1>{screen.title}</h1><p>{screen.subtitle}</p><label>Email Address<input defaultValue="admin@fhconnect.org" /></label><label>Password<input type="password" defaultValue="password" /></label><div className="remember"><label><input type="checkbox" defaultChecked/> Remember me</label><button type="button">Forgot password?</button></div><Link href="/admin/mfa" className="primary-button link-button">Sign In</Link><small>Need help? <b>Contact Support</b></small></div></section></main>;
+function adminReturnDestination(returnTo?: string): string {
+  if (returnTo && returnTo.startsWith('/admin') && !returnTo.startsWith('//')) return returnTo;
+  return '/admin';
 }
 
-function ScreenContent({ screen }: { screen: AdminScreen }) {
+function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string }) {
+  const router = useRouter();
+  const apiReady = isAuthApiConfigured();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const dest = adminReturnDestination(returnTo);
+
+  async function onLogin(event: FormEvent) {
+    event.preventDefault();
+    if (!apiReady) {
+      setError('Authentication is not configured.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { meta } = await loginBrowserUser({ email, password, remember });
+      if (meta.email_verification_required) {
+        router.push('/verify-email');
+        return;
+      }
+      const capabilities = await fetchUserCapabilities();
+      if (!hasAdministratorCapabilities(capabilities)) {
+        await logoutBrowserUser().catch(() => undefined);
+        setError('This account is not an administrator. Use member sign-in at /login, or sign in with an admin user.');
+        return;
+      }
+      router.push(dest);
+      router.refresh();
+    } catch (err) {
+      setError(formatAuthError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onMfa(event: FormEvent) {
+    event.preventDefault();
+    if (!apiReady) {
+      setError('Authentication is not configured.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await challengeMfa({ code: otp.join('') });
+      router.push(dest);
+      router.refresh();
+    } catch (err) {
+      setError(formatAuthError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (screen.kind === 'mfa') {
+    return (
+      <main className="auth-page">
+        <header className="auth-header"><Brand dark={false}/><span>Admin Portal</span></header>
+        <form className="card mfa-card" onSubmit={(event) => void onMfa(event)}>
+          <div className="mfa-icon">◇</div>
+          <h1>{screen.title}</h1>
+          <p>{screen.subtitle}</p>
+          {error ? <p className="auth-banner auth-banner-error" role="alert">{error}</p> : null}
+          <div className="otp-row">
+            {otp.map((digit, index) => (
+              <input
+                aria-label={`Digit ${index + 1}`}
+                value={digit}
+                maxLength={1}
+                inputMode="numeric"
+                autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                key={index}
+                onChange={(event) => {
+                  const value = event.target.value.replace(/\D/g, '').slice(-1);
+                  setOtp((prev) => prev.map((item, itemIndex) => (itemIndex === index ? value : item)));
+                }}
+              />
+            ))}
+          </div>
+          <div className="auth-links">
+            <Link href="/admin/login">Back to admin sign in</Link>
+          </div>
+          <button className="primary-button" type="submit" disabled={busy || otp.join('').length !== 6}>
+            {busy ? 'Verifying…' : 'Verify & Continue'}
+          </button>
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <main className="login-page">
+      <aside className="login-visual">
+        <Brand/>
+        <div className="login-copy">
+          <h1>Admin Portal</h1>
+          <p>Kingdom. Connection. Impact.</p>
+          <blockquote>“Go and make disciples<br/>of all nations.”<small>Matthew 28:19</small></blockquote>
+        </div>
+        <div className="city-lights"/>
+      </aside>
+      <form className="login-form" onSubmit={(event) => void onLogin(event)}>
+        <div>
+          <h1>{screen.title}</h1>
+          <p>{screen.subtitle}</p>
+          {error ? <p className="auth-banner auth-banner-error" role="alert">{error}</p> : null}
+          <label>Email Address<input type="email" name="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={busy} /></label>
+          <label>Password<input type="password" name="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy} /></label>
+          <div className="remember">
+            <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy}/> Remember me</label>
+            <Link href="/forgot-password">Forgot password?</Link>
+          </div>
+          <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy || !apiReady}>{busy ? 'Signing in…' : 'Sign In'}</button>
+          {!apiReady ? <small role="status">Set NEXT_PUBLIC_FHC_API_URL so admin sign-in can reach Laravel.</small> : <small>Need help? <Link href="/contact">Contact Support</Link></small>}
+        </div>
+      </form>
+    </main>
+  );
+}
+
+function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen}/>;
   if (screen.batch === 'I') return <MissionScreenContent screen={screen}/>;
   if (['J','K','L','M','N','O'].includes(screen.batch)) return <PlatformScreenContent screen={screen}/>;
@@ -435,14 +2465,14 @@ function ScreenContent({ screen }: { screen: AdminScreen }) {
     case 'command': return <CommandView screen={screen}/>;
     case 'feed': return <FeedView screen={screen}/>;
     case 'tasks': return <TasksView screen={screen}/>;
-    case 'kpi': return <KpiView screen={screen}/>;
-    case 'table': return <DataTable screen={screen}/>;
+    case 'kpi': return <KpiView screen={screen} requestedScope={requestedScope}/>;
+    case 'table': return <DataTable screen={screen} requestedScope={requestedScope}/>;
     case 'detail': return <DetailView screen={screen}/>;
     case 'wizard': return <WizardView screen={screen}/>;
     case 'profile': return <ProfileView screen={screen}/>;
-    case 'permissions': return <PermissionsView screen={screen}/>;
+    case 'permissions': return <PermissionsView screen={screen} requestedScope={requestedScope}/>;
     case 'matrix': return <MatrixView/>;
-    case 'form': return <FormView screen={screen}/>;
+    case 'form': return <FormView screen={screen} requestedScope={requestedScope}/>;
     case 'tree': return <TreeView screen={screen}/>;
     case 'map': return <MapView screen={screen}/>;
     case 'quick-actions': return <QuickActions screen={screen}/>;
@@ -465,12 +2495,12 @@ function ScreenContent({ screen }: { screen: AdminScreen }) {
 
 export function AdminScreenView({ screen, decision, requestedScope, returnTo }: { screen: AdminScreen; decision: AccessDecision; requestedScope: string; returnTo?: string }) {
   const breadcrumbs = getAdminBreadcrumbs(screen);
-  const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
-  if(screen.kind==='login'||screen.kind==='mfa') return <AdminInteractionShell {...interactionProps}><AuthView screen={screen}/></AdminInteractionShell>;
+  const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, screenKind: screen.kind, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
+  if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen} returnTo={returnTo}/>;
   const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id);
   const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
   const rendererOwnsAction = new Set(['G-01','G-17','H-11','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20']).has(screen.id);
-  return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
+  return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
 }
 
 const batchNames = {

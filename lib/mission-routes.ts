@@ -4,7 +4,7 @@ const crusades = [
   { 'Crusade Name': 'Lagos Mega Crusade', Location: 'Lagos, Nigeria', 'Start Date': 'May 15, 2024', 'End Date': 'May 18, 2024', Souls: '1,842', Status: 'Completed' },
   { 'Crusade Name': 'Ibadan City Crusade', Location: 'Ibadan, Nigeria', 'Start Date': 'Apr 25, 2024', 'End Date': 'Apr 28, 2024', Souls: '1,256', Status: 'Completed' },
   { 'Crusade Name': 'Kano Outreach', Location: 'Kano, Nigeria', 'Start Date': 'Apr 12, 2024', 'End Date': 'Apr 14, 2024', Souls: '1,128', Status: 'Completed' },
-  { 'Crusade Name': 'Abuja for Jesus', Location: 'Abuja, Nigeria', 'Start Date': 'May 3, 2024', 'End Date': 'May 5, 2024', Souls: '1,022', Status: 'Completed' },
+  { 'Crusade Name': 'Abuja for Jesus Christ', Location: 'Abuja, Nigeria', 'Start Date': 'May 3, 2024', 'End Date': 'May 5, 2024', Souls: '1,022', Status: 'Completed' },
   { 'Crusade Name': 'Port Harcourt Outreach', Location: 'Port Harcourt', 'Start Date': 'Apr 20, 2024', 'End Date': 'Apr 21, 2024', Souls: '892', Status: 'Completed' },
   { 'Crusade Name': 'Kaduna City Crusade', Location: 'Kaduna, Nigeria', 'Start Date': 'May 17, 2024', 'End Date': 'May 19, 2024', Souls: '756', Status: 'Planning' },
 ];
@@ -13,7 +13,7 @@ const souls = [
   { Name: 'Chinedu Okafor', Crusade: 'Lagos Mega Crusade', 'Date Won': 'May 12, 2024', Status: 'New', Mentor: 'Sister Mary' },
   { Name: 'Aisha Mohammed', Crusade: 'Lagos Mega Crusade', 'Date Won': 'May 10, 2024', Status: 'New', Mentor: 'Brother Daniel' },
   { Name: 'Tunde Adeleke', Crusade: 'Ibadan City Crusade', 'Date Won': 'Apr 28, 2024', Status: 'New', Mentor: 'Sister Grace' },
-  { Name: 'Blessing Nwosu', Crusade: 'Abuja for Jesus', 'Date Won': 'May 3, 2024', Status: 'New', Mentor: 'Pastor John' },
+  { Name: 'Blessing Nwosu', Crusade: 'Abuja for Jesus Christ', 'Date Won': 'May 3, 2024', Status: 'New', Mentor: 'Pastor John' },
   { Name: 'Emeka Obi', Crusade: 'Kano Outreach', 'Date Won': 'Apr 14, 2024', Status: 'New', Mentor: 'Brother Mike' },
   { Name: 'Joy Daniel', Crusade: 'Lagos Mega Crusade', 'Date Won': 'May 11, 2024', Status: 'New', Mentor: 'Sister Mary' },
 ];
@@ -57,7 +57,7 @@ export const missionScreens: AdminScreen[] = [
       { label: 'Follow Ups', value: '689' }, { label: 'Teams', value: '28' }, { label: 'Workers', value: '312' },
     ],
     details: {
-      Theme: 'Jesus Saves', 'Host Church': 'The Covenant Place, Lagos',
+      Theme: 'Jesus Christ Saves', 'Host Church': 'The Covenant Place, Lagos',
       'Crusade Lead': 'Pastor Samuel Adeyemi', Venue: 'Tafawa Balewa Square, Lagos',
       Type: 'Open Air Crusade', Focus: 'Salvation & Healing', Status: 'Completed',
     },
@@ -105,7 +105,7 @@ export const missionScreens: AdminScreen[] = [
     permission: 'mission.crusade.plan', scope: 'assigned', nav: 'crusades',
     tabs: ['General', 'Schedule', 'Logistics', 'Communication', 'Budget'],
     details: {
-      Theme: 'Jesus Saves', Objectives: 'Win souls for Christ; heal the sick; raise disciples; strengthen local churches.',
+      Theme: 'Jesus Christ Saves', Objectives: 'Win souls for Christ; heal the sick; raise disciples; strengthen local churches.',
       'Planning Start': 'Apr 10, 2024', 'Workers Training': 'Apr 30, 2024',
       'Publicity Start': 'May 1, 2024', 'Crusade Start': 'May 15, 2024', 'Crusade End': 'May 18, 2024', 'Follow-Up Start': 'May 19, 2024',
     },
@@ -214,7 +214,7 @@ export const missionScreens: AdminScreen[] = [
       { label: 'Not Contacted', value: '768' }, { label: 'Overdue (7+ days)', value: '312', trend: '+14%' },
     ],
     tabs: ['Gap by Crusade', 'Gap by Days'],
-    items: ['Lagos Mega — 85%', 'Ibadan City — 65%', 'Kano Outreach — 55%', 'Abuja for Jesus — 45%', 'Port Harcourt — 40%', '0–3 days — 35%', '4–7 days — 28%', '8–14 days — 24%', '15+ days — 13%'],
+    items: ['Lagos Mega — 85%', 'Ibadan City — 65%', 'Kano Outreach — 55%', 'Abuja for Jesus Christ — 45%', 'Port Harcourt — 40%', '0–3 days — 35%', '4–7 days — 28%', '8–14 days — 24%', '15+ days — 13%'],
   },
   {
     id: 'I-16', batch: 'I', route: '/admin/mission/partners', title: 'Mission Partners',
@@ -264,7 +264,7 @@ export const missionScreens: AdminScreen[] = [
       { label: 'Not Contacted', value: '768', trend: '+14%' },
     ],
     tabs: ['Gap by Crusade', 'Gap by Days'],
-    items: ['Lagos Mega — 35%', 'Ibadan City — 22%', 'Abuja for Jesus — 18%', 'Kano Outreach — 15%', 'Port Harcourt — 10%', '0–3 days — 35%', '4–7 days — 28%', '8–14 days — 24%', '15+ days — 13%'],
+    items: ['Lagos Mega — 35%', 'Ibadan City — 22%', 'Abuja for Jesus Christ — 18%', 'Kano Outreach — 15%', 'Port Harcourt — 10%', '0–3 days — 35%', '4–7 days — 28%', '8–14 days — 24%', '15+ days — 13%'],
   },
   {
     id: 'I-20', batch: 'I', route: '/admin/mission/reports', title: 'Mission Reports',

@@ -37,11 +37,11 @@ const lecturerRows = [
 ];
 
 const moduleRows = [
-  { Module: 'Identity in Christ', Year: 'Year 1', Lecturer: 'Dr. John Samuel', Lessons: '8', Status: 'Active' },
-  { Module: 'Bible Survey', Year: 'Year 1', Lecturer: 'Rev. Peace Okafor', Lessons: '10', Status: 'Active' },
-  { Module: 'Spiritual Disciplines', Year: 'Year 1', Lecturer: 'Pastor David Emmanuel', Lessons: '6', Status: 'Active' },
-  { Module: 'Old Testament Overview', Year: 'Year 2', Lecturer: 'Rev. Peace Okafor', Lessons: '12', Status: 'Active' },
-  { Module: 'Christian Doctrine', Year: 'Year 2', Lecturer: 'Dr. John Samuel', Lessons: '10', Status: 'Active' },
+  { Title: 'Identity in Christ', Code: 'Y1-M01', Sequence: '1', Lessons: '8', Status: 'Active' },
+  { Title: 'Bible Survey', Code: 'Y1-M02', Sequence: '2', Lessons: '10', Status: 'Active' },
+  { Title: 'Spiritual Disciplines', Code: 'Y1-M03', Sequence: '3', Lessons: '6', Status: 'Active' },
+  { Title: 'Old Testament Overview', Code: 'Y2-M01', Sequence: '4', Lessons: '12', Status: 'Active' },
+  { Title: 'Christian Doctrine', Code: 'Y2-M02', Sequence: '5', Lessons: '10', Status: 'Active' },
 ];
 
 const lessonRows = [
@@ -120,13 +120,13 @@ export const kcaLearningScreens: AdminScreen[] = [
   {
     id: 'H-09', batch: 'H', route: '/admin/kca/modules', title: 'Modules',
     subtitle: 'Manage all learning modules.', kind: 'table', permission: 'kca.module.view', scope: 'assigned', nav: 'kca-modules', action: '+ Create Module',
-    columns: ['Module', 'Year', 'Lecturer', 'Lessons', 'Status'], rows: moduleRows,
+    columns: ['Title', 'Code', 'Sequence', 'Lessons', 'Status'], rows: moduleRows,
   },
   {
     id: 'H-10', batch: 'H', route: '/admin/kca/modules/new', title: 'Module Builder',
     subtitle: 'Create and configure a new KCA module.', kind: 'wizard', permission: 'kca.module.create', scope: 'assigned', nav: 'kca-modules', action: 'Next: Content',
     tabs: ['Basic Info', 'Content', 'Prerequisites', 'Evidence', 'Review'],
-    details: { 'Module Title': 'Identity in Christ', Year: 'Year 1', Code: 'Y1-M01', Description: 'This module helps students understand their identity in Christ and its impact on daily living.', Lecturer: 'Dr. John Samuel', Duration: '8 Weeks', Status: 'Active' },
+    details: { title: 'Identity in Christ', code: 'Y1-M01', sequence: '1', is_active: 'Active', lecturer_person_id: 'Dr. John Samuel' },
   },
   {
     id: 'H-11', batch: 'H', route: '/admin/kca/modules/identity-in-christ/prerequisites', title: 'Prerequisite Builder',

@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { evaluateAccess, type AccessContext } from '../lib/access-control.ts';
+import {
+  accessContextFromCapabilities,
+  designFixtureAccessContext,
+  emptyAccessContext,
+  evaluateAccess,
+  evaluateMemberAccess,
+  formatCapabilityScope,
+  resolveAdminGuestLoginRedirect,
+  type AccessContext,
+} from '../lib/access-control.ts';
 import { getAdminScreen } from '../lib/admin-routes.ts';
 
 const dashboard = getAdminScreen('/admin')!;
@@ -62,12 +71,101 @@ const context = (overrides: Partial<AccessContext> = {}): AccessContext => ({
   ...overrides,
 });
 
+test('empty access context is fail-closed', () => {
+  assert.deepEqual(emptyAccessContext(), {
+    authenticated: false,
+    mfaVerified: false,
+    permissions: [],
+    scopes: [],
+  });
+});
+
+test('member access only requires authentication', () => {
+  assert.deepEqual(evaluateMemberAccess(emptyAccessContext()), { allowed: false, reason: 'unauthenticated' });
+  assert.deepEqual(evaluateMemberAccess(context()), { allowed: true });
+  assert.deepEqual(evaluateMemberAccess(designFixtureAccessContext()), { allowed: true });
+});
+
+test('design fixture grants wildcard access for review', () => {
+  const fixture = designFixtureAccessContext();
+  assert.equal(fixture.authenticated, true);
+  assert.ok(fixture.permissions.includes('*'));
+  assert.ok(fixture.scopes.includes('global'));
+  assert.deepEqual(evaluateAccess(dashboard, fixture), { allowed: true });
+});
+
+test('capability scopes map to evaluateAccess tokens', () => {
+  assert.deepEqual(formatCapabilityScope({ type: 'global', key: 'platform' }), ['global', 'global:platform']);
+  assert.deepEqual(formatCapabilityScope({ type: 'country', key: 'nigeria' }), ['country:nigeria']);
+  const live = accessContextFromCapabilities({
+    permissions: ['admin.dashboard.view'],
+    scopes: [
+      { type: 'global', key: 'platform' },
+      { type: 'country', key: 'nigeria' },
+    ],
+  });
+  assert.equal(live.authenticated, true);
+  assert.ok(live.scopes.includes('global'));
+  assert.ok(live.scopes.includes('country:nigeria'));
+  assert.deepEqual(evaluateAccess(dashboard, live, 'country:nigeria'), { allowed: true });
+});
+
+test('live administrator bundles receive UI access even when catalog permission codes differ', () => {
+  const live = accessContextFromCapabilities({
+    permissions: ['platform.configuration.manage', 'identity.users.view'],
+    scopes: [{ type: 'global', key: 'platform' }],
+  });
+  assert.ok(live.permissions.includes('*'));
+  assert.deepEqual(evaluateAccess(dashboard, live), { allowed: true });
+});
+
+test('member self-service capabilities do not open the admin console', () => {
+  const member = accessContextFromCapabilities({
+    permissions: ['identity.security.sessions.view', 'identity.preferences.manage', 'mobile.app.access'],
+    scopes: [{ type: 'global', key: 'platform' }],
+  });
+  assert.equal(member.permissions.includes('*'), false);
+  assert.deepEqual(evaluateAccess(dashboard, member), { allowed: false, reason: 'permission-denied' });
+});
+
 test('public routes are available without a session', () => {
   assert.deepEqual(evaluateAccess(publicLogin, context({ authenticated: false })), { allowed: true });
 });
 
 test('protected routes deny unauthenticated direct URL access', () => {
   assert.deepEqual(evaluateAccess(dashboard, context({ authenticated: false })), { allowed: false, reason: 'unauthenticated' });
+});
+
+test('guests hitting admin are sent to admin login, not member login or the dashboard', () => {
+  const denied = evaluateAccess(dashboard, context({ authenticated: false }));
+  assert.equal(
+    resolveAdminGuestLoginRedirect({
+      authenticated: false,
+      route: '/admin',
+      screenKind: 'dashboard',
+      decision: denied,
+    }),
+    '/admin/login?returnTo=%2Fadmin',
+  );
+  assert.equal(
+    resolveAdminGuestLoginRedirect({
+      authenticated: false,
+      route: '/admin/login',
+      screenKind: 'login',
+      decision: { allowed: true },
+      returnTo: '/admin/settings/platform',
+    }),
+    null,
+  );
+  assert.equal(
+    resolveAdminGuestLoginRedirect({
+      authenticated: true,
+      route: '/admin',
+      screenKind: 'dashboard',
+      decision: { allowed: false, reason: 'permission-denied' },
+    }),
+    null,
+  );
 });
 
 test('privileged routes require MFA', () => {

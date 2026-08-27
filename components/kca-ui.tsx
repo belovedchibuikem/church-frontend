@@ -1,6 +1,22 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
+import {
+  catalogErrorMessage,
+  catalogRecordsToRows,
+  listCatalogDomain,
+  resolveCatalogDataset,
+  shouldUseCatalogLiveData,
+} from '../lib/admin-catalog-api';
+import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
+import { AdminFormFields } from './admin-form-fields';
+import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
+import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
+import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
+import { TableRowActions } from './table-row-actions';
 
 const applicationSteps = [
   'Personal Information',
@@ -41,6 +57,7 @@ function KcaFilters({ search = 'Search records...', compact = false, labels = ['
 }
 
 function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [], showAction = true, filterLabels, toolbarAction }: { screen: AdminScreen; rows?: Row[]; columns?: string[]; showAction?: boolean; filterLabels?: string[]; toolbarAction?: string }) {
+  const entityKey = resolveEntityKey(screen.route, screen.id);
   return <article className={`card kca-table-card ${toolbarAction ? 'kca-prerequisites' : ''}`}>
     {toolbarAction && <header><div><h2>Orientation Sessions</h2><p>Manage upcoming orientation sessions and student attendance.</p></div><button className="primary-button" type="button">{toolbarAction}</button></header>}
     <KcaFilters search={`Search ${screen.title.toLowerCase()}...`} labels={filterLabels} />
@@ -53,7 +70,7 @@ function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?
             const isStatus = /status|priority|progress|issued/i.test(column);
             return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
           })}
-          {showAction && <td><button className="kca-row-action" type="button" aria-label={`View ${String(row[columns[0]] ?? 'record')}`}>View</button></td>}
+          {showAction && <td><TableRowActions record={String(row[columns[0]] ?? 'record')} entityKey={entityKey} className="row-actions kca-row-actions" /></td>}
         </tr>)}</tbody>
       </table>
     </div>
@@ -165,7 +182,75 @@ function KcaYears({ screen }: { screen: AdminScreen }) {
 }
 
 function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
-  return <div className="kca-builder"><div className="kca-builder-steps" role="list" aria-label="Module creation progress">{(screen.tabs ?? []).map((tab,index) => <div role="listitem" aria-current={index === 0 ? 'step' : undefined} className={index === 0 ? 'current' : ''} key={tab}><span aria-hidden="true">{index + 1}</span><b>{tab}</b></div>)}</div><article className="card kca-form-card"><header><div><span className="kca-overline">New module</span><h2>Basic Information</h2><p>Define the module students will learn.</p></div></header><div className="kca-form-grid">{Object.entries(screen.details ?? {}).map(([label,value]) => <label className={value.length > 40 ? 'wide' : ''} key={label}><span>{label}</span>{value.length > 40 ? <textarea required defaultValue={value}/> : <input required defaultValue={value}/>}</label>)}</div><footer><button className="ghost-button" type="button">Cancel</button><button className="primary-button" type="button">{screen.action}</button></footer></article></div>;
+  const fields = fieldsForEntity('kca_module');
+  const values = normalizeDetailValues(screen.details ?? {});
+  const steps = screen.tabs ?? [];
+  const wizard = useAdminWizardStep(steps);
+
+  return (
+    <div className="kca-builder" data-admin-wizard="true">
+      <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} className="kca-builder-steps" itemClassName="" activeClassName="current" />
+      <article className="card kca-form-card">
+        <header>
+          <div>
+            <span className="kca-overline">{wizard.isFirst ? 'New module' : `Step ${wizard.currentStep + 1} of ${steps.length}`}</span>
+            <h2>{wizard.currentLabel || 'Basic Information'}</h2>
+            <p>
+              {wizard.currentStep === 0 && 'Define the module students will learn. Fields map to kca_modules columns.'}
+              {wizard.currentStep === 1 && 'Add lessons and learning content for this module.'}
+              {wizard.currentStep === 2 && 'Set prerequisites students must complete before starting.'}
+              {wizard.currentStep === 3 && 'Configure evidence and assessment requirements.'}
+              {wizard.currentStep >= 4 && 'Review module details before publishing.'}
+            </p>
+          </div>
+        </header>
+
+        {wizard.currentStep === 0 && <AdminFormFields fields={fields} values={values} />}
+
+        {wizard.currentStep === 1 && (
+          <div className="kca-form-grid">
+            <label className="wide"><span>Lesson plan notes</span><textarea placeholder="Outline videos, readings, and assignments for this module..." rows={5} defaultValue="8 lessons planned: identity foundations, adoption, new creation, authority, and daily walk." /></label>
+            <label><span>Content format</span><select defaultValue="Mixed"><option>Mixed</option><option>Video-led</option><option>Reading-led</option></select></label>
+            <label><span>Estimated lessons</span><input type="number" defaultValue="8" min={1} /></label>
+          </div>
+        )}
+
+        {wizard.currentStep === 2 && (
+          <div className="kca-prerequisite-list">
+            {['Bible Survey (Year 1)', 'Walk With Christ', 'Basic Bible Knowledge'].map((item, index) => (
+              <div className="kca-prerequisite-row" key={item}>
+                <span className="kca-drag" aria-hidden="true">⋮⋮</span>
+                <span className="kca-prerequisite-icon" aria-hidden="true">{index < 2 ? '▣' : '◇'}</span>
+                <strong>{item}</strong>
+                <KcaBadge value={index < 2 ? 'Required' : 'Optional'} />
+              </div>
+            ))}
+            <button className="ghost-button" type="button" data-interaction-native="true">+ Add prerequisite</button>
+          </div>
+        )}
+
+        {wizard.currentStep === 3 && (
+          <div className="kca-form-grid">
+            <label><span>Evidence type</span><select defaultValue="Written + Practical"><option>Written + Practical</option><option>Written only</option><option>Practical only</option></select></label>
+            <label><span>Minimum submissions</span><input type="number" defaultValue="3" min={0} /></label>
+            <label className="wide"><span>Evidence instructions</span><textarea rows={4} placeholder="Describe what students must submit..." defaultValue="Students submit reflection essays and a practical application assignment reviewed by their mentor." /></label>
+          </div>
+        )}
+
+        {wizard.currentStep >= 4 && (
+          <dl className="kca-review-summary">
+            {Object.entries(values).map(([key, value]) => (
+              <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{value}</dd></div>
+            ))}
+            <div><dt>Lessons</dt><dd>8 planned</dd></div>
+            <div><dt>Prerequisites</dt><dd>3 configured</dd></div>
+          </dl>
+        )}
+
+        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel="Create module" secondaryClassName="ghost-button" primaryClassName="primary-button" />
+      </article>
+    </div>
+  );
 }
 
 function KcaPrerequisites({ screen }: { screen: AdminScreen }) {
@@ -182,7 +267,63 @@ function KcaCertificate({ screen }: { screen: AdminScreen }) {
 }
 
 function KcaManagedTable({ screen }: { screen: AdminScreen }) {
-  return <div className="kca-managed-table">{screen.metrics && <KcaMetrics metrics={screen.metrics}/>}<KcaTable screen={screen}/></div>;
+  const columns = screen.columns ?? [];
+  const columnKey = columns.join('\0');
+  const dataset = resolveCatalogDataset(screen);
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData() && dataset !== null;
+  const [rows, setRows] = useState<Row[]>(live ? [] : (screen.rows ?? []));
+  const [message, setMessage] = useState(live ? 'Loading catalog…' : '');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live || !dataset) return;
+    const mappedColumns = columnKey ? columnKey.split('\0') : [];
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setMessage('Loading catalog…');
+      try {
+        const result = await listCatalogDomain(dataset, { perPage: 25 });
+        if (cancelled) return;
+        setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[]);
+        setMessage(
+          result.pagination.total === 0
+            ? 'No catalog records in this scope.'
+            : `Showing ${result.items.length} of ${result.pagination.total} records`,
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setError(catalogErrorMessage(err, 'Unable to load domain catalog.'));
+        setMessage('Live catalog unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [columnKey, dataset, live]);
+
+  if (!shouldUseDesignFixtures() && !live) {
+    return (
+      <div className="kca-managed-table">
+        <p className="maps-settings-lead" role="status">
+          No live list API is wired for this screen. Design fixtures are disabled.
+        </p>
+        <article className="card kca-table-card">
+          <p>Live data unavailable for this route.</p>
+        </article>
+      </div>
+    );
+  }
+
+  return (
+    <div className="kca-managed-table">
+      {screen.metrics && <KcaMetrics metrics={screen.metrics} />}
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      <KcaTable screen={screen} rows={rows} />
+    </div>
+  );
 }
 
 export function KcaScreenContent({ screen }: { screen: AdminScreen }) {

@@ -1,28 +1,37 @@
 import type { Metadata } from 'next';
+import { BrandingProvider } from '../components/branding-provider';
+import { loadPublicBranding } from '../lib/branding';
 import './globals.css';
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
-  title: { default: 'Family House Connect', template: '%s | Family House Connect' },
-  description: 'One family. One mission. Connect, grow, worship, learn, serve, and give with Family House Connect.',
-  openGraph: {
-    title: 'Family House Connect — Admin Portal',
-    description: 'Global ministry administration with permission-aware access and scope governance.',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Family House Connect Global Ministry Administration' }],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Family House Connect — Admin Portal',
-    description: 'Global ministry administration with permission-aware access and scope governance.',
-    images: ['/og.png'],
-  },
-  robots: { index: true, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await loadPublicBranding();
+  return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+    title: { default: branding.app_name, template: `%s | ${branding.app_name}` },
+    description: `One family. One mission. Connect, grow, worship, learn, serve, and give with ${branding.app_name}.`,
+    icons: branding.favicon_url ? { icon: [{ url: branding.favicon_url }] } : undefined,
+    openGraph: {
+      title: branding.app_name,
+      description: `One family. One mission. Connect, grow, worship, learn, serve, and give with ${branding.app_name}.`,
+      images: [{ url: '/og.png', width: 1200, height: 630, alt: branding.app_name }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: branding.app_name,
+      description: `One family. One mission. Connect, grow, worship, learn, serve, and give with ${branding.app_name}.`,
+      images: ['/og.png'],
+    },
+    robots: { index: true, follow: true },
+  };
+}
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const branding = await loadPublicBranding();
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <BrandingProvider initial={branding}>{children}</BrandingProvider>
+      </body>
     </html>
   );
 }

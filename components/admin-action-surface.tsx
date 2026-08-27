@@ -1,6 +1,12 @@
 'use client';
 
 import type { FormEvent } from 'react';
+import { useState } from 'react';
+import { AdminFormFields } from './admin-form-fields';
+import { SearchSelect } from './search-select';
+import { catalogOptions } from '../lib/form-catalogs';
+import { adminFormSchemas, fieldsForEntity, normalizeDetailValues, type AdminFormField } from '../lib/admin-form-schemas';
+import { formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 
 export type ActionSurfaceMode = 'create' | 'edit' | 'assign' | 'confirm' | 'file' | 'preview' | 'help' | 'actions' | 'ai';
 
@@ -10,14 +16,16 @@ type Props = {
   pageTitle: string;
   permission: string;
   scope: string;
+  entityKey?: string;
+  record?: string;
   details?: Record<string, string>;
   items?: string[];
   records?: string[];
   onClose: () => void;
-  onDraft: (payload: Record<string, string>) => void;
+  onSubmit: (payload: Record<string, string>) => void | Promise<void>;
 };
 
-type Field = { label: string; name: string; type?: 'text' | 'email' | 'date' | 'number' | 'select' | 'textarea'; options?: string[]; placeholder?: string };
+type Field = AdminFormField;
 
 export function inferActionSurfaceMode(label: string): ActionSurfaceMode {
   const value = label.toLowerCase();
@@ -42,19 +50,32 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
     { label: 'Full name', name: 'fullName', placeholder: 'Enter full name' },
     { label: 'Email address', name: 'email', type: 'email', placeholder: 'name@example.org' },
     { label: 'Phone number', name: 'phone', placeholder: '+234' },
+    { label: 'Person record', name: 'person_id', type: 'search-select', catalog: 'person', placeholder: 'Search people' },
     { label: 'Assignment', name: 'assignment', type: 'select', options: ['Unassigned', 'Primary team', 'Support team'] },
+  ];
+  if (/home church/.test(entity)) return [
+    { label: 'Name', name: 'name', placeholder: 'Enter home church name' },
+    { label: 'Parent church', name: 'church_id', type: 'search-select', catalog: 'church', placeholder: 'Search church' },
+    { label: 'Leader', name: 'leader_person_id', type: 'search-select', catalog: 'person', placeholder: 'Search leader' },
+    { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
+    { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
+    { label: 'Status', name: 'status', type: 'select', options: ['Active', 'Suspended', 'Closed'] },
   ];
   if (/church|cohort|group|department|team|ministry|crusade|orientation/.test(entity)) return [
     { label: 'Name', name: 'name', placeholder: `Enter ${entityName(label, pageTitle).toLowerCase()} name` },
-    { label: 'Location', name: 'location', placeholder: 'Select or enter location' },
+    { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
+    { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
     { label: 'Start date', name: 'startDate', type: 'date' },
-    { label: 'Leader / owner', name: 'owner', placeholder: 'Select responsible person' },
+    { label: 'Leader / owner', name: 'owner_id', type: 'search-select', catalog: 'person', placeholder: 'Search responsible person' },
     { label: 'Description', name: 'description', type: 'textarea', placeholder: 'Add context and operating notes' },
   ];
-  if (/publication|manuscript|module|lesson|assessment|prerequisite|testimony|announcement|template|activity/.test(entity)) return [
+  if (/module/.test(entity) && !/lesson/.test(entity)) return fieldsForEntity('kca_module');
+  if (/lesson/.test(entity)) return fieldsForEntity('kca_lesson');
+  if (/cohort/.test(entity)) return fieldsForEntity('kca_cohort');
+  if (/publication|manuscript|assessment|prerequisite|testimony|announcement|template|activity/.test(entity)) return [
     { label: 'Title', name: 'title', placeholder: `Enter ${entityName(label, pageTitle).toLowerCase()} title` },
     { label: 'Category', name: 'category', type: 'select', options: ['General', 'Leadership', 'Discipleship', 'Ministry'] },
-    { label: 'Owner / author', name: 'owner', placeholder: 'Select owner' },
+    { label: 'Owner / author', name: 'owner_id', type: 'search-select', catalog: 'person', placeholder: 'Search owner' },
     { label: 'Description', name: 'description', type: 'textarea', placeholder: 'Describe the content and intended outcome' },
   ];
   if (/refund|payment|provider|channel|request|need|case|classification|restriction/.test(entity)) return [
@@ -72,36 +93,84 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
 
 function FieldControl({ field, required, defaultValue }: { field: Field; required?: boolean; defaultValue?: string }) {
   if (field.type === 'textarea') return <textarea name={field.name} placeholder={field.placeholder} rows={4} required={required} defaultValue={defaultValue}/>;
+  if (field.type === 'checkbox') return <label className="interaction-check"><input name={field.name} type="checkbox" value="true" defaultChecked={defaultValue === 'true' || defaultValue === 'Active'} />{field.placeholder ?? 'Enabled'}</label>;
+  if (field.type === 'search-select' && field.catalog) {
+    const fixtureOptions =
+      field.catalog in catalogOptions
+        ? catalogOptions[field.catalog as keyof typeof catalogOptions]
+        : undefined;
+    return (
+      <SearchSelect
+        name={field.name}
+        catalog={field.catalog}
+        options={fixtureOptions ?? []}
+        defaultValue={defaultValue}
+        placeholder={field.placeholder}
+        required={required}
+      />
+    );
+  }
   if (field.type === 'select') return <select name={field.name} required={required} defaultValue={defaultValue ?? ''}><option value="" disabled>Select an option</option>{field.options?.map((option) => <option value={option} key={option}>{option}</option>)}</select>;
-  return <input name={field.name} type={field.type ?? 'text'} placeholder={field.placeholder} required={required} defaultValue={defaultValue}/>;
+  return <input name={field.name} type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : field.type === 'date' ? 'date' : 'text'} placeholder={field.placeholder} required={required} defaultValue={defaultValue}/>;
 }
 
-export function AdminActionSurface({ mode, label, pageTitle, permission, scope, details = {}, items = [], records = [], onClose, onDraft }: Props) {
-  const entity = entityName(label, pageTitle);
-  const save = (event: FormEvent<HTMLFormElement>) => {
+export function AdminActionSurface({ mode, label, pageTitle, permission, scope, entityKey, record, details = {}, items = [], records = [], onClose, onSubmit }: Props) {
+  const schema = entityKey ? adminFormSchemas[entityKey] : undefined;
+  const entity = schema?.entity ?? entityName(label, pageTitle);
+  const normalizedDetails = normalizeDetailValues(details);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = Object.fromEntries(Array.from(new FormData(event.currentTarget).entries()).map(([key, value]) => [key, String(value)]));
-    onDraft(values);
+    setSubmitting(true);
+    setFormError('');
+    try {
+      await onSubmit(values);
+    } catch (error) {
+      setFormError(formatAdminMutationError(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const errorNote = formError ? <div className="interaction-safety-note" role="alert">{formError}</div> : null;
+  const footerButtons = (submitLabel: string) => (
+    <footer>
+      <button type="button" data-interaction-native="true" onClick={onClose} disabled={submitting}>Cancel</button>
+      <button className="primary-button" type="submit" data-interaction-native="true" disabled={submitting}>
+        {submitting ? 'Submitting…' : submitLabel}
+      </button>
+    </footer>
+  );
 
   if (mode === 'help') return <div className="interaction-record-preview"><div className="interaction-confirm-summary"><span>?</span><div><strong>Account recovery and support</strong><p>Use your organization’s approved support channel for authenticator recovery, password reset or backup-code access.</p></div></div><div className="interaction-context-grid"><span><small>Current page</small><strong>{pageTitle}</strong></span><span><small>Support scope</small><strong>{scope}</strong></span><span><small>Requested option</small><strong>{label}</strong></span></div><div className="interaction-safety-note">No recovery email, code or account change has been simulated in this frontend design.</div><footer><button type="button" data-interaction-native="true" onClick={onClose}>Close</button></footer></div>;
 
-  if (mode === 'ai') return <form className="interaction-action-form" onSubmit={save}><div className="interaction-form-heading"><span>Mission AI workspace</span><h3>Ask Mission AI</h3><p>Frame a ministry operations question using the approved reporting context.</p></div><div className="interaction-ai-suggestions">{['Show follow-up gaps','Summarize crusade outcomes','Identify overdue assignments'].map((suggestion)=><button type="button" data-interaction-native="true" key={suggestion} onClick={(event)=>{const form=event.currentTarget.closest('form');const input=form?.querySelector<HTMLTextAreaElement>('textarea');if(input)input.value=suggestion;}}>{suggestion}</button>)}</div><label>Your question<textarea name="prompt" required rows={5} placeholder="Ask about mission performance, follow-up or planning..."/></label><div className="interaction-safety-note">Saving preserves the prompt locally. No AI response is fabricated until the authorized AI service is connected.</div><footer><button type="button" data-interaction-native="true" onClick={onClose}>Cancel</button><button className="primary-button" type="submit" data-interaction-native="true">Save prompt</button></footer></form>;
+  if (mode === 'ai') return <form className="interaction-action-form" onSubmit={save}><div className="interaction-form-heading"><span>Mission AI workspace</span><h3>Ask Mission AI</h3><p>Frame a ministry operations question using the approved reporting context.</p></div><div className="interaction-ai-suggestions">{['Show follow-up gaps','Summarize crusade outcomes','Identify overdue assignments'].map((suggestion)=><button type="button" data-interaction-native="true" key={suggestion} onClick={(event)=>{const form=event.currentTarget.closest('form');const input=form?.querySelector<HTMLTextAreaElement>('textarea');if(input)input.value=suggestion;}}>{suggestion}</button>)}</div><label>Your question<textarea name="prompt" required rows={5} placeholder="Ask about mission performance, follow-up or planning..."/></label>{errorNote ?? <div className="interaction-safety-note">This submits to the Laravel advisory API. No fabricated AI response is shown on failure.</div>}{footerButtons('Submit')}</form>;
 
   if (mode === 'preview' || mode === 'actions') return <div className="interaction-record-preview">
-    <div className="interaction-context-grid"><span><small>Page</small><strong>{pageTitle}</strong></span><span><small>Scope</small><strong>{scope}</strong></span><span><small>Permission</small><strong>{permission}</strong></span></div>
+    <div className="interaction-context-grid"><span><small>Page</small><strong>{pageTitle}</strong></span><span><small>Scope</small><strong>{scope}</strong></span><span><small>Permission</small><strong>{permission}</strong></span>{record && <span><small>Record</small><strong>{record}</strong></span>}</div>
     <h3>{mode === 'actions' ? 'Available actions' : 'Record details'}</h3>
-    <div className="interaction-preview-list">{records.slice(0, 5).map((record, index) => <article key={`${record}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{record}</p></article>)}{records.length === 0 && items.slice(0, 6).map((item) => <article key={item}><span>•</span><p>{item}</p></article>)}</div>
-    <footer>{mode === 'actions' && <button type="button" data-interaction-native="true" onClick={() => onDraft({ pinnedPage: pageTitle })}>Pin page shortcut</button>}<button type="button" data-interaction-native="true" onClick={onClose}>Close</button></footer>
+    {schema && mode === 'preview' ? (
+      <dl className="interaction-detail-list">{schema.fields.map((field) => {
+        const value = normalizedDetails[field.name] ?? '—';
+        return <div key={field.name}><dt>{field.label}</dt><dd>{value}</dd></div>;
+      })}</dl>
+    ) : (
+      <div className="interaction-preview-list">{records.slice(0, 5).map((entry, index) => <article key={`${entry}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{entry}</p></article>)}{records.length === 0 && items.slice(0, 6).map((item) => <article key={item}><span>•</span><p>{item}</p></article>)}</div>
+    )}
+    {errorNote}
+    <footer>{mode === 'actions' && <button type="button" data-interaction-native="true" disabled={submitting} onClick={() => { void (async () => { setFormError(''); try { await onSubmit({ pinnedPage: pageTitle }); } catch (error) { setFormError(formatAdminMutationError(error)); } })(); }}>Pin page shortcut</button>}<button type="button" data-interaction-native="true" onClick={onClose}>Close</button></footer>
   </div>;
 
-  if (mode === 'file' && /download|print|receipt|pdf/i.test(label)) return <form className="interaction-action-form" onSubmit={save}><div className="interaction-file-summary"><span className="interaction-file-icon">▧</span><div><strong>{label}</strong><p>Document preview for {pageTitle}</p></div></div><div className="interaction-document-preview"><span>FAMILY HOUSE CONNECT</span><h3>{pageTitle}</h3><p>Authorized document preview</p><dl><div><dt>Scope</dt><dd>{scope}</dd></div><div><dt>Permission</dt><dd>{permission}</dd></div><div><dt>Format</dt><dd>PDF document</dd></div></dl></div><label>Delivery note<textarea name="note" rows={3} placeholder="Optional note for this document request"/></label><div className="interaction-safety-note">The preview is designed, but a downloadable file requires the authorized document service. No fake document is generated.</div><footer><button type="button" data-interaction-native="true" onClick={onClose}>Close</button><button className="primary-button" type="submit" data-interaction-native="true">Save document request</button></footer></form>;
+  if (mode === 'file' && /download|print|receipt|pdf/i.test(label)) return <form className="interaction-action-form" onSubmit={save}><div className="interaction-file-summary"><span className="interaction-file-icon">▧</span><div><strong>{label}</strong><p>Document preview for {pageTitle}</p></div></div><div className="interaction-document-preview"><span>FAMILY HOUSE CONNECT</span><h3>{pageTitle}</h3><p>Authorized document preview</p><dl><div><dt>Scope</dt><dd>{scope}</dd></div><div><dt>Permission</dt><dd>{permission}</dd></div><div><dt>Format</dt><dd>PDF document</dd></div></dl></div><label>Delivery note<textarea name="note" rows={3} placeholder="Optional note for this document request"/></label>{errorNote ?? <div className="interaction-safety-note">A downloadable file requires an authorized Laravel file operation. No fake document is generated.</div>}{footerButtons('Submit')}</form>;
 
   if (mode === 'file') return <form className="interaction-action-form" onSubmit={save}>
     <div className="interaction-file-summary"><span className="interaction-file-icon">▧</span><div><strong>{label}</strong><p>Prepare an authorized export for {pageTitle}.</p></div></div>
     <div className="interaction-form-grid"><label>Format<select name="format" defaultValue="PDF"><option>PDF</option><option>CSV</option><option>XLSX</option></select></label><label>Date range<select name="dateRange" defaultValue="current"><option value="current">Current view</option><option value="month">This month</option><option value="year">This year</option></select></label><label className="wide">Export notes<textarea name="notes" rows={3} placeholder="Optional note for the export request"/></label></div>
-    <div className="interaction-safety-note">File generation needs the authorized document service. Saving below preserves this export setup locally and does not fabricate a file.</div>
-    <footer><button type="button" data-interaction-native="true" onClick={onClose}>Cancel</button><button className="primary-button" type="submit" data-interaction-native="true">Save export setup</button></footer>
+    {errorNote ?? <div className="interaction-safety-note">File generation needs an authorized Laravel document operation. This does not fabricate a file.</div>}
+    {footerButtons('Submit')}
   </form>;
 
   if (mode === 'confirm') return <form className="interaction-action-form" onSubmit={save}>
@@ -109,20 +178,31 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
     <div className="interaction-context-grid">{Object.entries(details).slice(0, 4).map(([key, value]) => <span key={key}><small>{key}</small><strong>{value}</strong></span>)}</div>
     <label>Decision notes<textarea name="notes" rows={4} placeholder="Record the reason and supporting context"/></label>
     <label className="interaction-check"><input name="reviewed" type="checkbox" value="yes" required/> I reviewed the displayed scope and action details.</label>
-    <div className="interaction-safety-note">The frontend can preserve review notes, but authoritative execution remains unavailable until the server action is connected.</div>
-    <footer><button type="button" data-interaction-native="true" onClick={onClose}>Cancel</button><button className="primary-button" type="submit" data-interaction-native="true">Save review notes</button></footer>
+    {errorNote ?? <div className="interaction-safety-note">Confirm submits the matching Laravel admin operation. Failures are shown here; success is never simulated.</div>}
+    {footerButtons('Confirm')}
   </form>;
 
   const fields = mode === 'assign' ? [
-    { label: 'Assign to', name: 'assignee', type: 'select' as const, options: ['Pastor Daniel', 'Sister Mary', 'Brother John', 'Intercessory Team'] },
+    { label: 'Assign to', name: 'assignee_id', type: 'search-select' as const, catalog: 'person' as const, placeholder: 'Search people' },
     { label: 'Due date', name: 'dueDate', type: 'date' as const },
     { label: 'Instructions', name: 'instructions', type: 'textarea' as const, placeholder: 'Add clear handoff instructions' },
-  ] : fieldsFor(label, pageTitle);
+  ] : schema?.fields ?? fieldsFor(label, pageTitle);
+
+  if (schema) {
+    return <form className="interaction-action-form" onSubmit={save}>
+      <div className="interaction-form-heading"><span>{mode === 'edit' ? 'Edit' : mode === 'assign' ? 'Assignment' : 'New record'}</span><h3>{record ? `${entity}: ${record}` : entity}</h3><p>Fields match the database columns for this record type.</p></div>
+      <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' ? normalizedDetails : {}} className="interaction-form-grid" />
+      <div className="interaction-context-strip"><span>Scope: <b>{scope}</b></span><span>Permission: <b>{permission}</b></span></div>
+      {errorNote}
+      {footerButtons('Submit')}
+    </form>;
+  }
 
   return <form className="interaction-action-form" onSubmit={save}>
     <div className="interaction-form-heading"><span>{mode === 'edit' ? 'Edit' : mode === 'assign' ? 'Assignment' : 'New record'}</span><h3>{entity}</h3><p>Complete the fields below. Required values are marked.</p></div>
-    <div className="interaction-form-grid">{fields.map((field, index) => <label className={field.type === 'textarea' ? 'wide' : ''} key={field.name}>{field.label}{index < 2 && <b aria-hidden="true"> *</b>}<FieldControl field={field} required={index < 2} defaultValue={mode === 'edit' ? Object.values(details)[index] : undefined}/></label>)}</div>
+    <div className="interaction-form-grid">{fields.map((field, index) => <label className={field.type === 'textarea' ? 'wide' : ''} key={field.name}>{field.label}{index < 2 && <b aria-hidden="true"> *</b>}<FieldControl field={field} required={index < 2} defaultValue={mode === 'edit' ? Object.values(normalizedDetails)[index] : undefined}/></label>)}</div>
     <div className="interaction-context-strip"><span>Scope: <b>{scope}</b></span><span>Permission: <b>{permission}</b></span></div>
-    <footer><button type="button" data-interaction-native="true" onClick={onClose}>Cancel</button><button className="primary-button" type="submit" data-interaction-native="true">Save local draft</button></footer>
+    {errorNote}
+    {footerButtons('Submit')}
   </form>;
 }

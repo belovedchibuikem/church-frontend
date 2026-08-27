@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findSiteRoute, siteRoutes } from '../lib/site-routes.ts';
+import { findSiteRoute, isMemberNavActive, memberNavigation, siteRoutes } from '../lib/site-routes.ts';
 
 test('public and member reference catalogue has unique, resolvable routes', () => {
   assert.ok(siteRoutes.length >= 110);
@@ -16,7 +16,85 @@ test('member routes are explicitly classified and public routes are not protecte
 });
 
 test('every major public experience has a canonical entry route', () => {
-  for (const path of ['/', '/church', '/mission', '/kca', '/press', '/events', '/give', '/online-church', '/login', '/account']) {
+  for (const path of [
+    '/',
+    '/church',
+    '/mission',
+    '/kca',
+    '/kca/gate',
+    '/press',
+    '/events',
+    '/give',
+    '/online-church',
+    '/login',
+    '/register',
+    '/account',
+    '/account/kca',
+    '/account/calendar',
+    '/account/events',
+  ]) {
     assert.ok(findSiteRoute(path), `Missing ${path}`);
+  }
+});
+
+test('member navigation keeps unique hrefs and nested-route active matching', () => {
+  const hrefs = memberNavigation.map(([href]) => href);
+  assert.equal(new Set(hrefs).size, hrefs.length);
+  assert.equal(isMemberNavActive('/account', '/account'), true);
+  assert.equal(isMemberNavActive('/account/church', '/account'), false);
+  assert.equal(isMemberNavActive('/account/kca/modules', '/account/kca'), true);
+  assert.equal(isMemberNavActive('/account/giving/recurring', '/account/giving'), true);
+});
+
+test('events and KCA flows expose register, ticket, modules and mentor routes', () => {
+  for (const path of [
+    '/events/youth-summit-2025',
+    '/events/youth-summit-2025/register',
+    '/events/youth-summit-2025/ticket',
+    '/account/kca/modules',
+    '/account/kca/assignments',
+    '/account/kca/mentor',
+    '/account/kca/attendance',
+    '/kca/apply/church',
+    '/kca/admission-letter',
+  ]) {
+    assert.ok(findSiteRoute(path), `Missing ${path}`);
+  }
+});
+
+test('live KCA module and assignment links resolve as protected member pages', () => {
+  const module = findSiteRoute('/account/kca/modules/01J8KCA1234567890ABCDEFGHJ');
+  const assignment = findSiteRoute('/account/kca/assignments/01J8KCA1234567890ABCDEFGHJ');
+
+  assert.equal(module?.surface, 'member');
+  assert.equal(module?.kind, 'detail');
+  assert.equal(assignment?.surface, 'member');
+  assert.equal(assignment?.kind, 'detail');
+});
+
+test('member auth registration and verification routes are available', () => {
+  for (const path of [
+    '/login',
+    '/register',
+    '/register/personal',
+    '/register/contact',
+    '/register/security',
+    '/register/about',
+    '/register/review',
+    '/verify-email',
+    '/verify-phone',
+    '/otp',
+    '/forgot-password',
+    '/reset-password',
+    '/mfa/setup',
+    '/account-recovery',
+    '/onboarding/language',
+    '/onboarding/location',
+    '/onboarding/profile',
+    '/onboarding/role',
+  ]) {
+    const route = findSiteRoute(path);
+    assert.ok(route, `Missing ${path}`);
+    assert.equal(route?.surface, 'auth');
   }
 });

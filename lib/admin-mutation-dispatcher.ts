@@ -1,0 +1,1196 @@
+/**
+ * Maps admin UI (route, label, payload, record ULID, scope) onto Laravel
+ * `/api/v1/admin/*` mutations from `api/routes/api/v1/admin.php`.
+ *
+ * Catalog wrappers are GET-only (`lib/admin-catalog-api.ts`) and are not used here.
+ * Do not invent endpoints that are absent from that route file.
+ */
+import { ApiError, apiRequestData } from './api-client.ts';
+import type { JsonObject, JsonValue } from './api-types.ts';
+import {
+  AdminIdentityApiError,
+  reactivateAdminUser,
+  suspendAdminUser,
+} from './admin-identity-api.ts';
+import {
+  createCountry,
+  createLevel,
+  createLocation,
+  createUnit,
+  moveUnit,
+  OrganizationApiError,
+  organizationErrorMessage,
+} from './admin-organization-api.ts';
+import {
+  AdminOperationsApiError,
+  assignSoulMentor,
+  captureSoul,
+  completeFollowUpTask,
+  completeSoulFollowUp,
+  createChurch,
+  defaultOpsScope,
+  GLOBAL_ADMIN_SCOPE,
+  operationsErrorMessage,
+  recordSoulFollowUp,
+  registerFirstTimer,
+  transitionHomeChurchApplication,
+  type AdminScope,
+} from './admin-operations-api.ts';
+import {
+  activateMapsProvider,
+  activateObjectStorage,
+  AdminPlatformApiError,
+  configureMapsProvider,
+  configureObjectStorage,
+  deactivateMapsProvider,
+  deactivateObjectStorage,
+  disableFeatureFlag,
+  enableFeatureFlag,
+  platformErrorMessage,
+  upsertConfiguration,
+  upsertFeatureFlag,
+  validateObjectStorage,
+  wipeDemoDataset,
+  type MapsProvider,
+} from './admin-platform-api.ts';
+
+export { GLOBAL_ADMIN_SCOPE };
+
+export const UNREGISTERED_ADMIN_ACTION_MESSAGE =
+  'No Laravel operation is registered for this action';
+
+export class UnregisteredAdminActionError extends Error {
+  constructor(message = UNREGISTERED_ADMIN_ACTION_MESSAGE) {
+    super(message);
+    this.name = 'UnregisteredAdminActionError';
+  }
+}
+
+export type AdminActionInput = {
+  route: string;
+  label: string;
+  payload: Record<string, string>;
+  recordId?: string | null;
+  scope?: string | AdminScope;
+};
+
+export type AdminActionResult = {
+  id?: string;
+  status?: string;
+  data: unknown;
+};
+
+type Ctx = {
+  route: string;
+  label: string;
+  payload: Record<string, string>;
+  recordId?: string;
+  scope: AdminScope;
+};
+
+const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i;
+const CODE_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
+
+function normalizeLabel(label: string): string {
+  return label
+    .replace(/[＋+→↗⌄⋯•••]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+export function extractUlid(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (ULID_PATTERN.test(trimmed)) return trimmed;
+  const match = trimmed.match(/[0-7][0-9A-HJKMNP-TV-Z]{25}/i);
+  return match?.[0];
+}
+
+function firstUlid(...values: Array<string | null | undefined>): string | undefined {
+  for (const value of values) {
+    const id = extractUlid(value);
+    if (id) return id;
+  }
+  return undefined;
+}
+
+function field(payload: Record<string, string>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = payload[key];
+    if (value !== undefined && String(value).trim() !== '') return String(value).trim();
+  }
+  return undefined;
+}
+
+function asNumber(value?: string): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function asInt(value?: string): number | undefined {
+  const parsed = asNumber(value);
+  return parsed === undefined ? undefined : Math.trunc(parsed);
+}
+
+function asBool(value?: string): boolean | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (/^(true|1|yes|on|enabled|active)$/i.test(value)) return true;
+  if (/^(false|0|no|off|disabled|inactive)$/i.test(value)) return false;
+  return undefined;
+}
+
+function asObject(value?: string): JsonObject | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as JsonObject;
+    }
+  } catch {
+    /* not JSON */
+  }
+  return undefined;
+}
+
+function asStringArray(value?: string): string[] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item));
+  } catch {
+    /* comma-separated */
+  }
+  return value
+    .split(/[,|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function jsonBody(entries: Record<string, JsonValue | undefined>): JsonObject {
+  const body: JsonObject = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (value !== undefined) body[key] = value;
+  }
+  return body;
+}
+
+function looksLikeCode(value?: string): boolean {
+  return Boolean(value && CODE_PATTERN.test(value));
+}
+
+function reasonCode(payload: Record<string, string>, fallback?: string): string | undefined {
+  const direct = field(payload, 'reason_code', 'reasonCode', 'completion_reason_code');
+  if (looksLikeCode(direct)) return direct;
+  const notes = field(payload, 'notes', 'note');
+  if (looksLikeCode(notes)) return notes;
+  return fallback && looksLikeCode(fallback) ? fallback : undefined;
+}
+
+function requireId(id: string | undefined, name: string): string {
+  if (!id) {
+    throw new ApiError(422, `A ${name} ULID is required for this action.`);
+  }
+  return id;
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `admin-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function resolveScope(scope?: string | AdminScope): AdminScope {
+  if (!scope) return GLOBAL_ADMIN_SCOPE;
+  if (typeof scope === 'object' && scope.type && scope.id) return scope;
+  return defaultOpsScope(typeof scope === 'string' ? scope : undefined);
+}
+
+function recordFrom(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== 'object') return null;
+  const obj = data as Record<string, unknown>;
+  if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) {
+    return obj.data as Record<string, unknown>;
+  }
+  return obj;
+}
+
+function toResult(data: unknown): AdminActionResult {
+  const record = recordFrom(data);
+  const id = typeof record?.id === 'string' ? record.id : typeof record?.public_id === 'string' ? record.public_id : undefined;
+  const status =
+    typeof record?.status === 'string'
+      ? record.status
+      : typeof record?.account_status === 'string'
+        ? record.account_status
+        : undefined;
+  return { data, id, status };
+}
+
+export function formatAdminActionSuccess(result: AdminActionResult): string {
+  const parts = ['Saved'];
+  if (result.id) parts.push(`id ${result.id}`);
+  if (result.status) parts.push(`status ${result.status}`);
+  return parts.join(' · ');
+}
+
+export function formatAdminMutationError(error: unknown): string {
+  if (error instanceof UnregisteredAdminActionError) return error.message;
+  if (error instanceof OrganizationApiError) return organizationErrorMessage(error);
+  if (error instanceof AdminPlatformApiError) {
+    return platformErrorMessage(error, 'The platform admin request failed.');
+  }
+  if (error instanceof AdminOperationsApiError) {
+    return operationsErrorMessage(error, 'Admin operations mutation failed.');
+  }
+  if (error instanceof AdminIdentityApiError) {
+    return error.code ? `${error.message} (${error.code})` : error.message;
+  }
+  if (error instanceof ApiError) {
+    const first = error.errors ? Object.values(error.errors).flat()[0] : undefined;
+    const message = first || error.message;
+    return error.code ? `${message} (${error.code})` : message;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return 'The admin action failed.';
+}
+
+async function mutate<T>(
+  path: string,
+  body?: JsonObject,
+  options: { scope: AdminScope; method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; idempotent?: boolean } = {
+    scope: GLOBAL_ADMIN_SCOPE,
+  },
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options.idempotent) headers['Idempotency-Key'] = newIdempotencyKey();
+  return apiRequestData<T>(path, {
+    method: options.method ?? 'POST',
+    scope: options.scope,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function routeStarts(route: string, ...prefixes: string[]): boolean {
+  return prefixes.some((prefix) => route === prefix || route.startsWith(`${prefix}/`) || route.startsWith(prefix));
+}
+
+function labelIs(label: string, pattern: RegExp): boolean {
+  return pattern.test(label);
+}
+
+function pickRecord(ctx: Ctx, ...keys: string[]): string | undefined {
+  return firstUlid(ctx.recordId, ...keys.map((key) => ctx.payload[key]));
+}
+
+function splitPersonName(payload: Record<string, string>): { given_name?: string; family_name?: string } {
+  const given = field(payload, 'given_name', 'givenName', 'first_name', 'firstName');
+  const family = field(payload, 'family_name', 'familyName', 'last_name', 'lastName');
+  if (given || family) return { given_name: given, family_name: family };
+  const full = field(payload, 'fullName', 'full_name', 'name');
+  if (!full) return {};
+  const [first, ...rest] = full.split(/\s+/);
+  return { given_name: first, family_name: rest.join(' ') || undefined };
+}
+
+async function dispatch(ctx: Ctx): Promise<unknown> {
+  const { route, label, payload, scope } = ctx;
+  const opts = { scope };
+
+  // --- Identity (existing wrappers + remaining POSTs) ---
+  if (routeStarts(route, '/admin/users') && labelIs(label, /suspend|disable|lock/)) {
+    const userId = requireId(pickRecord(ctx, 'user_id', 'id'), 'user');
+    return suspendAdminUser(userId, field(payload, 'reason', 'notes', 'reason_code') ?? 'policy_violation', scope);
+  }
+  if (routeStarts(route, '/admin/users') && labelIs(label, /reactivat|unsuspend|enable account|restore/)) {
+    return reactivateAdminUser(requireId(pickRecord(ctx, 'user_id', 'id'), 'user'), scope);
+  }
+  if (
+    (routeStarts(route, '/admin/access/user-role-assignment', '/admin/users') && labelIs(label, /assign role|save assignment/)) ||
+    labelIs(label, /^assign roles? to users?$/)
+  ) {
+    const userId = requireId(pickRecord(ctx, 'user_id', 'id'), 'user');
+    return mutate(`admin/users/${encodeURIComponent(userId)}/role-assignments`, {
+      role_id: requireId(firstUlid(payload.role_id, payload.role), 'role'),
+      expires_at: field(payload, 'expires_at', 'expiresAt') ?? null,
+    }, opts);
+  }
+  if (routeStarts(route, '/admin/roles', '/admin/permissions') && labelIs(label, /grant permission|add permission|assign permission/)) {
+    const roleId = requireId(pickRecord(ctx, 'role_id', 'id'), 'role');
+    return mutate(`admin/access/roles/${encodeURIComponent(roleId)}/permissions`, {
+      permission_id: requireId(firstUlid(payload.permission_id, payload.permission), 'permission'),
+    }, opts);
+  }
+  if (
+    routeStarts(route, '/admin/access/scope-assignments', '/admin/geography/scope-assignment', '/admin/access') &&
+    labelIs(label, /save scope|assign scope|save assignment/)
+  ) {
+    const assignmentId = requireId(pickRecord(ctx, 'role_assignment_id', 'assignment_id', 'id'), 'role assignment');
+    return mutate(`admin/access/role-assignments/${encodeURIComponent(assignmentId)}/scopes`, {
+      scope_type: field(payload, 'scope_type', 'scopeType') ?? scope.type,
+      scope_key: field(payload, 'scope_key', 'scopeKey', 'scope_id', 'scopeId') ?? scope.id,
+    }, opts);
+  }
+
+  // --- Organization ---
+  if (routeStarts(route, '/admin/geography/countries') && labelIs(label, /add country|create country/)) {
+    return createCountry(
+      {
+        iso_code: (field(payload, 'iso_code', 'code') ?? '').toUpperCase(),
+        name: field(payload, 'name', 'country') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/geography') && labelIs(label, /add level|create level/)) {
+    const countryId = requireId(pickRecord(ctx, 'country_id', 'id'), 'country');
+    return createLevel(
+      countryId,
+      {
+        code: field(payload, 'code', 'level_code') ?? '',
+        name: field(payload, 'name', 'level_name') ?? '',
+        sort_order: asInt(field(payload, 'sort_order', 'order', 'sequence')) ?? 1,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/geography') && labelIs(label, /add (region|state|local area|unit)|create (region|state|local area|unit)/)) {
+    return createUnit(
+      {
+        country_id: requireId(firstUlid(payload.country_id, ctx.recordId), 'country'),
+        administrative_level_id: requireId(firstUlid(payload.administrative_level_id, payload.level_id), 'administrative level'),
+        name: field(payload, 'name') ?? '',
+        parent_id: firstUlid(payload.parent_id) ?? null,
+        reference_code: field(payload, 'reference_code', 'code') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/geography') && labelIs(label, /move unit|change parent|reparent/)) {
+    return moveUnit(
+      requireId(pickRecord(ctx, 'unit_id', 'id'), 'unit'),
+      { parent_id: firstUlid(payload.parent_id) ?? null },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/geography') && labelIs(label, /add location|create location/)) {
+    return createLocation(
+      {
+        country_id: requireId(firstUlid(payload.country_id), 'country'),
+        name: field(payload, 'name') ?? '',
+        timezone: field(payload, 'timezone') ?? 'UTC',
+        administrative_unit_id: firstUlid(payload.administrative_unit_id) ?? null,
+        address_line_one: field(payload, 'address_line_one', 'address') ?? null,
+        address_line_two: field(payload, 'address_line_two') ?? null,
+        locality: field(payload, 'locality') ?? null,
+        postal_code: field(payload, 'postal_code') ?? null,
+        latitude: asNumber(field(payload, 'latitude')) ?? null,
+        longitude: asNumber(field(payload, 'longitude')) ?? null,
+      },
+      opts,
+    );
+  }
+
+  // --- Platform settings / storage / maps / search / advisory ---
+  if (routeStarts(route, '/admin/settings/feature-flags') && labelIs(label, /enable|activate/)) {
+    return enableFeatureFlag(requireId(pickRecord(ctx, 'feature_flag_id', 'id'), 'feature flag'), scope);
+  }
+  if (routeStarts(route, '/admin/settings/feature-flags') && labelIs(label, /disable|deactivate/)) {
+    return disableFeatureFlag(requireId(pickRecord(ctx, 'feature_flag_id', 'id'), 'feature flag'), scope);
+  }
+  if (routeStarts(route, '/admin/settings/feature-flags') && labelIs(label, /save|upsert|update|create/)) {
+    return upsertFeatureFlag(
+      {
+        key: field(payload, 'key', 'name') ?? '',
+        environment: field(payload, 'environment') ?? '*',
+        rollout_percentage: asInt(field(payload, 'rollout_percentage')) ?? 100,
+        scope_type: field(payload, 'scope_type') ?? null,
+        scope_id: field(payload, 'scope_id') ?? null,
+        starts_at: field(payload, 'starts_at', 'startDate') ?? null,
+        ends_at: field(payload, 'ends_at', 'endDate') ?? null,
+      },
+      scope,
+    );
+  }
+  if (routeStarts(route, '/admin/settings/maps') && labelIs(label, /activate/)) {
+    return activateMapsProvider(scope);
+  }
+  if (routeStarts(route, '/admin/settings/maps') && labelIs(label, /deactivate/)) {
+    return deactivateMapsProvider(scope);
+  }
+  if (routeStarts(route, '/admin/settings/maps') && labelIs(label, /save|configure|update/)) {
+    return configureMapsProvider(
+      {
+        active_provider: (field(payload, 'active_provider', 'provider') ?? 'leaflet') as MapsProvider,
+        google_api_key: field(payload, 'google_api_key') ?? null,
+        mapbox_access_token: field(payload, 'mapbox_access_token') ?? null,
+        leaflet_tile_url: field(payload, 'leaflet_tile_url') ?? null,
+        default_latitude: asNumber(field(payload, 'default_latitude')) ?? null,
+        default_longitude: asNumber(field(payload, 'default_longitude')) ?? null,
+        default_zoom: asInt(field(payload, 'default_zoom')) ?? null,
+      },
+      scope,
+    );
+  }
+  if (routeStarts(route, '/admin/settings/uploads') && labelIs(label, /validate/)) {
+    return validateObjectStorage(scope);
+  }
+  if (routeStarts(route, '/admin/settings/uploads') && labelIs(label, /activate/)) {
+    return activateObjectStorage(scope);
+  }
+  if (routeStarts(route, '/admin/settings/uploads') && labelIs(label, /deactivate/)) {
+    return deactivateObjectStorage(scope);
+  }
+  if (routeStarts(route, '/admin/settings/uploads') && labelIs(label, /save|configure|update/)) {
+    return configureObjectStorage(
+      {
+        access_key_id: field(payload, 'access_key_id') ?? '',
+        secret_access_key: field(payload, 'secret_access_key') ?? '',
+        region: field(payload, 'region') ?? '',
+        bucket: field(payload, 'bucket') ?? '',
+        endpoint: field(payload, 'endpoint') ?? null,
+        url: field(payload, 'url') ?? null,
+        root_prefix: field(payload, 'root_prefix') ?? null,
+        use_path_style_endpoint: asBool(field(payload, 'use_path_style_endpoint')),
+      },
+      scope,
+    );
+  }
+  if (routeStarts(route, '/admin/settings/platform') && labelIs(label, /erase demo|wipe demo/)) {
+    return wipeDemoDataset(field(payload, 'confirmation') ?? 'ERASE DEMO', scope);
+  }
+  if (routeStarts(route, '/admin/settings/platform') && labelIs(label, /save|upsert|update|configure/)) {
+    const valueRaw = field(payload, 'value');
+    const valueType = (field(payload, 'value_type') ?? 'string') as 'string' | 'integer' | 'boolean' | 'json';
+    let value: JsonValue = valueRaw ?? '';
+    if (valueType === 'integer') value = asInt(valueRaw) ?? 0;
+    else if (valueType === 'boolean') value = asBool(valueRaw) ?? false;
+    else if (valueType === 'json') value = asObject(valueRaw) ?? {};
+    return upsertConfiguration(
+      {
+        key: field(payload, 'key', 'name') ?? '',
+        value_type: valueType,
+        classification: (field(payload, 'classification') ?? 'internal') as 'internal' | 'confidential',
+        value,
+        environment: field(payload, 'environment') ?? '*',
+        scope_type: field(payload, 'scope_type') ?? null,
+        scope_id: field(payload, 'scope_id') ?? null,
+      },
+      scope,
+    );
+  }
+  if (routeStarts(route, '/admin/press/assets', '/admin/settings/uploads') && labelIs(label, /approv/)) {
+    const fileId = requireId(pickRecord(ctx, 'file_id', 'file_asset_id', 'id'), 'file');
+    return mutate(`admin/platform/files/${encodeURIComponent(fileId)}/approval`, undefined, opts);
+  }
+  if (labelIs(label, /search (the )?(platform|directory|records)|run search|command search/) || (routeStarts(route, '/admin/command') && field(payload, 'term', 'q'))) {
+    const term = field(payload, 'term', 'query', 'q', 'name', 'prompt');
+    if (term && term.length >= 2) {
+      return mutate(
+        'admin/platform/search/queries',
+        jsonBody({
+          term,
+          resource_types: asStringArray(field(payload, 'resource_types')),
+          limit: asInt(field(payload, 'limit')),
+        }),
+        opts,
+      );
+    }
+  }
+  if (routeStarts(route, '/admin/mission/ai-assistant', '/admin/reports/pastoral-ai', '/admin/reports/press-ai') || labelIs(label, /ask.*ai|ai assistant|save prompt/)) {
+    const assistant =
+      field(payload, 'assistant') ??
+      (route.includes('/mission/') ? 'mission' : route.includes('press') ? 'press' : route.includes('kca') ? 'kca' : 'pastoral');
+    const useCase =
+      field(payload, 'use_case', 'useCase') ??
+      (assistant === 'mission'
+        ? 'follow_up_gap_detection'
+        : assistant === 'kca'
+          ? 'lesson_explanation'
+          : assistant === 'press'
+            ? 'publication_search'
+            : 'report_summarization');
+    return mutate(
+      'admin/platform/advisory/requests',
+      {
+        assistant,
+        use_case: useCase,
+        instruction: field(payload, 'instruction', 'prompt', 'notes', 'description') ?? '',
+        context: asObject(field(payload, 'context')) ?? { source_route: route },
+      },
+      opts,
+    );
+  }
+
+  // --- Church / mission (existing wrappers + remaining POSTs) ---
+  if ((routeStarts(route, '/admin/churches') || labelIs(label, /add church|create church/)) && labelIs(label, /add church|create church|save|submit|register/)) {
+    if (route.includes('/first-timers')) {
+      /* handled below */
+    } else if (!route.includes('/members') && !route.includes('/home-churches')) {
+      return createChurch(
+        {
+          name: field(payload, 'name') ?? '',
+          location_id: requireId(firstUlid(payload.location_id), 'location'),
+          administrative_unit_id: requireId(firstUlid(payload.administrative_unit_id), 'administrative unit'),
+        },
+        scope,
+      );
+    }
+  }
+  if (routeStarts(route, '/admin/home-churches/applications') && labelIs(label, /new application|create application|submit application|add application/)) {
+    return mutate(
+      'admin/church/home-church-applications',
+      {
+        applicant_person_id: requireId(firstUlid(payload.applicant_person_id, payload.person_id, payload.owner_id), 'applicant'),
+        church_id: requireId(firstUlid(payload.church_id), 'church'),
+        location_id: requireId(firstUlid(payload.location_id), 'location'),
+        administrative_unit_id: requireId(firstUlid(payload.administrative_unit_id), 'administrative unit'),
+        proposed_name: field(payload, 'proposed_name', 'name') ?? '',
+        expected_participants: asInt(field(payload, 'expected_participants')) ?? 1,
+        meeting_day: field(payload, 'meeting_day') ?? '',
+        meeting_time: field(payload, 'meeting_time') ?? '',
+        contact_email: field(payload, 'contact_email', 'email') ?? '',
+        contact_phone: field(payload, 'contact_phone', 'phone') ?? '',
+        guidelines_agreed_at: field(payload, 'guidelines_agreed_at') ?? new Date().toISOString(),
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/home-churches/applications') && labelIs(label, /approv|reject|defer|transition|submit decision|review|activate|suspend|close/)) {
+    const status =
+      field(payload, 'status') ??
+      (labelIs(label, /approv/)
+        ? 'approved'
+        : labelIs(label, /reject/)
+          ? 'rejected'
+          : labelIs(label, /defer/)
+            ? 'under_review'
+            : labelIs(label, /activate/)
+              ? 'active'
+              : labelIs(label, /suspend/)
+                ? 'suspended'
+                : labelIs(label, /close/)
+                  ? 'closed'
+                  : 'submitted');
+    return transitionHomeChurchApplication(
+      requireId(pickRecord(ctx, 'application_id', 'id'), 'application'),
+      { status, reason_code: reasonCode(payload, 'application_reviewed') ?? 'application_reviewed' },
+      scope,
+    );
+  }
+  if ((route.includes('/first-timers') || routeStarts(route, '/admin/people/first-timers')) && labelIs(label, /register|create|add|save|submit/)) {
+    return registerFirstTimer(
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
+        church_id: requireId(firstUlid(payload.church_id), 'church'),
+        home_church_id: firstUlid(payload.home_church_id) ?? null,
+        assigned_follow_up_person_id: firstUlid(payload.assigned_follow_up_person_id, payload.assignee_id) ?? null,
+        registered_at: field(payload, 'registered_at', 'startDate') ?? null,
+      },
+      scope,
+    );
+  }
+  if (routeStarts(route, '/admin/people/follow-up', '/admin/churches') && labelIs(label, /complete follow|mark complete|complete task/) ) {
+    return completeFollowUpTask(
+      requireId(pickRecord(ctx, 'task_id', 'id'), 'follow-up task'),
+      reasonCode(payload, 'contacted_successfully') ?? 'contacted_successfully',
+      scope,
+    );
+  }
+  if (
+    ((routeStarts(route, '/admin/churches') && route.includes('/members')) || route.includes('/membership')) &&
+    labelIs(label, /add member|register member|start membership|create membership/)
+  ) {
+    return mutate(
+      'admin/church/memberships',
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
+        church_id: requireId(firstUlid(payload.church_id), 'church'),
+        home_church_id: firstUlid(payload.home_church_id) ?? null,
+        joined_at: field(payload, 'joined_at', 'startDate') ?? null,
+      },
+      opts,
+    );
+  }
+  if (route.includes('/membership') && labelIs(label, /end membership|close membership|remove member/)) {
+    return mutate(
+      `admin/church/memberships/${encodeURIComponent(requireId(pickRecord(ctx, 'membership_id', 'id'), 'membership'))}/end`,
+      { reason_code: reasonCode(payload, 'membership_ended') ?? 'membership_ended' },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /invitation|invite/) && labelIs(label, /create|add|submit|save|send/)) {
+    return mutate(
+      'admin/mission/invitations',
+      {
+        crusade_id: requireId(firstUlid(payload.crusade_id, ctx.recordId), 'crusade'),
+        requester_person_id: requireId(firstUlid(payload.requester_person_id, payload.person_id, payload.owner_id), 'requester'),
+        requested_location_id: requireId(firstUlid(payload.requested_location_id, payload.location_id), 'location'),
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/mission') && labelIs(label, /transition invitation|approv.*invitation|reject.*invitation/)) {
+    return mutate(
+      `admin/mission/invitations/${encodeURIComponent(requireId(pickRecord(ctx, 'invitation_id', 'id'), 'invitation'))}/transitions`,
+      {
+        status: field(payload, 'status') ?? (labelIs(label, /reject/) ? 'rejected' : 'accepted'),
+        reason_code: reasonCode(payload) ?? null,
+      },
+      opts,
+    );
+  }
+  if (
+    (routeStarts(route, '/admin/mission/souls', '/admin/mission/crusades') && labelIs(label, /capture|register soul|add soul|add convert/)) ||
+    labelIs(label, /capture soul/)
+  ) {
+    const names = splitPersonName(payload);
+    return captureSoul(
+      requireId(firstUlid(payload.crusade_id, ctx.recordId), 'crusade'),
+      {
+        person_id: firstUlid(payload.person_id) ?? null,
+        given_name: names.given_name ?? null,
+        family_name: names.family_name ?? null,
+        middle_name: field(payload, 'middle_name') ?? null,
+        preferred_name: field(payload, 'preferred_name') ?? null,
+      },
+      { scope },
+    );
+  }
+  if (routeStarts(route, '/admin/mission/mentor-assignments', '/admin/mission/souls') && labelIs(label, /assign mentor|mentor assignment|assign/)) {
+    return assignSoulMentor(
+      requireId(pickRecord(ctx, 'soul_id', 'id'), 'soul'),
+      { mission_team_assignment_id: requireId(firstUlid(payload.mission_team_assignment_id, payload.assignment, payload.assignee_id), 'mission team assignment') },
+      { scope },
+    );
+  }
+  if (routeStarts(route, '/admin/mission/follow-up') && labelIs(label, /record follow|log follow|add follow|save/)) {
+    return recordSoulFollowUp(
+      requireId(pickRecord(ctx, 'soul_id', 'id'), 'soul'),
+      {
+        mentor_assignment_id: requireId(firstUlid(payload.mentor_assignment_id), 'mentor assignment'),
+        channel_code: field(payload, 'channel_code', 'channel') ?? 'in_person',
+        outcome_code: field(payload, 'outcome_code', 'status') ?? 'contacted',
+        occurred_at: field(payload, 'occurred_at', 'startDate') ?? new Date().toISOString(),
+      },
+      { scope },
+    );
+  }
+  if (routeStarts(route, '/admin/mission/follow-up', '/admin/mission/souls') && labelIs(label, /complete follow/)) {
+    return completeSoulFollowUp(
+      requireId(pickRecord(ctx, 'soul_id', 'id'), 'soul'),
+      reasonCode(payload, 'follow_up_completed') ?? 'follow_up_completed',
+      scope,
+    );
+  }
+
+  // --- KCA ---
+  if (routeStarts(route, '/admin/kca/years') && labelIs(label, /create|add|save|submit/)) {
+    return mutate(
+      'admin/kca/years',
+      {
+        code: field(payload, 'code') ?? '',
+        name: field(payload, 'name', 'title') ?? '',
+        starts_on: field(payload, 'starts_on', 'startDate', 'starts_at') ?? '',
+        ends_on: field(payload, 'ends_on', 'endDate', 'ends_at') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/cohorts') && labelIs(label, /create|add|save|submit/)) {
+    const yearId = requireId(firstUlid(payload.year_id, payload.kca_year_id, ctx.recordId), 'year');
+    return mutate(
+      `admin/kca/years/${encodeURIComponent(yearId)}/cohorts`,
+      {
+        code: field(payload, 'code') ?? '',
+        name: field(payload, 'name', 'title') ?? '',
+        starts_on: field(payload, 'starts_on', 'starts_at', 'startDate') ?? '',
+        ends_on: field(payload, 'ends_on', 'ends_at', 'endDate') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /create module|add module|save|submit/) && !labelIs(label, /lesson/)) {
+    return mutate(
+      'admin/kca/modules',
+      {
+        code: field(payload, 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        sequence: asInt(field(payload, 'sequence')) ?? 1,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/lessons', '/admin/kca/modules') && labelIs(label, /create lesson|add lesson|save lesson/)) {
+    const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
+    return mutate(
+      `admin/kca/modules/${encodeURIComponent(moduleId)}/lessons`,
+      {
+        code: field(payload, 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        sequence: asInt(field(payload, 'sequence')) ?? 1,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca') && labelIs(label, /record attendance|mark attendance/)) {
+    const enrollmentId = requireId(pickRecord(ctx, 'enrollment_id', 'id'), 'enrollment');
+    return mutate(
+      `admin/kca/enrollments/${encodeURIComponent(enrollmentId)}/attendance`,
+      {
+        lesson_id: requireId(firstUlid(payload.lesson_id, payload.kca_lesson_id), 'lesson'),
+        status: field(payload, 'status') ?? 'present',
+        session_on: field(payload, 'session_on', 'startDate') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') && labelIs(label, /transition|approv|defer|accept|reject|not accepted|decision|submit/)) {
+    const status =
+      field(payload, 'status') ??
+      (labelIs(label, /provisionally/)
+        ? 'provisionally_accepted'
+        : labelIs(label, /not accepted|reject/)
+          ? 'not_accepted'
+          : labelIs(label, /defer/)
+            ? 'deferred'
+            : labelIs(label, /accept|approv/)
+              ? 'accepted'
+              : 'reviewed');
+    return mutate(
+      `admin/kca/applications/${encodeURIComponent(requireId(pickRecord(ctx, 'application_id', 'id'), 'application'))}/transitions`,
+      { status, reason_code: reasonCode(payload) ?? null },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca') && labelIs(label, /enroll/)) {
+    const applicationId = requireId(pickRecord(ctx, 'application_id', 'id'), 'application');
+    return mutate(
+      `admin/kca/applications/${encodeURIComponent(applicationId)}/enrollments`,
+      {
+        cohort_id: requireId(firstUlid(payload.cohort_id), 'cohort'),
+        registration_number: field(payload, 'registration_number', 'code') ?? '',
+        starts_on: field(payload, 'starts_on', 'startDate') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca') && labelIs(label, /transition assignment/)) {
+    return mutate(
+      `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}/transitions`,
+      { status: field(payload, 'status') ?? 'submitted' },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca') && labelIs(label, /submit evidence|add evidence/)) {
+    const assignmentId = requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment');
+    return mutate(
+      `admin/kca/assignments/${encodeURIComponent(assignmentId)}/evidence`,
+      {
+        enrollment_id: requireId(firstUlid(payload.enrollment_id), 'enrollment'),
+        file_asset_id: requireId(firstUlid(payload.file_asset_id, payload.platform_file_id), 'file'),
+        submitted_by_person_id: requireId(firstUlid(payload.submitted_by_person_id, payload.person_id, payload.owner_id), 'person'),
+      },
+      { ...opts, idempotent: true },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/evidence-reviews') && labelIs(label, /review|approv|reject/)) {
+    return mutate(
+      `admin/kca/evidence/${encodeURIComponent(requireId(pickRecord(ctx, 'evidence_id', 'id'), 'evidence'))}/reviews`,
+      {
+        reviewer_person_id: requireId(firstUlid(payload.reviewer_person_id, payload.person_id, payload.owner_id), 'reviewer'),
+        outcome: field(payload, 'outcome', 'status') ?? (labelIs(label, /reject/) ? 'rejected' : 'accepted'),
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/certificates') && labelIs(label, /issue|create|save|submit/)) {
+    const enrollmentId = requireId(pickRecord(ctx, 'enrollment_id', 'id'), 'enrollment');
+    return mutate(
+      `admin/kca/enrollments/${encodeURIComponent(enrollmentId)}/certificates`,
+      {
+        certificate_number: field(payload, 'certificate_number', 'code') ?? '',
+        completion_on: field(payload, 'completion_on', 'startDate') ?? '',
+        verification_code: field(payload, 'verification_code') ?? '',
+      },
+      { ...opts, idempotent: true },
+    );
+  }
+
+  // --- Press ---
+  if (routeStarts(route, '/admin/press/publications') && labelIs(label, /create publication|add publication|save|submit/) && !route.includes('/translations')) {
+    if (!labelIs(label, /isbn|contributor|translation|transition|approv|publish/)) {
+      return mutate(
+        'admin/press/publications',
+        {
+          title: field(payload, 'title', 'name') ?? '',
+          publisher_name: field(payload, 'publisher_name', 'owner_id') ?? '',
+          language_code: field(payload, 'language_code', 'language') ?? 'en',
+          format: (field(payload, 'format') ?? 'print').toLowerCase(),
+          subtitle: field(payload, 'subtitle') ?? null,
+          category: field(payload, 'category') ?? null,
+          description: field(payload, 'description') ?? null,
+        },
+        { ...opts, idempotent: true },
+      );
+    }
+  }
+  if (routeStarts(route, '/admin/press') && labelIs(label, /isbn/)) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/isbn`,
+      {
+        isbn: field(payload, 'isbn', 'code', 'name') ?? '',
+        reason_code: reasonCode(payload, 'isbn_assigned') ?? 'isbn_assigned',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/press') && labelIs(label, /add contributor|assign contributor/)) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/contributors`,
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
+        role: field(payload, 'role') ?? 'author',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts') && labelIs(label, /approv|publish|transition|reject/)) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/transitions`,
+      {
+        status: field(payload, 'status') ?? (labelIs(label, /reject/) ? 'rejected' : 'published'),
+        reason_code: reasonCode(payload, 'publication_reviewed') ?? 'publication_reviewed',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/press/translations', '/admin/press/publications') && labelIs(label, /create translation|add translation|submit translation/)) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/translations`,
+      {
+        target_language_code: field(payload, 'target_language_code', 'language_code', 'language') ?? '',
+        translated_title: field(payload, 'translated_title', 'title', 'name') ?? '',
+        translated_subtitle: field(payload, 'translated_subtitle', 'subtitle') ?? null,
+        translated_description: field(payload, 'translated_description', 'description') ?? null,
+      },
+      { ...opts, idempotent: true },
+    );
+  }
+  if (routeStarts(route, '/admin/press/translations') && labelIs(label, /approv|transition|reject/)) {
+    return mutate(
+      `admin/press/translations/${encodeURIComponent(requireId(pickRecord(ctx, 'translation_id', 'id'), 'translation'))}/transitions`,
+      {
+        status: field(payload, 'status') ?? (labelIs(label, /reject/) ? 'rejected' : 'approved'),
+        reason_code: reasonCode(payload, 'translation_reviewed') ?? 'translation_reviewed',
+      },
+      opts,
+    );
+  }
+
+  // --- Events ---
+  if ((routeStarts(route, '/admin/settings/events') || labelIs(label, /create event|add event/)) && labelIs(label, /create event|add event|save|submit/)) {
+    return mutate(
+      'admin/events',
+      {
+        name: field(payload, 'name', 'title') ?? '',
+        category_code: field(payload, 'category_code', 'category') ?? 'general',
+        starts_at: field(payload, 'starts_at', 'startDate') ?? '',
+        ends_at: field(payload, 'ends_at', 'endDate') ?? '',
+        location_id: firstUlid(payload.location_id) ?? null,
+        registration_opens_at: field(payload, 'registration_opens_at') ?? null,
+        registration_closes_at: field(payload, 'registration_closes_at') ?? null,
+        fee_amount_minor: asInt(field(payload, 'fee_amount_minor', 'amount')) ?? null,
+        fee_currency: field(payload, 'fee_currency') ?? null,
+        capacity: asInt(field(payload, 'capacity')) ?? null,
+        published_at: field(payload, 'published_at') ?? null,
+      },
+      opts,
+    );
+  }
+  if (labelIs(label, /register (for )?event|add registration/)) {
+    const eventId = requireId(pickRecord(ctx, 'event_id', 'id'), 'event');
+    return mutate(
+      `admin/events/${encodeURIComponent(eventId)}/registrations`,
+      { person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person') },
+      { ...opts, idempotent: true },
+    );
+  }
+  if (labelIs(label, /record (event )?attendance/)) {
+    return mutate(
+      `admin/events/registrations/${encodeURIComponent(requireId(pickRecord(ctx, 'registration_id', 'id'), 'registration'))}/attendance`,
+      { source_code: field(payload, 'source_code') ?? 'admin' },
+      opts,
+    );
+  }
+  if (labelIs(label, /record (event )?feedback/)) {
+    return mutate(
+      `admin/events/registrations/${encodeURIComponent(requireId(pickRecord(ctx, 'registration_id', 'id'), 'registration'))}/feedback`,
+      { rating: asInt(field(payload, 'rating')) ?? 5 },
+      opts,
+    );
+  }
+
+  // --- Finance ---
+  if (routeStarts(route, '/admin/finance') && labelIs(label, /payment intent|create intent|charge|collect payment/)) {
+    return mutate(
+      'admin/finance/payment-intents',
+      { event_registration_id: requireId(firstUlid(payload.event_registration_id, payload.registration_id, ctx.recordId), 'event registration') },
+      { ...opts, idempotent: true },
+    );
+  }
+  if (routeStarts(route, '/admin/finance/refunds') && labelIs(label, /refund|process/)) {
+    const transactionId = requireId(pickRecord(ctx, 'transaction_id', 'id'), 'transaction');
+    return mutate(
+      `admin/finance/payment-transactions/${encodeURIComponent(transactionId)}/refunds`,
+      {
+        amount_minor: asInt(field(payload, 'amount_minor', 'amount')) ?? 1,
+        reason_code: reasonCode(payload, 'requested_by_admin') ?? 'requested_by_admin',
+      },
+      { ...opts, idempotent: true },
+    );
+  }
+
+  // --- Communications ---
+  if (routeStarts(route, '/admin/communications/templates') && labelIs(label, /create|add|new template|save|submit/)) {
+    return mutate(
+      'admin/communications/templates',
+      {
+        code: field(payload, 'code') ?? '',
+        channel: field(payload, 'channel') ?? 'email',
+        locale: field(payload, 'locale', 'language_code') ?? 'en',
+        subject: field(payload, 'subject', 'title', 'name') ?? '',
+        body: field(payload, 'body', 'description', 'notes', 'prompt') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/communications/audiences') && labelIs(label, /save audience|create audience|add audience|submit/)) {
+    const rules = asObject(field(payload, 'rules'));
+    return mutate(
+      'admin/communications/audiences',
+      {
+        code: field(payload, 'code') ?? '',
+        name: field(payload, 'name', 'title') ?? '',
+        rules: (rules ? [rules] : [{ type: 'all_users', selector_key: null, scope_type: null, scope_key: null }]) as unknown as JsonValue[],
+      } as unknown as JsonObject,
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/communications/broadcasts') && labelIs(label, /compose|prepare|create|save|submit|send/)) {
+    return mutate(
+      'admin/communications/broadcasts',
+      {
+        template_id: requireId(firstUlid(payload.template_id), 'template'),
+        audience_id: requireId(firstUlid(payload.audience_id), 'audience'),
+        kind: field(payload, 'kind') ?? 'broadcast',
+        channel: field(payload, 'channel') ?? 'email',
+        purpose: field(payload, 'purpose', 'title', 'name') ?? 'admin_broadcast',
+        scheduled_at: field(payload, 'scheduled_at') ?? null,
+      },
+      { ...opts, idempotent: true },
+    );
+  }
+  if (routeStarts(route, '/admin/communications') && labelIs(label, /resolve broadcast|resolve audience/)) {
+    return mutate(
+      `admin/communications/broadcasts/${encodeURIComponent(requireId(pickRecord(ctx, 'broadcast_id', 'id'), 'broadcast'))}/resolve`,
+      undefined,
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/communications/delivery-queue', '/admin/communications/failed') && labelIs(label, /deliver|retry|attempt/)) {
+    return mutate(
+      `admin/communications/recipients/${encodeURIComponent(requireId(pickRecord(ctx, 'recipient_id', 'id'), 'recipient'))}/deliveries`,
+      {},
+      { ...opts, idempotent: true },
+    );
+  }
+  if (routeStarts(route, '/admin/communications') && labelIs(label, /in-app|create notification|notify/)) {
+    return mutate(
+      `admin/communications/recipients/${encodeURIComponent(requireId(pickRecord(ctx, 'recipient_id', 'id'), 'recipient'))}/notifications`,
+      undefined,
+      opts,
+    );
+  }
+
+  // --- Reporting ---
+  if ((routeStarts(route, '/admin/alerts', '/admin/finance/alerts', '/admin/security/alerts') || labelIs(label, /alert rule/)) && labelIs(label, /create|add|new|save|submit/)) {
+    return mutate(
+      'admin/reporting/alert-rules',
+      {
+        code: field(payload, 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        condition_type: field(payload, 'condition_type', 'category') ?? 'threshold',
+        severity: field(payload, 'severity', 'status') ?? 'warning',
+        configuration: asObject(field(payload, 'configuration')) ?? { source: field(payload, 'description', 'notes') ?? 'admin' },
+        scope_type: field(payload, 'scope_type') ?? null,
+        scope_key: field(payload, 'scope_key') ?? null,
+      },
+      opts,
+    );
+  }
+  if (labelIs(label, /enable alert|disable alert/)) {
+    return mutate(
+      `admin/reporting/alert-rules/${encodeURIComponent(requireId(pickRecord(ctx, 'alert_rule_id', 'id'), 'alert rule'))}/enabled`,
+      { enabled: !labelIs(label, /disable/) },
+      opts,
+    );
+  }
+  if (labelIs(label, /evaluate alert/)) {
+    return mutate(
+      `admin/reporting/alert-rules/${encodeURIComponent(requireId(pickRecord(ctx, 'alert_rule_id', 'id'), 'alert rule'))}/evaluations`,
+      {
+        condition_reference_type: field(payload, 'condition_reference_type') ?? 'manual',
+        condition_reference_key: field(payload, 'condition_reference_key', 'code') ?? 'admin',
+        summary: field(payload, 'summary', 'notes') ?? null,
+        facts: asObject(field(payload, 'facts')) ?? null,
+      },
+      opts,
+    );
+  }
+  if (labelIs(label, /acknowledge/)) {
+    return mutate(
+      `admin/reporting/alert-occurrences/${encodeURIComponent(requireId(pickRecord(ctx, 'occurrence_id', 'id'), 'occurrence'))}/acknowledgement`,
+      undefined,
+      opts,
+    );
+  }
+  if (labelIs(label, /resolve alert|resolve occurrence/)) {
+    return mutate(
+      `admin/reporting/alert-occurrences/${encodeURIComponent(requireId(pickRecord(ctx, 'occurrence_id', 'id'), 'occurrence'))}/resolution`,
+      { reason_code: reasonCode(payload, 'resolved') ?? 'resolved' },
+      opts,
+    );
+  }
+
+  // --- Privacy ---
+  if (routeStarts(route, '/admin/security/privacy-requests', '/admin/security/data-export-requests', '/admin/security/data-deletion-requests') && labelIs(label, /create|add|new request|submit|save/)) {
+    const requestType =
+      field(payload, 'request_type') ??
+      (route.includes('deletion') ? 'deletion' : route.includes('export') ? 'export' : 'export');
+    return mutate(
+      'admin/privacy/data-subject-requests',
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id, ctx.recordId), 'person'),
+        request_type: requestType,
+        notes: field(payload, 'notes', 'description') ?? null,
+      },
+      { ...opts, idempotent: true },
+    );
+  }
+  if (routeStarts(route, '/admin/security/data-export-requests', '/admin/security/privacy-requests') && labelIs(label, /begin export/)) {
+    const requestId = requireId(pickRecord(ctx, 'data_subject_request_id', 'id'), 'data-subject request');
+    return mutate(
+      `admin/privacy/data-subject-requests/${encodeURIComponent(requestId)}/exports/begin`,
+      {
+        data_categories: asStringArray(field(payload, 'data_categories')) ?? ['profile'],
+        scope_type: field(payload, 'scope_type') ?? null,
+        scope_key: field(payload, 'scope_key') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/security/data-export-requests', '/admin/security/privacy-requests') && labelIs(label, /complete export/)) {
+    const requestId = requireId(pickRecord(ctx, 'data_subject_request_id', 'id'), 'data-subject request');
+    return mutate(
+      `admin/privacy/data-subject-requests/${encodeURIComponent(requestId)}/exports/complete`,
+      {
+        file_asset_id: requireId(firstUlid(payload.file_asset_id), 'file'),
+        expires_at: field(payload, 'expires_at') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/security/data-export-requests', '/admin/security/privacy-requests') && labelIs(label, /expire export/)) {
+    const requestId = requireId(pickRecord(ctx, 'data_subject_request_id', 'id'), 'data-subject request');
+    return mutate(`admin/privacy/data-subject-requests/${encodeURIComponent(requestId)}/exports/expire`, undefined, opts);
+  }
+
+  // --- Safeguarding ---
+  if (routeStarts(route, '/admin/security/safeguarding') && labelIs(label, /report|create|add|submit|save/) && !labelIs(label, /guardian/)) {
+    return mutate(
+      'admin/safeguarding/incidents',
+      {
+        concern_type: field(payload, 'concern_type', 'category', 'name') ?? '',
+        severity: field(payload, 'severity', 'status') ?? 'medium',
+        restricted_summary: field(payload, 'restricted_summary', 'notes', 'description') ?? '',
+        subject_person_id: firstUlid(payload.subject_person_id, payload.person_id) ?? null,
+        occurred_at: field(payload, 'occurred_at', 'startDate') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/security/guardian-consent', '/admin/security/child-profiles') && labelIs(label, /register|add|create|save|submit/)) {
+    return mutate(
+      'admin/safeguarding/guardian-relationships',
+      {
+        guardian_person_id: requireId(firstUlid(payload.guardian_person_id, payload.person_id, payload.owner_id), 'guardian'),
+        child_person_id: requireId(firstUlid(payload.child_person_id, payload.assignee_id), 'child'),
+        relationship_type: field(payload, 'relationship_type', 'assignment', 'name') ?? 'parent',
+      },
+      opts,
+    );
+  }
+
+  // --- Content CMS ---
+  if (labelIs(label, /create (content )?page|add page/) || (route.includes('/content') && labelIs(label, /create|add/))) {
+    return mutate(
+      'admin/content/pages',
+      {
+        slug: field(payload, 'slug', 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        summary: field(payload, 'summary') ?? null,
+        body: field(payload, 'body', 'description', 'notes') ?? '',
+        locale: field(payload, 'locale') ?? null,
+        published_at: field(payload, 'published_at') ?? null,
+      },
+      opts,
+    );
+  }
+  if (labelIs(label, /update (content )?page/) || (route.includes('/content') && labelIs(label, /save|update/))) {
+    const pageId = requireId(pickRecord(ctx, 'page_id', 'id'), 'page');
+    return mutate(
+      `admin/content/pages/${encodeURIComponent(pageId)}`,
+      jsonBody({
+        slug: field(payload, 'slug', 'code'),
+        title: field(payload, 'title', 'name'),
+        summary: field(payload, 'summary') ?? null,
+        body: field(payload, 'body', 'description', 'notes'),
+        locale: field(payload, 'locale'),
+        published_at: field(payload, 'published_at') ?? null,
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (labelIs(label, /add (page )?item|create (page )?item/)) {
+    const pageId = requireId(pickRecord(ctx, 'page_id', 'id'), 'page');
+    return mutate(
+      `admin/content/pages/${encodeURIComponent(pageId)}/items`,
+      jsonBody({
+        kind: field(payload, 'kind', 'category') ?? 'block',
+        title: field(payload, 'title', 'name') ?? '',
+        body: field(payload, 'body', 'description', 'notes') ?? '',
+        href: field(payload, 'href') ?? null,
+        sort_order: asInt(field(payload, 'sort_order', 'sequence')),
+        published_at: field(payload, 'published_at') ?? null,
+      }),
+      opts,
+    );
+  }
+
+  throw new UnregisteredAdminActionError();
+}
+
+export async function executeAdminAction(input: AdminActionInput): Promise<AdminActionResult> {
+  const ctx: Ctx = {
+    route: input.route,
+    label: normalizeLabel(input.label),
+    payload: input.payload ?? {},
+    recordId: extractUlid(input.recordId) ?? extractUlid(input.payload?.id),
+    scope: resolveScope(input.scope),
+  };
+
+  const data = await dispatch(ctx);
+  return toResult(data);
+}

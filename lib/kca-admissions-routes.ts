@@ -89,11 +89,11 @@ export const kcaAdmissionsScreens: AdminScreen[] = [
   },
   {
     id: 'G-06', batch: 'G', route: '/admin/kca/applications/samuel-david/walk-with-christ',
-    title: 'Walk With Christ', subtitle: 'Help us understand your relationship with Jesus.', kind: 'form',
+    title: 'Walk With Christ', subtitle: 'Help us understand your relationship with Jesus Christ.', kind: 'form',
     permission: 'kca.application.update', scope: 'assigned', nav: 'kca-applications', action: 'Save & Continue',
     details: {
       'When did you give your life to Christ?': '2020',
-      'How did you come to know Jesus?': 'Through a friend’s invitation',
+      'How did you come to know Jesus Christ?': 'Through a friend’s invitation',
       'Personal decision time': 'Yes', 'Bible reading frequency': 'Daily',
       'Greatest spiritual growth area': 'Understanding God’s word and applying it daily',
       'Current challenge': 'Consistency in prayer and resisting peer pressure',

@@ -1,4 +1,47 @@
+'use client';
+
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes';
+import { resolveEntityKey } from '../lib/admin-form-schemas';
+import {
+  assignSoulMentor,
+  captureSoul,
+  completeSoulFollowUp,
+  defaultOpsScope,
+  listCrusades,
+  listSouls,
+  loadOpsDataset,
+  operationsErrorMessage,
+  opsRecordsToRows,
+  recordSoulFollowUp,
+  resolveOpsDataset,
+  shouldUseOperationsLiveData,
+  type CrusadeRecord,
+  type SoulRecord,
+} from '../lib/admin-operations-api';
+import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
+import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
+import { TableRowActions } from './table-row-actions';
+
+function isPublicId(value: string | undefined | null): boolean {
+  return Boolean(value && /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(value.trim()));
+}
+
+function formText(form: FormData, name: string): string {
+  return String(form.get(name) ?? '').trim();
+}
+
+function toIsoDate(value: string): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function nowDateTimeLocal(): string {
+  const date = new Date();
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
 
 const missionPalette = ['#4318ff', '#6f52ed', '#0ea36c', '#f59e0b', '#ef4444'];
 
@@ -27,17 +70,412 @@ function MissionToolbar({ action, tabs }: { action?: string; tabs?: string[] }) 
   </div>;
 }
 
+function CaptureSoulForm({
+  screen,
+  crusades,
+  defaultCrusadeId,
+  onCaptured,
+}: {
+  screen: AdminScreen;
+  crusades: CrusadeRecord[];
+  defaultCrusadeId?: string;
+  onCaptured: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    const crusadeId = formText(form, 'crusade_id');
+    const personId = formText(form, 'person_id');
+    const givenName = formText(form, 'given_name');
+    const familyName = formText(form, 'family_name');
+    const middleName = formText(form, 'middle_name');
+    const preferredName = formText(form, 'preferred_name');
+    if (!isPublicId(crusadeId)) {
+      setMessage('Select a live crusade public id.');
+      return;
+    }
+    if (!personId && (!givenName || !familyName)) {
+      setMessage('Provide a person public id, or given name and family name.');
+      return;
+    }
+    if (personId && !isPublicId(personId)) {
+      setMessage('person_id must be a public id (ULID).');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const soul = await captureSoul(
+        crusadeId,
+        {
+          person_id: personId || null,
+          given_name: givenName || null,
+          family_name: familyName || null,
+          middle_name: middleName || null,
+          preferred_name: preferredName || null,
+        },
+        { scope: defaultOpsScope(screen.scope) },
+      );
+      setMessage(`Captured soul ${soul.id}.`);
+      formEl.reset();
+      await onCaptured();
+    } catch (err) {
+      setMessage(operationsErrorMessage(err, 'Soul capture failed.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="mission-form-card" onSubmit={(event) => void onSubmit(event)} style={{ marginBottom: 16 }}>
+      <header><h2>Capture soul</h2><p>POST uses the crusade public id and Idempotency-Key. Names are used only when no person id is sent.</p></header>
+      <div className="mission-form-grid">
+        <label>
+          <span>Crusade *</span>
+          <select name="crusade_id" defaultValue={defaultCrusadeId && isPublicId(defaultCrusadeId) ? defaultCrusadeId : ''}>
+            <option value="">Select crusade</option>
+            {crusades.map((crusade) => (
+              <option key={crusade.id} value={crusade.id}>{crusade.name} · {crusade.id}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Person id</span>
+          <input name="person_id" autoComplete="off" placeholder="Optional person public id" />
+        </label>
+        <label>
+          <span>Given name</span>
+          <input name="given_name" autoComplete="off" placeholder="Required without person id" />
+        </label>
+        <label>
+          <span>Family name</span>
+          <input name="family_name" autoComplete="off" placeholder="Required without person id" />
+        </label>
+        <label>
+          <span>Middle name</span>
+          <input name="middle_name" autoComplete="off" />
+        </label>
+        <label>
+          <span>Preferred name</span>
+          <input name="preferred_name" autoComplete="off" />
+        </label>
+      </div>
+      {crusades.length === 0 ? <p className="field-help" role="status">No live crusades in this scope. Capture needs a crusade id.</p> : null}
+      {message ? <p className="field-help" role="status">{message}</p> : null}
+      <footer>
+        <button className="mission-primary-button" type="submit" disabled={busy || crusades.length === 0}>
+          {busy ? 'Capturing…' : 'Capture soul'}
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+function RecordFollowUpForm({
+  screen,
+  souls,
+  onRecorded,
+}: {
+  screen: AdminScreen;
+  souls: SoulRecord[];
+  onRecorded: () => Promise<void>;
+}) {
+  const [soulId, setSoulId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const selected = souls.find((soul) => soul.id === soulId);
+  const mentorId = selected?.mentor_assignment_id && isPublicId(selected.mentor_assignment_id)
+    ? selected.mentor_assignment_id
+    : '';
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    const selectedSoulId = formText(form, 'soul_id');
+    const selectedMentorId = formText(form, 'mentor_assignment_id');
+    const channel = formText(form, 'channel_code');
+    const outcome = formText(form, 'outcome_code');
+    const occurredAt = toIsoDate(formText(form, 'occurred_at'));
+    if (!isPublicId(selectedSoulId)) {
+      setMessage('Select a live soul public id from the table.');
+      return;
+    }
+    if (!isPublicId(selectedMentorId)) {
+      setMessage('Selected soul has no mentor assignment id.');
+      return;
+    }
+    if (!channel || !outcome || !occurredAt) {
+      setMessage('Channel, outcome, and occurred_at are required.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const interaction = await recordSoulFollowUp(
+        selectedSoulId,
+        {
+          mentor_assignment_id: selectedMentorId,
+          channel_code: channel,
+          outcome_code: outcome,
+          occurred_at: occurredAt,
+        },
+        { scope: defaultOpsScope(screen.scope) },
+      );
+      setMessage(`Recorded follow-up ${interaction.id}.`);
+      formEl.reset();
+      setSoulId('');
+      await onRecorded();
+    } catch (err) {
+      setMessage(operationsErrorMessage(err, 'Follow-up recording failed.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="mission-form-card" onSubmit={(event) => void onSubmit(event)} style={{ marginBottom: 16 }}>
+      <header><h2>Record soul follow-up</h2><p>Uses the selected soul id and its mentor assignment id. Idempotency-Key is sent by the client.</p></header>
+      <div className="mission-form-grid">
+        <label>
+          <span>Soul *</span>
+          <select name="soul_id" value={soulId} onChange={(event) => setSoulId(event.target.value)}>
+            <option value="">Select soul</option>
+            {souls.map((soul) => (
+              <option key={soul.id} value={soul.id}>
+                {soul.person_id ?? soul.id} · {soul.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Mentor assignment</span>
+          <input name="mentor_assignment_id" readOnly value={mentorId} placeholder="Assigned after mentor assignment" />
+        </label>
+        <label>
+          <span>Channel *</span>
+          <select name="channel_code" defaultValue="phone">
+            {['phone', 'visit', 'whatsapp', 'sms', 'email'].map((code) => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Outcome *</span>
+          <select name="outcome_code" defaultValue="connected">
+            {['connected', 'contacted', 'no_answer', 'requested_follow_up', 'not_interested'].map((code) => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Occurred at *</span>
+          <input name="occurred_at" type="datetime-local" defaultValue={nowDateTimeLocal()} />
+        </label>
+      </div>
+      {souls.length === 0 ? <p className="field-help" role="status">No live souls in this scope.</p> : null}
+      {selected && !mentorId ? <p className="field-help" role="status">This soul has no mentor assignment yet.</p> : null}
+      {message ? <p className="field-help" role="status">{message}</p> : null}
+      <footer>
+        <button className="mission-primary-button" type="submit" disabled={busy || souls.length === 0}>
+          {busy ? 'Recording…' : 'Record follow-up'}
+        </button>
+      </footer>
+    </form>
+  );
+}
+
 function MissionTable({ screen }: { screen: AdminScreen }) {
-  const rows = screen.rows ?? [];
-  const columns = screen.columns ?? Object.keys(rows[0] ?? {});
-  return <section className="mission-table-card">
-    <MissionToolbar action={screen.action} tabs={screen.tabs}/>
-    <div className="mission-table-scroll"><table className="mission-table" aria-label={`${screen.title} records`}>
-      <thead><tr>{columns.map(column => <th scope="col" key={column}>{column}</th>)}<th scope="col">Actions</th></tr></thead>
-      <tbody>{rows.map((row, rowIndex) => <tr key={`${screen.id}-${rowIndex}`}>{columns.map((column, columnIndex) => <td key={column}>{columnIndex === 0 ? <span className="mission-primary-cell"><i aria-hidden="true">{String(row[column] ?? '?').slice(0, 1)}</i><b>{row[column]}</b></span> : column.toLowerCase().includes('status') ? <MissionStatus value={row[column] ?? 'Active'}/> : row[column]}</td>)}<td><button className="mission-row-action" type="button" aria-label={`View ${String(row[columns[0]] ?? 'record')}`}>View</button></td></tr>)}</tbody>
-    </table></div>
-    <footer className="mission-table-footer"><span>Showing 1 to {rows.length} of {Math.max(rows.length, 24)} records</span><div role="navigation" aria-label={`${screen.title} pagination`}><button type="button" aria-label="Previous page">‹</button><button className="active" type="button" aria-label="Page 1" aria-current="page">1</button><button type="button" aria-label="Page 2">2</button><button type="button" aria-label="Page 3">3</button><button type="button" aria-label="Next page">›</button></div></footer>
-  </section>;
+  const fixtureRows = screen.rows ?? [];
+  const columns = screen.columns ?? Object.keys(fixtureRows[0] ?? {});
+  const entityKey = resolveEntityKey(screen.route, screen.id);
+  const dataset = resolveOpsDataset(screen);
+  const live = shouldUseOperationsLiveData() && dataset !== null;
+  const [rows, setRows] = useState<Array<Record<string, string>>>(
+    live ? [] : (fixtureRows as Array<Record<string, string>>),
+  );
+  const [message, setMessage] = useState(
+    live ? 'Loading…' : `Showing 1 to ${fixtureRows.length} of ${Math.max(fixtureRows.length, 24)} records`,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [souls, setSouls] = useState<SoulRecord[]>([]);
+  const [crusades, setCrusades] = useState<CrusadeRecord[]>([]);
+
+  const refresh = useCallback(async () => {
+    if (!live || !dataset) return;
+    setError(null);
+    try {
+      const result = await loadOpsDataset(dataset, { scope: defaultOpsScope(screen.scope), perPage: 25 });
+      setRows(opsRecordsToRows(dataset, result.items, columns));
+      if (dataset === 'souls') setSouls(result.items as SoulRecord[]);
+      if (dataset === 'crusades') setCrusades(result.items as CrusadeRecord[]);
+      setMessage(
+        result.pagination.total === 0
+          ? 'No mission records in this scope.'
+          : `Showing ${result.items.length} of ${result.pagination.total} records`,
+      );
+    } catch (err) {
+      setRows([]);
+      if (dataset === 'souls') setSouls([]);
+      if (dataset === 'crusades') setCrusades([]);
+      setError(operationsErrorMessage(err, 'Unable to load mission operations.'));
+      setMessage('Live mission data unavailable');
+    }
+  }, [columns, dataset, live, screen.scope]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!live || dataset !== 'souls') return;
+    let cancelled = false;
+    void listCrusades({ scope: defaultOpsScope(screen.scope), perPage: 25 })
+      .then((result) => {
+        if (!cancelled) setCrusades(result.items);
+      })
+      .catch(() => {
+        if (!cancelled) setCrusades([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dataset, live, screen.scope]);
+
+  async function onAssignMentor(row: Record<string, string>) {
+    const soulId = row.__id;
+    if (!soulId || soulId === '—') return;
+    const teamAssignmentId = window.prompt('Mission team assignment id (ULID):');
+    if (!teamAssignmentId) return;
+    setBusyId(soulId);
+    setError(null);
+    try {
+      await assignSoulMentor(
+        soulId,
+        { mission_team_assignment_id: teamAssignmentId.trim() },
+        { scope: defaultOpsScope(screen.scope) },
+      );
+      await refresh();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Mentor assignment failed.'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onCompleteFollowUp(row: Record<string, string>) {
+    const soulId = row.__id;
+    if (!soulId || soulId === '—') return;
+    const reason = window.prompt('Completion reason code (e.g. discipleship_connected):', 'discipleship_connected');
+    if (!reason) return;
+    setBusyId(soulId);
+    setError(null);
+    try {
+      await completeSoulFollowUp(soulId, reason.trim(), defaultOpsScope(screen.scope));
+      await refresh();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Follow-up completion failed.'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      {live && (dataset === 'souls' || dataset === 'crusades') ? (
+        <CaptureSoulForm screen={screen} crusades={crusades} onCaptured={refresh} />
+      ) : null}
+      {live && dataset === 'souls' ? (
+        <RecordFollowUpForm screen={screen} souls={souls} onRecorded={refresh} />
+      ) : null}
+      <section className="mission-table-card">
+      <MissionToolbar action={screen.action} tabs={screen.tabs} />
+      {error ? <p className="field-help" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      <div className="mission-table-scroll">
+        <table className="mission-table" aria-label={`${screen.title} records`}>
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th scope="col" key={column}>{column}</th>
+              ))}
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + 1}>{error ? 'Unable to load records.' : 'No records.'}</td>
+              </tr>
+            ) : (
+              rows.map((row, rowIndex) => (
+                <tr key={`${screen.id}-${row.__id ?? rowIndex}`}>
+                  {columns.map((column, columnIndex) => (
+                    <td key={column}>
+                      {columnIndex === 0 ? (
+                        <span className="mission-primary-cell">
+                          <i aria-hidden="true">{String(row[column] ?? '?').slice(0, 1)}</i>
+                          <b>{row[column]}</b>
+                        </span>
+                      ) : column.toLowerCase().includes('status') ? (
+                        <MissionStatus value={row[column] ?? 'Active'} />
+                      ) : (
+                        row[column]
+                      )}
+                    </td>
+                  ))}
+                  <td>
+                    <div className="row-actions mission-row-actions">
+                      <TableRowActions
+                        record={String(row[columns[0]] ?? 'record')}
+                        entityKey={entityKey}
+                        className="row-actions mission-row-actions"
+                      />
+                      {live && dataset === 'souls' ? (
+                        <>
+                          <button
+                            type="button"
+                            className="table-action"
+                            disabled={busyId === row.__id}
+                            onClick={() => void onAssignMentor(row)}
+                          >
+                            Assign mentor
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action"
+                            disabled={busyId === row.__id}
+                            onClick={() => void onCompleteFollowUp(row)}
+                          >
+                            Complete follow-up
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <footer className="mission-table-footer">
+        <span>{message}</span>
+        <div role="navigation" aria-label={`${screen.title} pagination`}>
+          <button type="button" aria-label="Previous page">‹</button>
+          <button className="active" type="button" aria-label="Page 1" aria-current="page">1</button>
+          <button type="button" aria-label="Page 2">2</button>
+          <button type="button" aria-label="Page 3">3</button>
+          <button type="button" aria-label="Next page">›</button>
+        </div>
+      </footer>
+    </section>
+    </>
+  );
 }
 
 function MissionLineChart({ title = 'Souls Over Time' }: { title?: string }) {
@@ -91,10 +529,39 @@ function CrusadeDetail({ screen }: { screen: AdminScreen }) {
 
 function MissionWizard({ screen }: { screen: AdminScreen }) {
   const details = Object.entries(screen.details ?? {});
-  return <div className="mission-wizard">
-    <div className="mission-stepper" role="list" aria-label="Crusade creation progress">{(screen.tabs ?? []).map((tab, index) => <div role="listitem" aria-current={index === 0 ? 'step' : undefined} className={index === 0 ? 'active' : ''} key={tab}><span aria-hidden="true">{index + 1}</span><b>{tab}</b></div>)}</div>
-    <section className="mission-form-card"><div className="mission-form-grid">{details.map(([label, value], index) => <label className={index === details.length - 1 ? 'mission-field-wide' : ''} key={label}><span>{label}{index < 8 && <em aria-hidden="true">*</em>}</span>{label === 'Description' ? <textarea required={index < 8} defaultValue={value}/> : /Date/.test(label) ? <input required={index < 8} type="text" defaultValue={value}/> : /Location|Type|Focus/.test(label) ? <select required={index < 8} defaultValue={value}><option>{value}</option></select> : <input required={index < 8} defaultValue={value}/>}</label>)}</div><footer><button className="mission-secondary-button" type="button">Cancel</button><button className="mission-primary-button" type="button">{screen.action}</button></footer></section>
-  </div>;
+  const steps = screen.tabs ?? [];
+  const wizard = useAdminWizardStep(steps);
+  const visibleDetails = wizard.currentStep === 0
+    ? details
+    : wizard.currentStep === 1
+      ? details.slice(0, Math.ceil(details.length / 2))
+      : wizard.currentStep === 2
+        ? details.slice(Math.ceil(details.length / 2))
+        : details;
+
+  return (
+    <div className="mission-wizard" data-admin-wizard="true">
+      <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} className="mission-stepper" itemClassName="" activeClassName="active" />
+      <section className="mission-form-card">
+        <header><h2>{wizard.currentLabel}</h2><p>{screen.subtitle}</p></header>
+        {wizard.currentStep < steps.length - 1 ? (
+          <div className="mission-form-grid">
+            {visibleDetails.map(([label, value], index) => (
+              <label className={index === visibleDetails.length - 1 || label === 'Description' ? 'mission-field-wide' : ''} key={label}>
+                <span>{label}{index < 8 && <em aria-hidden="true">*</em>}</span>
+                {label === 'Description' ? <textarea required={index < 8} defaultValue={value} /> : /Date/.test(label) ? <input required={index < 8} type="text" defaultValue={value} /> : /Location|Type|Focus/.test(label) ? <select required={index < 8} defaultValue={value}><option>{value}</option></select> : <input required={index < 8} defaultValue={value} />}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <dl className="wizard-review-summary">
+            {details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+          </dl>
+        )}
+        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel="Create crusade" primaryClassName="mission-primary-button" secondaryClassName="mission-secondary-button" />
+      </section>
+    </div>
+  );
 }
 
 function InvitationReview({ screen }: { screen: AdminScreen }) {
@@ -146,6 +613,35 @@ function DistributionView({ screen }: { screen: AdminScreen }) {
 }
 
 function FollowUpView({ screen }: { screen: AdminScreen }) {
+  const live = shouldUseOperationsLiveData();
+  const [souls, setSouls] = useState<SoulRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!live) return;
+    try {
+      const result = await listSouls({ scope: defaultOpsScope(screen.scope), perPage: 25 });
+      setSouls(result.items);
+      setError(null);
+    } catch (err) {
+      setSouls([]);
+      setError(operationsErrorMessage(err, 'Unable to load souls for follow-up.'));
+    }
+  }, [live, screen.scope]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  if (live) {
+    return (
+      <div className="mission-follow-up">
+        {error ? <p className="field-help" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+        <RecordFollowUpForm screen={screen} souls={souls} onRecorded={refresh} />
+      </div>
+    );
+  }
+
   return <div className="mission-follow-up"><MissionMetrics metrics={screen.metrics}/><div className="mission-analytics-grid">
     <MissionDonut title="Follow-Up by Status" center="1,842" items={screen.items ?? []}/>
     <article className="mission-panel mission-overdue"><header><h3>Overdue Follow-Ups</h3><button type="button">View all</button></header>{(screen.rows ?? []).map(row => <div key={row.Name}><span className="mission-mini-avatar">{row.Name?.slice(0, 1)}</span><b>{row.Name}</b><small>{row.Mentor}</small><MissionStatus value={row.Status ?? 'Overdue'}/></div>)}</article>
