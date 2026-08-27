@@ -123,6 +123,7 @@ import {
   storeUserFile,
   submitKcaApplication,
   submitUserDataSubjectRequest,
+  updateUserProfile,
   updateUserPreferences,
   updateUserSyncCheckpoint,
   withdrawUserConsent,
@@ -3308,6 +3309,67 @@ function LiveProfilePanel({ user }: { user: CurrentUser }) {
   );
 }
 
+function LiveProfileForm({ user }: { user: CurrentUser }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await updateUserProfile({
+        given_name: String(values.get('given_name') ?? '').trim(),
+        middle_name: String(values.get('middle_name') ?? '').trim() || null,
+        family_name: String(values.get('family_name') ?? '').trim(),
+        preferred_name: String(values.get('preferred_name') ?? '').trim() || null,
+      });
+      setMessage('Your profile has been updated.');
+    } catch (requestError) {
+      setError(
+        isRecentMfaRequiredError(requestError)
+          ? 'Recent multi-factor authentication is required before changing your profile.'
+          : formatUserApiError(requestError, 'Unable to update your profile.'),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="panel site-form" onSubmit={(event) => void submit(event)}>
+      <h3>Edit profile</h3>
+      <p>Profile changes require recent multi-factor authentication.</p>
+      <div className="form-grid">
+        <label>
+          Given name
+          <input defaultValue={user.profile.given_name ?? ''} name="given_name" required />
+        </label>
+        <label>
+          Middle name
+          <input defaultValue={user.profile.middle_name ?? ''} name="middle_name" />
+        </label>
+        <label>
+          Family name
+          <input defaultValue={user.profile.family_name ?? ''} name="family_name" required />
+        </label>
+        <label>
+          Preferred name
+          <input defaultValue={user.profile.preferred_name ?? ''} name="preferred_name" />
+        </label>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      {message ? <p>{message}</p> : null}
+      <button className="site-button" disabled={busy} type="submit">
+        {busy ? 'Saving…' : 'Save profile'}
+      </button>
+    </form>
+  );
+}
+
 function LivePreferencesForm({
   initial,
   actionLabel,
@@ -4054,46 +4116,30 @@ function LiveAccountSettings({ route }: { route: SiteRoute }) {
   return (
     <div className="settings-panel">
       {path === '/account/profile' || path === '/account/settings/profile' ? (
-        <section className="panel">
-          <h3>{route.title}</h3>
-          <p>Live membership profile from GET /user/me. Profile name fields are read-only here (no member profile update API).</p>
-          <dl>
-            <div>
-              <dt>Email</dt>
-              <dd>{user.email}</dd>
-            </div>
-            <div>
-              <dt>Verified</dt>
-              <dd>{user.email_verified_at ? formatTimestamp(user.email_verified_at) : 'Not verified'}</dd>
-            </div>
-            <div>
-              <dt>Given name</dt>
-              <dd>{user.profile.given_name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Middle name</dt>
-              <dd>{user.profile.middle_name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Family name</dt>
-              <dd>{user.profile.family_name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Preferred name</dt>
-              <dd>{user.profile.preferred_name ?? '—'}</dd>
-            </div>
-          </dl>
-          {prefs ? (
-            <p>
-              Locale {prefs.locale} · {prefs.timezone} · channels {(prefs.notification_channels ?? []).join(', ') || 'none'}
-            </p>
-          ) : (
-            <p>No preference record yet — save preferences from Account Settings.</p>
-          )}
-          <Link className="site-button" href="/account/settings">
-            {route.action ?? 'Open settings'}
-          </Link>
-        </section>
+        <>
+          <section className="panel">
+            <h3>{route.title}</h3>
+            <p>Live membership profile from your Family House account.</p>
+            <dl>
+              <div>
+                <dt>Email</dt>
+                <dd>{user.email}</dd>
+              </div>
+              <div>
+                <dt>Verified</dt>
+                <dd>{user.email_verified_at ? formatTimestamp(user.email_verified_at) : 'Not verified'}</dd>
+              </div>
+            </dl>
+            {prefs ? (
+              <p>
+                Locale {prefs.locale} · {prefs.timezone} · channels {(prefs.notification_channels ?? []).join(', ') || 'none'}
+              </p>
+            ) : (
+              <p>No preference record yet — save preferences from Account Settings.</p>
+            )}
+          </section>
+          <LiveProfileForm user={user} />
+        </>
       ) : null}
       {showPreferences ? (
         <LivePreferencesForm initial={prefs} actionLabel={route.action ?? 'Save Preferences'} />

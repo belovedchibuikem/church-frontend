@@ -55,6 +55,13 @@ export type UpdatePreferencesInput = {
   notification_channels: string[];
 };
 
+export type UpdateProfileInput = {
+  given_name: string;
+  middle_name?: string | null;
+  family_name: string;
+  preferred_name?: string | null;
+};
+
 export type UserSecuritySession = {
   id: string;
   device_id?: string | null;
@@ -408,6 +415,21 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
   return apiRequestData<CurrentUser>('user/me', {
     method: 'GET',
     headers: await serverSessionHeaders(),
+  });
+}
+
+/** PUT /user/profile — current member profile; recent MFA required. */
+export async function updateUserProfile(input: UpdateProfileInput): Promise<CurrentUser> {
+  const headers = new Headers(await serverSessionHeaders());
+  return apiRequestData<CurrentUser>('user/profile', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      given_name: input.given_name,
+      middle_name: input.middle_name ?? null,
+      family_name: input.family_name,
+      preferred_name: input.preferred_name ?? null,
+    }),
   });
 }
 

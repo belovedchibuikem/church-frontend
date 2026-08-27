@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppBrand } from '@/components/app-brand';
 import { formFieldsFor, type FormField } from '@/lib/site-content';
 import { flowNext, registerSteps } from '@/lib/site-flow';
+import type { SiteRoute } from '@/lib/site-routes';
 import {
   AuthApiError,
   challengeMfa,

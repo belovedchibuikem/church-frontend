@@ -38,13 +38,14 @@ export class FamilyHousePublicApiClient {
     });
     const body = await response.json() as PublicSuccessEnvelope<HealthData> | { error?: { code?: string; message?: string; details?: JsonObject }; correlation_id?: string };
     if (!response.ok || !('data' in body)) {
+      const errorBody = body as { error?: { code?: string; message?: string; details?: JsonObject }; correlation_id?: string };
       throw new GeneratedPublicApiError(response.status, {
         error: {
-          code: body.error?.code ?? 'PUBLIC_API_ERROR',
-          message: body.error?.message ?? 'The public API request failed.',
-          details: body.error?.details,
+          code: errorBody.error?.code ?? 'PUBLIC_API_ERROR',
+          message: errorBody.error?.message ?? 'The public API request failed.',
+          details: errorBody.error?.details,
         },
-        correlation_id: body.correlation_id ?? '',
+        correlation_id: errorBody.correlation_id ?? '',
       });
     }
     return body;
