@@ -49,7 +49,7 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 export function resolveApiOrigin(): string | null {
   for (const value of apiEnvCandidates()) {
     const origin = toApiOrigin(value);
-    if (origin) return preferSameOriginLoopback(alignLoopbackHost(origin));
+    if (origin) return preferSameOriginBrowserApi(alignLoopbackHost(origin));
   }
   return null;
 }
@@ -61,7 +61,7 @@ export function resolveApiOrigin(): string | null {
 export function resolveApiV1BaseUrl(): string | null {
   for (const value of apiEnvCandidates()) {
     const v1 = toApiV1BaseUrl(value);
-    if (v1) return preferSameOriginLoopback(alignLoopbackHost(v1));
+    if (v1) return preferSameOriginBrowserApi(alignLoopbackHost(v1));
   }
   return null;
 }
@@ -160,27 +160,43 @@ export function alignLoopbackHost(value: string): string {
 }
 
 /**
- * Cross-port loopback (site :3000, Laravel :8000) is cross-origin. Cookies set on :8000
- * never reach Next on refresh, so member/admin RSC gating treats the user as logged out.
- * Same-origin `/api` + the Vite/Next proxy keeps the session on the site origin.
+ * Browser-only API base rewrite for cookie sessions.
+ *
+ * Local: site :3000 + Laravel :8000 are cross-origin — rewrite to same-origin `/api/v1`
+ * (Vite dev proxy → Laravel) so `family_house_connect_session` survives refresh/RSC.
+ *
+ * Production: frontend (e.g. Vercel) + API on another host has the same problem if the
+ * browser calls the API origin directly. Rewrite to `${page.origin}/api/v1` and proxy
+ * `/api/**` to Laravel in `nitro.config.ts` (see `.env.example`).
  */
-export function preferSameOriginLoopback(value: string): string {
+export function preferSameOriginBrowserApi(value: string): string {
   if (!isBrowserRuntime()) return value;
   try {
     const url = new URL(value);
     const page = window.location;
-    if (
-      url.origin !== page.origin &&
-      LOOPBACK_HOSTS.has(url.hostname) &&
-      LOOPBACK_HOSTS.has(page.hostname)
-    ) {
-      return `${page.origin}${url.pathname}${url.search}`.replace(/\/$/, '');
+    if (url.origin === page.origin) return value.replace(/\/$/, '');
+
+    const path = url.pathname.replace(/\/+$/, '') || '';
+    const isV1Base = path === '' || path === '/' || /\/api\/v1$/i.test(path);
+
+    // Loopback cross-port (localhost:3000 ↔ localhost:8000).
+    if (LOOPBACK_HOSTS.has(url.hostname) && LOOPBACK_HOSTS.has(page.hostname) && isV1Base) {
+      return `${page.origin}/api/v1`;
     }
+
+    // Split deploy: browser must not call the API host directly or RSC gating loses the session.
+    if (isV1Base) {
+      return `${page.origin}/api/v1`;
+    }
+
     return value;
   } catch {
     return value;
   }
 }
+
+/** @deprecated Use preferSameOriginBrowserApi */
+export const preferSameOriginLoopback = preferSameOriginBrowserApi;
 
 export function isMutatingMethod(method: string | undefined): boolean {
   const normalized = (method ?? 'GET').toUpperCase();

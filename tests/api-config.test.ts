@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { preferSameOriginLoopback } from '../lib/api-config.ts';
+import { preferSameOriginBrowserApi } from '../lib/api-config.ts';
 
 const originalWindow = globalThis.window;
 
@@ -12,26 +12,38 @@ afterEach(() => {
   }
 });
 
-test('preferSameOriginLoopback keeps server URLs unchanged', () => {
+test('preferSameOriginBrowserApi keeps server URLs unchanged', () => {
   Reflect.deleteProperty(globalThis, 'window');
   assert.equal(
-    preferSameOriginLoopback('http://localhost:8000/api/v1'),
+    preferSameOriginBrowserApi('http://localhost:8000/api/v1'),
     'http://localhost:8000/api/v1',
   );
 });
 
-test('preferSameOriginLoopback rewrites cross-port loopback to the page origin', () => {
+test('preferSameOriginBrowserApi rewrites cross-port loopback to the page origin', () => {
   Object.defineProperty(globalThis, 'window', {
     value: { location: { origin: 'http://localhost:3000', hostname: 'localhost' } },
     configurable: true,
     writable: true,
   });
   assert.equal(
-    preferSameOriginLoopback('http://localhost:8000/api/v1'),
+    preferSameOriginBrowserApi('http://localhost:8000/api/v1'),
     'http://localhost:3000/api/v1',
   );
   assert.equal(
-    preferSameOriginLoopback('http://localhost:3000/api/v1'),
+    preferSameOriginBrowserApi('http://localhost:3000/api/v1'),
     'http://localhost:3000/api/v1',
+  );
+});
+
+test('preferSameOriginBrowserApi rewrites split production hosts to same-origin /api/v1', () => {
+  Object.defineProperty(globalThis, 'window', {
+    value: { location: { origin: 'https://familyconnect-vert.vercel.app', hostname: 'familyconnect-vert.vercel.app' } },
+    configurable: true,
+    writable: true,
+  });
+  assert.equal(
+    preferSameOriginBrowserApi('https://familyconnect.katakarra.com/api/v1'),
+    'https://familyconnect-vert.vercel.app/api/v1',
   );
 });
