@@ -410,7 +410,19 @@ export async function deactivatePaymentProvider(
 export type CommunicationProviderStatus = {
   configured: boolean;
   active: boolean;
-  email: { provider: string; sender_name?: string | null; sender_address?: string | null; credentials_configured: boolean };
+  email: {
+    provider: string;
+    sender_name?: string | null;
+    sender_address?: string | null;
+    credentials_configured: boolean;
+    smtp?: {
+      host?: string | null;
+      port?: number | null;
+      username?: string | null;
+      encryption?: string | null;
+      password_configured?: boolean;
+    };
+  };
   sms: { provider: string; sender_id?: string | null; credentials_configured: boolean };
   whatsapp: { provider: string; phone_number_id?: string | null; credentials_configured: boolean };
   push: { provider: string; credentials_configured: boolean };

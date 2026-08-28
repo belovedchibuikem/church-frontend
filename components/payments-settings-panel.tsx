@@ -93,6 +93,52 @@ export function PaymentsSettingsPanel() {
     void refresh();
   }, [refresh]);
 
+  async function onActivate() {
+    if (fixtures || !platformApiConfigured()) return;
+    setBusy(true);
+    try {
+      const data = await activatePaymentProvider();
+      setStatus(data);
+      setMessage(
+        t('settings.payments.liveProvider', {
+          defaultMessage: 'Live provider: {provider}. Giving on web and mobile uses hosted checkout.',
+          vars: { provider: data.active_provider },
+        }),
+      );
+    } catch (error) {
+      setMessage(
+        platformErrorMessage(
+          error,
+          t('errors.paymentsActivate', {
+            defaultMessage: 'Activation failed. Confirm platform.payments.manage and recent MFA.',
+          }),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDeactivate() {
+    if (fixtures || !platformApiConfigured()) return;
+    setBusy(true);
+    try {
+      await deactivatePaymentProvider();
+      await refresh();
+    } catch (error) {
+      setMessage(
+        platformErrorMessage(
+          error,
+          t('errors.paymentsDeactivate', {
+            defaultMessage: 'Deactivation failed. Confirm platform.payments.manage and recent MFA.',
+          }),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (fixtures || !platformApiConfigured()) return;
@@ -200,10 +246,10 @@ export function PaymentsSettingsPanel() {
           <button className="platform-primary" disabled={busy} type="submit">
             {t('settings.payments.saveKeys', { defaultMessage: 'Save keys' })}
           </button>
-          <button className="ghost-button" disabled={busy} onClick={() => void activatePaymentProvider().then(setStatus)} type="button">
+          <button className="ghost-button" disabled={busy} onClick={() => void onActivate()} type="button">
             {t('common.activate', { defaultMessage: 'Activate' })}
           </button>
-          <button className="ghost-button" disabled={busy} onClick={() => void deactivatePaymentProvider()} type="button">
+          <button className="ghost-button" disabled={busy} onClick={() => void onDeactivate()} type="button">
             {t('common.deactivate', { defaultMessage: 'Deactivate' })}
           </button>
         </footer>

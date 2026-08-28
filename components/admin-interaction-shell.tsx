@@ -36,7 +36,7 @@ type Props = {
   items?: string[];
 };
 
-const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|edit|update|process/i;
+const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request/i;
 const filePattern = /download|export|print|upload|preview pdf|send receipt/i;
 const emptyTabs: string[] = [];
 

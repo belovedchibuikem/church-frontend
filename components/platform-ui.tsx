@@ -54,6 +54,7 @@ import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { MapsSettingsPanel } from './maps-settings-panel';
 import { PaymentsSettingsPanel } from './payments-settings-panel';
 import { CommunicationsSettingsPanel } from './communications-settings-panel';
+import { CommunicationsComposePanel } from './communications-compose-panel';
 import { BrandingSettingsPanel } from './branding-settings-panel';
 import { TableRowActions } from './table-row-actions';
 import { useLocale } from '@/components/locale-provider';
@@ -1279,7 +1280,13 @@ export function PlatformScreenContent({ screen, requestedScope }: { screen: Admi
     case 'table': content=<><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>; break;
     case 'detail': case 'profile': return <Detail screen={screen}/>;
     case 'workflow': case 'approval': content=<Workflow screen={screen}/>; break;
-    case 'form': case 'wizard': content=<Form screen={screen}/>; break;
+    case 'form': case 'wizard':
+      if (screen.route.startsWith('/admin/communications/') && !screen.route.includes('/settings')) {
+        content = <CommunicationsComposePanel screen={screen} />;
+      } else {
+        content = <Form screen={screen} />;
+      }
+      break;
     case 'settings': content=<Settings screen={screen}/>; break;
     case 'operations': content=<Operations screen={screen}/>; break;
     case 'reports':

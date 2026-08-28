@@ -1597,6 +1597,7 @@ const formFields = [
 
 function FormFields() {
   const { t } = useLocale();
+  const fixtures = shouldUseDesignFixtures();
   return (
     <div className="form-grid">
       {formFields.map((field) => (
@@ -1607,11 +1608,11 @@ function FormFields() {
               name={field.name}
               catalog={field.catalog}
               options={catalogOptions[field.catalog]}
-              defaultValue={field.value}
+              defaultValue={fixtures ? field.value : undefined}
               placeholder={`Search ${field.label.replace(' *', '')}`}
             />
           ) : field.type === 'select' ? (
-            <select name={field.name} defaultValue={field.value}>
+            <select name={field.name} defaultValue={fixtures ? field.value : ''}>
               <option value="" disabled>
                 Select {field.label.replace(' *', '')}
               </option>
@@ -1622,10 +1623,17 @@ function FormFields() {
               ))}
             </select>
           ) : (
-            <input name={field.name} type={field.type} defaultValue={field.value} />
+            <input name={field.name} type={field.type} defaultValue={fixtures ? field.value : undefined} />
           )}
         </label>
       ))}
+      {!fixtures ? (
+        <p className="field-help full" role="status">
+          {t('admin.createUserLiveHint', {
+            defaultMessage: 'Complete each wizard step. User creation submits through the live identity API when wired for this scope.',
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }
