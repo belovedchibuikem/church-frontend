@@ -94,5 +94,29 @@ export default defineConfig(async ({ mode }) => {
     },
     preview: { proxy: apiProxy },
     plugins,
+    build: {
+      rolldownOptions: {
+        output: {
+          // Vinext Link dynamically imports named exports from next/navigation
+          // (`navigateClientSide`, `getPrefetchInterceptionContext`). Rolldown
+          // otherwise mangles those names on the shared client chunk while the
+          // dynamic import still looks up the original names — production then
+          // logs "[vinext] RSC prefetch setup error: m is not a function" and
+          // clicks throw "e is not a function" inside startTransition.
+          minifyInternalExports: false,
+        },
+      },
+    },
+    environments: {
+      client: {
+        build: {
+          rolldownOptions: {
+            output: {
+              minifyInternalExports: false,
+            },
+          },
+        },
+      },
+    },
   };
 });
