@@ -174,7 +174,7 @@ export const siteRoutes: SiteRoute[] = [
     ['/kca/why', 'Why Join KCA?', 'Start Application'],
   ]),
   ...make('KCA', 'workflow', 'form', [
-    ['/kca/enrol', 'Begin Your KCA Journey', 'Start Application'],
+    ['/kca/enrol', 'Kingdom Change Agents', 'Enroll Now'],
     ['/kca/apply/church', 'Church Information', 'Save & Continue'],
     ['/kca/apply/walk-with-christ', 'Walk with Christ', 'Save & Continue'],
     ['/kca/apply/why-join', 'Why Do You Want to Join KCA?', 'Save & Continue'],

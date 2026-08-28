@@ -330,11 +330,17 @@ export function isAuthApiConfigured(): boolean {
 
 export function formatAuthError(error: unknown): string {
   if (error instanceof AuthApiError) {
+    if (error.code === 'CSRF_TOKEN_MISMATCH') {
+      return 'Your sign-in session expired. Hard-refresh the page (Ctrl+Shift+R), then sign in again.';
+    }
     const fields = error.allFieldMessages();
     if (fields.length) return fields[0] ?? error.message;
     return error.message;
   }
   if (error instanceof ApiError) {
+    if (error.code === 'CSRF_TOKEN_MISMATCH') {
+      return 'Your sign-in session expired. Hard-refresh the page (Ctrl+Shift+R), then sign in again.';
+    }
     if (error.errors) {
       const first = Object.values(error.errors).flat()[0];
       if (first) return first;

@@ -1,7 +1,4 @@
 import type { NextConfig } from 'next';
-import { laravelDevProxyOrigin } from './lib/laravel-dev-proxy';
-
-const laravelOrigin = laravelDevProxyOrigin(process.env.FHC_LARAVEL_API_URL);
 
 const nextConfig: NextConfig = {
   async redirects() {
@@ -16,14 +13,8 @@ const nextConfig: NextConfig = {
       { source: '/kca/mentor', destination: '/account/kca/mentor', permanent: true },
     ];
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${laravelOrigin}/api/:path*`,
-      },
-    ];
-  },
+  // Local Laravel proxying is handled by vite.config.ts `server.proxy` during
+  // `vinext dev` so Set-Cookie / session forwarding matches Vite's cookie rewrite.
 };
 
 export default nextConfig;

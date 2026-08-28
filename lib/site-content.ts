@@ -382,7 +382,7 @@ export const formFieldsFor = (path: string): FormField[] => {
   if (path.includes('/kca/certificates/verify')) return [
     { label: 'Certificate verification code', name: 'code', value: '', wide: true },
   ];
-  if (path.includes('/kca/apply/church') || path === '/kca/enrol') return [
+  if (path.includes('/kca/apply/church')) return [
     { label: 'Full Name', name: 'fullName', value: 'Samuel David' },
     { label: 'Email Address', name: 'email', type: 'email', value: 'samuel.david@email.com' },
     { label: 'Home Church', name: 'home_church_id', type: 'search-select', catalog: 'homeChurch', value: '01JHCHOMEALLEN' },

@@ -506,7 +506,7 @@ function Progress({ route }: { route: SiteRoute }) {
   if (route.surface === 'auth' || route.surface !== 'workflow') return null;
 
   const homeChurch = route.path.includes('/start-home-church/apply');
-  const kca = route.path.includes('/kca/apply') || route.path === '/kca/enrol';
+  const kca = route.path.includes('/kca/apply');
   const steps = homeChurch ? homeChurchSteps : kca ? kcaApplySteps : null;
   if (!steps) return null;
 
@@ -1860,6 +1860,66 @@ function Detail({ route }: { route: SiteRoute }) {
   );
 }
 
+function KcaEnrolStart() {
+  const { t } = useLocale();
+  const bullets = [
+    { icon: '📚', key: 'member.kca.twelveModules', fallback: '12 Powerful Modules' },
+    { icon: '👥', key: 'member.kca.mentorshipAccountability', fallback: 'Mentorship & Accountability' },
+    { icon: '✅', key: 'member.kca.assignmentsEvidence', fallback: 'Assignments & Evidence' },
+    { icon: '🎓', key: 'member.kca.practicalMinistry', fallback: 'Practical Ministry Experience' },
+    { icon: '🌍', key: 'member.kca.globalCertification', fallback: 'Global Certification' },
+  ] as const;
+
+  return (
+    <div className="kca-enrol-start">
+      <section className="panel kca-enrol-start-hero">
+        <span className="kca-enrol-shield" aria-hidden="true">
+          🛡
+        </span>
+        <h2>
+          {t('member.kca.kingdomChangeAgents', { defaultMessage: 'Kingdom Change Agents' })}
+        </h2>
+        <p>
+          {t('member.kca.discipleshipJourney', {
+            defaultMessage: 'A discipleship journey. Not just a course.',
+          })}
+        </p>
+        <ul className="kca-enrol-points">
+          {bullets.map((item) => (
+            <li key={item.key}>
+              <span aria-hidden="true">{item.icon}</span>
+              {t(item.key, { defaultMessage: item.fallback })}
+            </li>
+          ))}
+        </ul>
+        <div className="kca-enrol-actions">
+          <Link className="site-button kca-enrol-primary" href="/kca/apply/church">
+            {t('member.kca.enrollNow', { defaultMessage: 'Enroll Now' })}
+          </Link>
+          <Link className="ghost-link" href="/account/kca/modules">
+            {t('member.kca.learnMore', { defaultMessage: 'Learn More' })}
+          </Link>
+        </div>
+      </section>
+      <aside className="panel kca-enrol-start-side">
+        <span className="kca-enrol-start-icon">🎓</span>
+        <h3>{t('member.kca.beforeYouApply', { defaultMessage: 'Before you apply' })}</h3>
+        <p>
+          {t('member.kca.beforeYouApplyCopy', {
+            defaultMessage:
+              'The application takes about 15 minutes. Progress is saved in this browser until you submit on the review step.',
+          })}
+        </p>
+        <small>
+          {t('member.kca.admissionsReviewCopy', {
+            defaultMessage: 'Admissions reviews your application before enrollment is activated on your student dashboard.',
+          })}
+        </small>
+      </aside>
+    </div>
+  );
+}
+
 function FormScreen({ route }: { route: SiteRoute }) {
   const { t } = useLocale();
   const router = useRouter();
@@ -1887,6 +1947,10 @@ function FormScreen({ route }: { route: SiteRoute }) {
   useEffect(() => {
     if (isHomeChurchReview) setDraftSummary(readHomeChurchDraft());
   }, [isHomeChurchReview]);
+
+  if (route.path === '/kca/enrol') {
+    return <KcaEnrolStart />;
+  }
 
   if (isHomeChurchStart) {
     return (
@@ -2190,7 +2254,7 @@ function FormScreen({ route }: { route: SiteRoute }) {
       return;
     }
 
-    if (isKcaApply || route.path === '/kca/enrol') {
+    if (isKcaApply) {
       const draftKey = 'fhc.kca-application.draft';
       if (!isKcaApplyReview) {
         let existing: Record<string, string> = {};
@@ -2461,6 +2525,8 @@ function KcaLiveStudentDashboard() {
     ? `${String(dashboard.mentor.preferred_name ?? dashboard.mentor.given_name ?? 'Mentor')} ${String(dashboard.mentor.family_name ?? '')}`.trim()
     : 'Unassigned';
 
+  const enrolled = dashboard?.enrolled === true;
+
   return (
     <>
       <div className="welcome">
@@ -2468,14 +2534,27 @@ function KcaLiveStudentDashboard() {
           <span className="eyebrow">KCA STUDENT</span>
           <h2>KCA Student Dashboard</h2>
           <p>
-            {dashboard?.enrolled
+            {enrolled
               ? 'Continue learning and track your formation journey.'
-              : 'You are not enrolled yet. Browse published modules while admissions completes.'}
+              : 'Begin your KCA application or browse published modules while admissions completes.'}
           </p>
         </div>
-        <Link className="site-button" href="/account/kca/modules">
-          Browse Modules
-        </Link>
+        <div className="member-hero-actions">
+          {enrolled ? (
+            <Link className="site-button" href="/account/kca/modules">
+              Continue Learning
+            </Link>
+          ) : (
+            <>
+              <Link className="site-button" href="/kca/enrol">
+                Enroll Now
+              </Link>
+              <Link className="site-button secondary" href="/account/kca/modules">
+                Browse Modules
+              </Link>
+            </>
+          )}
+        </div>
       </div>
       <section className="panel kca-progress">
         <header>
@@ -2504,6 +2583,14 @@ function KcaLiveStudentDashboard() {
           </Link>
         ))}
       </div>
+      {!enrolled ? (
+        <section className="panel kca-enrol-callout">
+          <p>
+            You are not enrolled yet. Published modules remain browsable; assignments, attendance, and mentor access
+            unlock after admissions activates your enrollment.
+          </p>
+        </section>
+      ) : null}
       {dashboard?.certificate ? (
         <Link className="panel" href="/account/kca/certificate" style={{ display: 'block', textDecoration: 'none' }}>
           <span className="eyebrow">CERTIFICATE</span>
@@ -4769,6 +4856,7 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
     route.kind === 'calendar' ||
     route.surface === 'auth' ||
     route.path === '/account/kca' ||
+    route.path === '/kca/enrol' ||
     route.path === '/give' ||
     route.path.startsWith('/give/') ||
     route.path === '/mission/support' ||

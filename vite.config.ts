@@ -120,7 +120,9 @@ export default defineConfig(async ({ mode }) => {
     '/api': {
       target: laravelOrigin,
       changeOrigin: true,
-      cookieDomainRewrite: '',
+      secure: false,
+      cookieDomainRewrite: 'localhost',
+      cookiePathRewrite: '/',
     },
   };
 

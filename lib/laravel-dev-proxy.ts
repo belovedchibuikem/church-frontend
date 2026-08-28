@@ -6,16 +6,12 @@
 const API_V1_SUFFIX = /\/api\/v1\/?$/i;
 
 export function laravelDevProxyOrigin(apiV1?: string | null): string {
-  const raw = (apiV1 ?? 'http://127.0.0.1:8000/api/v1').trim();
+  const raw = (apiV1 ?? 'http://localhost:8000/api/v1').trim();
   try {
     const originBase = raw.replace(API_V1_SUFFIX, '') || raw;
-    const url = new URL(originBase);
-    if (url.hostname === 'localhost' || url.hostname === '::1') {
-      url.hostname = '127.0.0.1';
-    }
-    return url.origin;
+    return new URL(originBase).origin;
   } catch {
-    return 'http://127.0.0.1:8000';
+    return 'http://localhost:8000';
   }
 }
 

@@ -6,11 +6,11 @@ import {
   serializeForwardedCookies,
 } from '../lib/laravel-dev-proxy.ts';
 
-test('laravelDevProxyOrigin strips /api/v1 and prefers IPv4 loopback', () => {
-  assert.equal(laravelDevProxyOrigin('http://localhost:8000/api/v1'), 'http://127.0.0.1:8000');
+test('laravelDevProxyOrigin strips /api/v1 and preserves loopback host', () => {
+  assert.equal(laravelDevProxyOrigin('http://localhost:8000/api/v1'), 'http://localhost:8000');
   assert.equal(laravelDevProxyOrigin('http://127.0.0.1:8000/api/v1'), 'http://127.0.0.1:8000');
   assert.equal(laravelDevProxyOrigin('http://127.0.0.1:8000'), 'http://127.0.0.1:8000');
-  assert.equal(laravelDevProxyOrigin(undefined), 'http://127.0.0.1:8000');
+  assert.equal(laravelDevProxyOrigin(undefined), 'http://localhost:8000');
 });
 
 test('isLoopbackHostname covers local hosts', () => {
