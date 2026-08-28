@@ -184,7 +184,7 @@ export const PAYMENT_GOVERNANCE_DENIED_MESSAGE =
   'Giving is not available right now — payment governance has not authorized this request.';
 
 export const GIVING_CHECKOUT_UNAVAILABLE_MESSAGE =
-  'Your giving intent was recorded as pending, but no approved payment provider is available yet. Real PSP checkout, webhooks, and refunds remain blocked (OD-009/010).';
+  'Your giving intent was recorded as pending. No payment provider is active yet. An administrator must paste Paystack, Flutterwave, or Stripe keys and activate them.';
 
 export type UserPrayer = {
   id?: string;
@@ -998,6 +998,21 @@ export async function completeGivingIntent(intentId: string): Promise<CompleteGi
 
 export function isLocalManualGivingProvider(providerCode?: string | null): boolean {
   return providerCode === LOCAL_MANUAL_PROVIDER;
+}
+
+export function hostedCheckoutUrl(intent: UserPaymentIntent): string | null {
+  const url = intent.client_payload?.checkout_url;
+  return typeof url === 'string' && url.startsWith('https://') ? url : null;
+}
+
+/** GET /user/payments/intents/{id} */
+export async function fetchUserPaymentIntent(intentId: string): Promise<UserPaymentIntent> {
+  const headers = new Headers(await serverSessionHeaders());
+  const intent = await apiRequestData<UserPaymentIntent>(
+    `user/payments/intents/${encodeURIComponent(intentId)}`,
+    { method: 'GET', headers },
+  );
+  return { ...intent, id: intent.id ?? intent.public_id };
 }
 
 /** GET /user/kca/dashboard */

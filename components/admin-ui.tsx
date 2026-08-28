@@ -48,6 +48,9 @@ import { getAdminBreadcrumbs, getInteractionRouteMap, type AdminBreadcrumb } fro
 import { AppBrand } from './app-brand';
 import { BrandingSettingsPanel } from './branding-settings-panel';
 import { MapsSettingsPanel } from './maps-settings-panel';
+import { PaymentsSettingsPanel } from './payments-settings-panel';
+import { CommunicationsSettingsPanel } from './communications-settings-panel';
+import { KcaSettingsPanel } from './platform-ui';
 import { InteractiveMap } from './interactive-map';
 import { HierarchyTreeView } from './hierarchy-tree-view';
 import { SearchSelect } from './search-select';
@@ -2244,6 +2247,15 @@ function ApprovalView({ screen }: { screen: AdminScreen }) {
 function SettingsView({ screen }: { screen: AdminScreen }) {
   if (screen.route.includes('/settings/maps')) {
     return <MapsSettingsPanel />;
+  }
+  if (screen.route.includes('/settings/payments') || screen.route.includes('/finance/providers')) {
+    return <PaymentsSettingsPanel />;
+  }
+  if (screen.route.includes('/communications/settings')) {
+    return <CommunicationsSettingsPanel />;
+  }
+  if (screen.route.includes('/settings/kca')) {
+    return <KcaSettingsPanel />;
   }
   if (screen.route.includes('/settings/branding')) {
     return <BrandingSettingsPanel />;

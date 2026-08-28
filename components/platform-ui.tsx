@@ -43,12 +43,17 @@ import {
   type MediaAttachment,
   type ObjectStorageStatus,
   type PlatformConfiguration,
+  configureKcaGovernance,
+  getKcaGovernance,
+  type KcaGovernanceStatus,
 } from '../lib/admin-platform-api.ts';
 import type { JsonValue } from '../lib/api-types.ts';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { MapsSettingsPanel } from './maps-settings-panel';
+import { PaymentsSettingsPanel } from './payments-settings-panel';
+import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { BrandingSettingsPanel } from './branding-settings-panel';
 import { TableRowActions } from './table-row-actions';
 
@@ -406,74 +411,91 @@ function FixtureSettings({ screen }: { screen: AdminScreen }) {
   return <div className="platform-settings"><aside className="platform-card"><button className="active" type="button">General</button>{(screen.tabs??['Configuration','Policies','Advanced']).slice(1).map(tab=><button type="button" key={tab}>{tab}</button>)}<button type="button">Integrations</button><button type="button">Maintenance</button></aside><article className="platform-card platform-settings-body"><div className="platform-form-grid">{Object.entries(screen.details??{}).map(([label,value])=><label key={label}><span>{label}</span>{/enabled|active/i.test(value)?<span className="platform-toggle"><input type="checkbox" defaultChecked/><i/></span>:<input defaultValue={value}/>}</label>)}</div><h3>Configuration Rules</h3>{(screen.items??[]).map((item,index)=><div className="platform-setting-row" key={item}><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b><span className="platform-toggle"><input aria-label={`Toggle ${item}`} type="checkbox" defaultChecked={index<3}/><i/></span></div>)}<footer><button className="platform-primary" type="button">{screen.action}</button></footer></article></div>;
 }
 
-function KcaSettingsPanel() {
-  const tabs = ['General', 'Admissions', 'Curriculum', 'Certificates'];
-  const [activeTab, setActiveTab] = useState(tabs[0]);
-  const [saved, setSaved] = useState(false);
+export function KcaSettingsPanel() {
+  const [status, setStatus] = useState<KcaGovernanceStatus | null>(null);
+  const [message, setMessage] = useState('Loading KCA governance…');
+  const [busy, setBusy] = useState(false);
 
-  const save = (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    void getKcaGovernance()
+      .then((data) => {
+        setStatus(data);
+        setMessage(data.configured ? 'Live KCA governance from the admin API.' : 'Using KCA defaults until you save.');
+      })
+      .catch((error) => {
+        setMessage(platformErrorMessage(error, 'Could not load KCA governance. Requires kca.governance.view and recent MFA.'));
+      });
+  }, []);
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-    window.localStorage.setItem('fhc-admin-kca-settings-draft', JSON.stringify(values));
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2500);
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    try {
+      const data = await configureKcaGovernance({
+        pass_threshold_percent: Number(form.get('pass_threshold_percent') || 70),
+        attendance_threshold_percent: Number(form.get('attendance_threshold_percent') || 75),
+        require_final_assessment: form.get('require_final_assessment') === 'on',
+        require_signed_pdf: form.get('require_signed_pdf') === 'on',
+        certificate_signer_name: String(form.get('certificate_signer_name') || ''),
+        certificate_signer_title: String(form.get('certificate_signer_title') || ''),
+      });
+      setStatus(data);
+      setMessage('KCA governance saved. Superadmins delegate kca.governance.manage and kca.certificates.revoke.');
+    } catch (error) {
+      setMessage(platformErrorMessage(error, 'Save failed. Confirm kca.governance.manage and recent MFA.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <form className="platform-settings" onSubmit={save}>
-      <aside className="platform-card" aria-label="KCA settings sections">
-        {tabs.map((tab) => (
-          <button className={activeTab === tab ? 'active' : ''} type="button" key={tab} onClick={() => setActiveTab(tab)}>
-            {tab}
-          </button>
-        ))}
-      </aside>
+    <form className="platform-settings" onSubmit={(event) => void save(event)}>
       <article className="platform-card platform-settings-body">
         <header className="platform-settings-heading">
           <span className="platform-overline">KINGDOM CITIZENS ACADEMY</span>
-          <h2>{activeTab} Settings</h2>
-          <p>Configure the operational defaults used by KCA administrators. Changes are saved as a local draft until a KCA settings API is available.</p>
+          <h2>Certification governance</h2>
+          <p>Pass thresholds, signer identity, signed PDF requirement, and revocation authority are server-owned.</p>
         </header>
-
-        {activeTab === 'General' && (
-          <div className="platform-form-grid">
-            <label><span>Academy name</span><input name="academy_name" defaultValue="Kingdom Citizens Academy" required /></label>
-            <label><span>Default currency</span><select name="currency" defaultValue="NGN"><option value="NGN">Nigerian Naira (NGN)</option><option value="USD">US Dollar (USD)</option></select></label>
-            <label><span>Academic year label</span><input name="academic_year" defaultValue="KCA 2026" required /></label>
-            <label><span>Default timezone</span><select name="timezone" defaultValue="Africa/Lagos"><option value="Africa/Lagos">West Africa Time (Africa/Lagos)</option><option value="UTC">UTC</option></select></label>
-          </div>
-        )}
-
-        {activeTab === 'Admissions' && (
-          <div className="platform-form-grid">
-            <label><span>Application status</span><select name="admissions_status" defaultValue="Open"><option>Open</option><option>Closed</option><option>Invitation only</option></select></label>
-            <label><span>Minimum applicant age</span><input name="minimum_age" type="number" min="1" defaultValue="16" /></label>
-            <label><span>Require leader recommendation</span><span className="platform-toggle"><input name="leader_recommendation" type="checkbox" defaultChecked /><i /></span></label>
-            <label><span>Require guardian consent for minors</span><span className="platform-toggle"><input name="guardian_consent" type="checkbox" defaultChecked /><i /></span></label>
-          </div>
-        )}
-
-        {activeTab === 'Curriculum' && (
-          <div className="platform-form-grid">
-            <label><span>Module completion threshold (%)</span><input name="module_completion_threshold" type="number" min="0" max="100" defaultValue="70" /></label>
-            <label><span>Lesson attendance threshold (%)</span><input name="attendance_threshold" type="number" min="0" max="100" defaultValue="75" /></label>
-            <label><span>Allow prerequisite overrides</span><span className="platform-toggle"><input name="allow_prerequisite_overrides" type="checkbox" /><i /></span></label>
-            <label><span>Show unpublished modules to students</span><span className="platform-toggle"><input name="show_unpublished_modules" type="checkbox" /><i /></span></label>
-          </div>
-        )}
-
-        {activeTab === 'Certificates' && (
-          <div className="platform-form-grid">
-            <label><span>Certificate prefix</span><input name="certificate_prefix" defaultValue="KCA" /></label>
-            <label><span>Certificate validity period</span><select name="certificate_validity" defaultValue="No expiry"><option>No expiry</option><option>1 year</option><option>2 years</option></select></label>
-            <label><span>Require all modules completed</span><span className="platform-toggle"><input name="require_all_modules" type="checkbox" defaultChecked /><i /></span></label>
-            <label><span>Require final assessment</span><span className="platform-toggle"><input name="require_final_assessment" type="checkbox" defaultChecked /><i /></span></label>
-          </div>
-        )}
-
+        <p className="maps-settings-lead" role="status">
+          {message}
+        </p>
+        <div className="platform-form-grid">
+          <label>
+            <span>Pass threshold (%)</span>
+            <input defaultValue={status?.pass_threshold_percent ?? 70} max={100} min={1} name="pass_threshold_percent" type="number" />
+          </label>
+          <label>
+            <span>Attendance threshold (%)</span>
+            <input defaultValue={status?.attendance_threshold_percent ?? 75} max={100} min={1} name="attendance_threshold_percent" type="number" />
+          </label>
+          <label>
+            <span>Certificate signer name</span>
+            <input defaultValue={status?.certificate_signer_name ?? ''} name="certificate_signer_name" />
+          </label>
+          <label>
+            <span>Certificate signer title</span>
+            <input defaultValue={status?.certificate_signer_title ?? ''} name="certificate_signer_title" />
+          </label>
+          <label>
+            <span>Require final assessment</span>
+            <span className="platform-toggle">
+              <input defaultChecked={status?.require_final_assessment ?? true} name="require_final_assessment" type="checkbox" />
+              <i />
+            </span>
+          </label>
+          <label>
+            <span>Require signed PDF certificates</span>
+            <span className="platform-toggle">
+              <input defaultChecked={status?.require_signed_pdf ?? false} name="require_signed_pdf" type="checkbox" />
+              <i />
+            </span>
+          </label>
+        </div>
         <footer className="form-footer">
-          <span className="field-help">{saved ? 'KCA settings draft saved in this browser.' : 'No server-side KCA settings endpoint is currently available.'}</span>
-          <button className="platform-primary" type="submit">Save local draft</button>
+          <button className="platform-primary" disabled={busy} type="submit">
+            Save governance
+          </button>
         </footer>
       </article>
     </form>
@@ -1112,6 +1134,8 @@ function Settings({ screen }: { screen: AdminScreen }) {
 
   if (!fixtures) {
     if (route.includes('/settings/maps')) return <MapsSettingsPanel />;
+    if (route.includes('/settings/payments') || route.includes('/finance/providers')) return <PaymentsSettingsPanel />;
+    if (route.includes('/communications/settings')) return <CommunicationsSettingsPanel />;
     if (route.includes('/settings/branding')) return <BrandingSettingsPanel />;
     if (route.includes('/settings/kca')) return <KcaSettingsPanel />;
     if (route.includes('/settings/platform')) {

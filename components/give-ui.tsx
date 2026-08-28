@@ -22,10 +22,12 @@ import {
   createGivingIntent,
   displayNameFromUser,
   fetchCurrentUser,
+  fetchUserPaymentIntent,
   fetchUserPaymentReceipt,
   formatMoneyMinor,
   formatUserApiError,
   GIVING_CHECKOUT_UNAVAILABLE_MESSAGE,
+  hostedCheckoutUrl,
   isLocalManualGivingProvider,
   isPaymentGovernanceDenied,
   isRecentMfaRequiredError,
@@ -140,7 +142,7 @@ function GiveSummary({ draft, amountMinor }: { draft: GivingDraft; amountMinor: 
       <ul className="check-list">
         <li>Secure intent recorded to your account</li>
         <li>Receipt stored in My Giving</li>
-        <li>Local QA payments complete immediately</li>
+        <li>Paystack, Flutterwave, or Stripe hosted checkout when activated</li>
       </ul>
     </aside>
   );
@@ -342,6 +344,24 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
         return;
       }
 
+      const checkoutUrl = hostedCheckoutUrl(intent);
+      if (checkoutUrl && intentId) {
+        writeGivingReceiptSnapshot({
+          receiptId: null,
+          receiptNumber: null,
+          intentId,
+          amountMinor,
+          currency: draft.currency,
+          fund: draft.fund,
+          note: draft.note,
+          method: draft.method,
+          issuedAt: intent.created_at ?? null,
+          status: intent.status ?? 'pending_provider',
+        });
+        window.location.assign(checkoutUrl);
+        return;
+      }
+
       writeGivingReceiptSnapshot({
         receiptId: null,
         receiptNumber: null,
@@ -396,15 +416,14 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
         <span className="eyebrow">SECURE PAYMENT</span>
         <h1>Confirm {formatMoneyMinor(amountMinor, draft.currency)}</h1>
         <p>
-          {name !== 'Member' ? `${name}, ` : ''}review the details, then confirm. Completion is recorded when payment
-          governance allows — the local QA gateway marks the gift paid immediately.
+          {name !== 'Member' ? `${name}, ` : ''}review the details, then confirm. If a payment provider is active, you will continue to secure hosted checkout.
         </p>
       </section>
       <div className="give-layout">
         <section className="site-form give-form">
           <div className="form-intro">
             <h3>Payment confirmation</h3>
-            <p>This creates a giving intent on your account. Card/PSP checkout is not live yet outside the local QA gateway.</p>
+            <p>This creates a giving intent on your account, then opens Paystack, Flutterwave, or Stripe checkout when those keys are active.</p>
           </div>
           <dl className="give-dl give-dl-wide">
             <div>
@@ -462,13 +481,41 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<GivingReceiptSnapshot | null>(null);
   const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [intentId, setIntentId] = useState<string | null>(null);
 
   useEffect(() => {
     const snap = readGivingReceiptSnapshot();
-    const queryId = new URLSearchParams(window.location.search).get('receipt');
+    const query = new URLSearchParams(window.location.search);
+    const queryId = query.get('receipt');
+    const queryIntent = query.get('intent');
     setSnapshot(snap);
     setReceiptId(queryId ?? snap?.receiptId ?? null);
+    setIntentId(queryIntent ?? snap?.intentId ?? null);
   }, []);
+
+  useEffect(() => {
+    if (receiptId || !intentId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const live = await fetchUserPaymentIntent(intentId);
+        if (cancelled) return;
+        if (live.status === 'succeeded') {
+          setSnapshot((prev) =>
+            prev ? { ...prev, status: 'succeeded', intentId } : prev,
+          );
+        }
+      } catch {
+        /* keep snapshot */
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [intentId, receiptId]);
 
   useEffect(() => {
     if (!receiptId) {

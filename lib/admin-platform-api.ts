@@ -354,6 +354,122 @@ export async function deactivateMapsProvider(
   );
 }
 
+export type PaymentProviderId = 'paystack' | 'flutterwave' | 'stripe';
+
+export type PaymentProviderStatus = {
+  configured: boolean;
+  active: boolean;
+  active_provider?: PaymentProviderId | null;
+  providers: {
+    paystack: { label?: string; credentials_configured: boolean };
+    flutterwave: { label?: string; credentials_configured: boolean };
+    stripe: { label?: string; credentials_configured: boolean };
+  };
+  allowed_purpose_codes?: string[];
+  allowed_currencies?: string[];
+  configuration_revision?: number;
+  activated_at?: string | null;
+};
+
+export type ConfigurePaymentProviderInput = {
+  active_provider: PaymentProviderId;
+  paystack_secret_key?: string;
+  paystack_public_key?: string;
+  paystack_webhook_secret?: string;
+  flutterwave_secret_key?: string;
+  flutterwave_public_key?: string;
+  flutterwave_webhook_secret?: string;
+  stripe_secret_key?: string;
+  stripe_publishable_key?: string;
+  stripe_webhook_secret?: string;
+  allowed_purpose_codes?: string[];
+  allowed_currencies?: string[];
+};
+
+export async function getPaymentProvider(scope: AdminScope = PLATFORM_GLOBAL_SCOPE): Promise<PaymentProviderStatus> {
+  return (await platformGet<PaymentProviderStatus>('admin/platform/payments', scope)).data;
+}
+
+export async function configurePaymentProvider(
+  body: ConfigurePaymentProviderInput,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<PaymentProviderStatus> {
+  return platformMutate<PaymentProviderStatus>('PUT', 'admin/platform/payments', body, scope);
+}
+
+export async function activatePaymentProvider(scope: AdminScope = PLATFORM_GLOBAL_SCOPE): Promise<PaymentProviderStatus> {
+  return platformMutate<PaymentProviderStatus>('POST', 'admin/platform/payments/activation', undefined, scope);
+}
+
+export async function deactivatePaymentProvider(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<{ active: boolean }> {
+  return platformMutate<{ active: boolean }>('DELETE', 'admin/platform/payments/activation', undefined, scope);
+}
+
+export type CommunicationProviderStatus = {
+  configured: boolean;
+  active: boolean;
+  email: { provider: string; sender_name?: string | null; sender_address?: string | null; credentials_configured: boolean };
+  sms: { provider: string; sender_id?: string | null; credentials_configured: boolean };
+  whatsapp: { provider: string; phone_number_id?: string | null; credentials_configured: boolean };
+  push: { provider: string; credentials_configured: boolean };
+  consent_required_channels?: string[];
+  retry?: { max_attempts: number; backoff_seconds: number };
+  configuration_revision?: number;
+  activated_at?: string | null;
+};
+
+export async function getCommunicationProvider(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<CommunicationProviderStatus> {
+  return (await platformGet<CommunicationProviderStatus>('admin/platform/communications', scope)).data;
+}
+
+export async function configureCommunicationProvider(
+  body: Record<string, unknown>,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<CommunicationProviderStatus> {
+  return platformMutate<CommunicationProviderStatus>('PUT', 'admin/platform/communications', body, scope);
+}
+
+export async function activateCommunicationProvider(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<CommunicationProviderStatus> {
+  return platformMutate<CommunicationProviderStatus>('POST', 'admin/platform/communications/activation', undefined, scope);
+}
+
+export async function deactivateCommunicationProvider(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<{ active: boolean }> {
+  return platformMutate<{ active: boolean }>('DELETE', 'admin/platform/communications/activation', undefined, scope);
+}
+
+export type KcaGovernanceStatus = {
+  configured: boolean;
+  pass_threshold_percent: number;
+  attendance_threshold_percent: number;
+  require_final_assessment: boolean;
+  require_signed_pdf: boolean;
+  certificate_signer_name?: string | null;
+  certificate_signer_title?: string | null;
+  configuration_revision?: number;
+};
+
+export async function getKcaGovernance(scope: AdminScope = PLATFORM_GLOBAL_SCOPE): Promise<KcaGovernanceStatus> {
+  return (await platformGet<KcaGovernanceStatus>('admin/kca/governance', scope)).data;
+}
+
+export async function configureKcaGovernance(
+  body: Partial<KcaGovernanceStatus> & {
+    pass_threshold_percent: number;
+    attendance_threshold_percent: number;
+  },
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaGovernanceStatus> {
+  return platformMutate<KcaGovernanceStatus>('PUT', 'admin/kca/governance', body, scope);
+}
+
 export type AdminBrandingStatus = {
   app_name: string;
   logo_url: string | null;
