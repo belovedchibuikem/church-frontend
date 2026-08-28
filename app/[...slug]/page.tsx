@@ -19,7 +19,12 @@ export default async function PublicMemberPage({ params }: { params: Promise<{ s
   const route = findSiteRoute(path);
   if (!route) notFound();
 
-  if (route.surface === 'member') {
+  const requiresMemberSession =
+    route.surface === 'member' ||
+    route.path === '/kca/enrol' ||
+    route.path.startsWith('/kca/apply/');
+
+  if (requiresMemberSession) {
     const context = await getServerAccessContext();
     const decision = evaluateMemberAccess(context);
     if (!decision.allowed) {

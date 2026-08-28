@@ -56,6 +56,12 @@ import { PaymentsSettingsPanel } from './payments-settings-panel';
 import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { BrandingSettingsPanel } from './branding-settings-panel';
 import { TableRowActions } from './table-row-actions';
+import { useLocale } from '@/components/locale-provider';
+import {
+  breakdownToItems,
+  dashboardModuleForScreen,
+} from '../lib/admin-dashboard-api';
+import { useAdminDashboard } from '../lib/use-admin-dashboard';
 
 function tone(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -69,26 +75,34 @@ function Metrics({ metrics = [] }: { metrics?: Metric[] }) {
   return <div className={`platform-metrics count-${Math.min(metrics.length, 5)}`}>{metrics.map((metric,index)=><article className="platform-card platform-metric" key={metric.label}><span>{metric.label}</span><div><strong>{metric.value}</strong>{metric.trend&&<small className={metric.trend.includes('-')?'down':''}>{metric.trend}</small>}</div><i style={{width:`${48+(index*11)%45}%`}}/></article>)}</div>;
 }
 
-function Bars({ compact = false }: { compact?: boolean }) {
-  const values = [32,54,45,71,63,88,56,76,91,68,82,96];
-  return <div className={`platform-bars ${compact?'compact':''}`} role="img" aria-label="Performance trend chart">{values.map((height,index)=><i style={{height:`${height}%`}} key={index}/>)}</div>;
+function Bars({ compact = false, series }: { compact?: boolean; series?: Array<{ label: string; value: number }> }) {
+  const { t } = useLocale();
+  const max = Math.max(1, ...(series?.map((point) => point.value) ?? [1]));
+  const values = series?.length
+    ? series.map((point) => Math.max(8, Math.round((point.value / max) * 100)))
+    : [32, 54, 45, 71, 63, 88, 56, 76, 91, 68, 82, 96];
+  return <div className={`platform-bars ${compact?'compact':''}`} role="img" aria-label={t('admin.performanceTrendChart', { defaultMessage: 'Performance trend chart' })}>{values.map((height,index)=><i style={{height:`${height}%`}} key={index}/>)}</div>;
 }
 
 function Donut({ value = '12,842' }: { value?: string }) {
-  return <div className="platform-donut" role="img" aria-label={`Category distribution total ${value}`}><div><strong>{value}</strong><span>Total</span></div></div>;
+  const { t } = useLocale();
+  return <div className="platform-donut" role="img" aria-label={t('admin.categoryDistributionTotal', { defaultMessage: 'Category distribution total {value}', vars: { value } })}><div><strong>{value}</strong><span>{t('admin.total', { defaultMessage: 'Total' })}</span></div></div>;
 }
 
 function FilterBar({ screen }: { screen: AdminScreen }) {
-  return <div className="platform-filter-bar"><button type="button">All Status⌄</button><button type="button">All Categories⌄</button><label><span aria-hidden="true">⌕</span><input aria-label={`Search ${screen.title}`} placeholder={`Search ${screen.title.toLowerCase()}...`}/></label><button type="button">☷ Filters</button></div>;
+  const { t } = useLocale();
+  return <div className="platform-filter-bar"><button type="button">{t('admin.allStatus', { defaultMessage: 'All Status⌄' })}</button><button type="button">{t('admin.allCategories', { defaultMessage: 'All Categories⌄' })}</button><label><span aria-hidden="true">⌕</span><input aria-label={t('admin.searchAria', { defaultMessage: 'Search {title}', vars: { title: screen.title } })} placeholder={t('admin.searchPlaceholder', { defaultMessage: 'Search {title}...', vars: { title: screen.title.toLowerCase() } })}/></label><button type="button">{t('admin.filtersButton', { defaultMessage: '☷ Filters' })}</button></div>;
 }
 
 function PlatformTabs({ tabs = [] }: { tabs?: string[] }) {
-  return <div className="platform-tabs" role="tablist" aria-label="Page sections">{tabs.map((tab,index)=><button type="button" role="tab" aria-selected={index===0} className={index===0?'active':''} key={tab}>{tab}</button>)}</div>;
+  const { t } = useLocale();
+  return <div className="platform-tabs" role="tablist" aria-label={t('admin.pageSections', { defaultMessage: 'Page sections' })}>{tabs.map((tab,index)=><button type="button" role="tab" aria-selected={index===0} className={index===0?'active':''} key={tab}>{tab}</button>)}</div>;
 }
 
 function FixtureDenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [] }: { screen: AdminScreen; rows?: Row[]; columns?: string[] }) {
+  const { t } = useLocale();
   const entityKey = resolveEntityKey(screen.route, screen.id);
-  return <article className="platform-card platform-table-card"><FilterBar screen={screen}/><div className="platform-table-scroll"><table aria-label={`${screen.title} records`}><thead><tr>{columns.map(column=><th scope="col" key={column}>{column}</th>)}<th scope="col">Actions</th></tr></thead><tbody>{rows.map((row,index)=><tr key={`${screen.id}-${index}`}>{columns.map((column,columnIndex)=>{const value=row[column]??'—';return <td key={column}>{columnIndex===0?<span className="platform-leading"><i>{value.slice(0,2).toUpperCase()}</i><b>{value}</b></span>:/status|priority/i.test(column)?<Badge value={value}/>:value}</td>})}<td><TableRowActions record={String(row[columns[0]]??'record')} entityKey={entityKey} className="row-actions platform-row-actions" /></td></tr>)}</tbody></table></div><footer><span>Showing 1 to {rows.length} of {rows.length>5?'256':rows.length} records</span><nav aria-label={`${screen.title} pagination`}><button type="button" aria-label="Previous page">‹</button><button className="active" type="button" aria-label="Page 1" aria-current="page">1</button><button type="button" aria-label="Page 2">2</button><button type="button" aria-label="Page 3">3</button><button type="button" aria-label="Next page">›</button></nav></footer></article>;
+  return <article className="platform-card platform-table-card"><FilterBar screen={screen}/><div className="platform-table-scroll"><table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}><thead><tr>{columns.map(column=><th scope="col" key={column}>{column}</th>)}<th scope="col">{t('admin.actions', { defaultMessage: 'Actions' })}</th></tr></thead><tbody>{rows.map((row,index)=><tr key={`${screen.id}-${index}`}>{columns.map((column,columnIndex)=>{const value=row[column]??'—';return <td key={column}>{columnIndex===0?<span className="platform-leading"><i>{value.slice(0,2).toUpperCase()}</i><b>{value}</b></span>:/status|priority/i.test(column)?<Badge value={value}/>:value}</td>})}<td><TableRowActions record={String(row[columns[0]]??'record')} entityKey={entityKey} className="row-actions platform-row-actions" /></td></tr>)}</tbody></table></div><footer><span>{t('admin.showingRecordsRange', { defaultMessage: 'Showing 1 to {count} of {total} records', vars: { count: rows.length, total: rows.length>5?'256':rows.length } })}</span><nav aria-label={t('admin.paginationAria', { defaultMessage: '{title} pagination', vars: { title: screen.title } })}><button type="button" aria-label={t('common.previousPage', { defaultMessage: 'Previous page' })}>‹</button><button className="active" type="button" aria-label={t('common.pageNumber', { defaultMessage: 'Page {number}', vars: { number: 1 } })} aria-current="page">1</button><button type="button" aria-label={t('common.pageNumber', { defaultMessage: 'Page {number}', vars: { number: 2 } })}>2</button><button type="button" aria-label={t('common.pageNumber', { defaultMessage: 'Page {number}', vars: { number: 3 } })}>3</button><button type="button" aria-label={t('common.nextPage', { defaultMessage: 'Next page' })}>›</button></nav></footer></article>;
 }
 
 const CATALOG_FEED_COLUMNS = ['Item', 'Detail', 'Time'];
@@ -96,12 +110,13 @@ const CATALOG_NAME_COLUMNS = ['Name', 'Status', 'Updated'];
 const CATALOG_ASSET_COLUMNS = ['Name', 'Type', 'Status', 'Updated'];
 
 function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const columns = screen.columns ?? [];
   const columnKey = columns.join('\0');
   const dataset = resolveCatalogDataset(screen);
   const entityKey = resolveEntityKey(screen.route, screen.id);
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
-  const [message, setMessage] = useState('Loading catalog…');
+  const [message, setMessage] = useState(() => t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,46 +125,46 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
     let cancelled = false;
     void (async () => {
       setError(null);
-      setMessage('Loading catalog…');
+      setMessage(t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
       try {
         const result = await listCatalogDomain(dataset, { perPage: 25 });
         if (cancelled) return;
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns));
         setMessage(
           result.pagination.total === 0
-            ? 'No catalog records in this scope.'
-            : `Showing ${result.items.length} of ${result.pagination.total} records`,
+            ? t('admin.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
+            : t('admin.showingCatalogRecords', { defaultMessage: 'Showing {shown} of {total} records', vars: { shown: result.items.length, total: result.pagination.total } }),
         );
       } catch (err) {
         if (cancelled) return;
         setRows([]);
-        setError(catalogErrorMessage(err, 'Unable to load domain catalog.'));
-        setMessage('Live catalog unavailable');
+        setError(catalogErrorMessage(err, t('errors.loadCatalog', { defaultMessage: 'Unable to load domain catalog.' })));
+        setMessage(t('admin.catalogUnavailable', { defaultMessage: 'Live catalog unavailable' }));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [columnKey, dataset]);
+  }, [columnKey, dataset, t]);
 
   return (
     <article className="platform-card platform-table-card">
       <FilterBar screen={screen} />
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       <div className="platform-table-scroll">
-        <table aria-label={`${screen.title} records`}>
+        <table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
           <thead>
             <tr>
               {columns.map((column) => (
                 <th scope="col" key={column}>{column}</th>
               ))}
-              <th scope="col">Actions</th>
+              <th scope="col">{t('admin.actions', { defaultMessage: 'Actions' })}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1}>{error ? 'Unable to load records.' : message}</td>
+                <td colSpan={columns.length + 1}>{error ? t('errors.unableToLoadRecords', { defaultMessage: 'Unable to load records.' }) : message}</td>
               </tr>
             ) : (
               rows.map((row) => (
@@ -200,9 +215,10 @@ function IdentitySecurityLiveTable({
   screen: AdminScreen;
   kind: 'audit' | 'access-decisions';
 }) {
+  const { t } = useLocale();
   const columns = screen.columns ?? [];
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
-  const [message, setMessage] = useState('Loading security records…');
+  const [message, setMessage] = useState(() => t('admin.loadingSecurityRecords', { defaultMessage: 'Loading security records…' }));
   const [error, setError] = useState<string | null>(null);
   const entityKey = resolveEntityKey(screen.route, screen.id);
 
@@ -222,7 +238,7 @@ function IdentitySecurityLiveTable({
                 else if (column === 'User') mapped[column] = event.actor_user_id ?? '—';
                 else if (column === 'Module') mapped[column] = event.target_type ?? '—';
                 else if (column === 'Action') mapped[column] = event.action;
-                else if (column === 'Status') mapped[column] = 'Recorded';
+                else if (column === 'Status') mapped[column] = t('admin.statusRecorded', { defaultMessage: 'Recorded' });
                 else if (column === 'IP Address') mapped[column] = event.correlation_id ?? '—';
                 else mapped[column] = '—';
               }
@@ -230,7 +246,7 @@ function IdentitySecurityLiveTable({
               return mapped;
             }),
           );
-          setMessage(`Showing ${result.data.length} of ${result.pagination.total} audit events`);
+          setMessage(t('admin.showingAuditEvents', { defaultMessage: 'Showing {shown} of {total} audit events', vars: { shown: result.data.length, total: result.pagination.total } }));
         } else {
           const result = await listAdminAccessDecisions({ scope: defaultAdminScope(), perPage: 25 });
           if (cancelled) return;
@@ -241,7 +257,9 @@ function IdentitySecurityLiveTable({
                 if (column === 'User') mapped[column] = decision.actor_user_id ?? '—';
                 else if (column === 'Module') mapped[column] = decision.scope_type ?? '—';
                 else if (column === 'Action') mapped[column] = decision.permission_code;
-                else if (column === 'Status') mapped[column] = decision.allowed ? 'Allowed' : 'Denied';
+                else if (column === 'Status') mapped[column] = decision.allowed
+                  ? t('admin.statusAllowed', { defaultMessage: 'Allowed' })
+                  : t('admin.statusDenied', { defaultMessage: 'Denied' });
                 else if (column === 'Date' || column === 'Date & Time') {
                   mapped[column] = formatTimestamp(decision.decided_at);
                 } else mapped[column] = '—';
@@ -250,38 +268,38 @@ function IdentitySecurityLiveTable({
               return mapped;
             }),
           );
-          setMessage(`Showing ${result.data.length} of ${result.pagination.total} access decisions`);
+          setMessage(t('admin.showingAccessDecisions', { defaultMessage: 'Showing {shown} of {total} access decisions', vars: { shown: result.data.length, total: result.pagination.total } }));
         }
       } catch (err) {
         if (cancelled) return;
         setRows([]);
-        setError(err instanceof Error ? err.message : 'Unable to load security records.');
-        setMessage('Live security data unavailable');
+        setError(err instanceof Error ? err.message : t('errors.loadSecurityRecords', { defaultMessage: 'Unable to load security records.' }));
+        setMessage(t('admin.securityDataUnavailable', { defaultMessage: 'Live security data unavailable' }));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [columns, kind]);
+  }, [columns, kind, t]);
 
   return (
     <article className="platform-card platform-table-card">
       <FilterBar screen={screen} />
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       <div className="platform-table-scroll">
-        <table aria-label={`${screen.title} records`}>
+        <table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
           <thead>
             <tr>
               {columns.map((column) => (
                 <th scope="col" key={column}>{column}</th>
               ))}
-              <th scope="col">Actions</th>
+              <th scope="col">{t('admin.actions', { defaultMessage: 'Actions' })}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1}>{error ? 'Unable to load records.' : message}</td>
+                <td colSpan={columns.length + 1}>{error ? t('errors.unableToLoadRecords', { defaultMessage: 'Unable to load records.' }) : message}</td>
               </tr>
             ) : (
               rows.map((row) => (
@@ -326,6 +344,7 @@ function IdentitySecurityLiveTable({
 }
 
 function DenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [] }: { screen: AdminScreen; rows?: Row[]; columns?: string[] }) {
+  const { t } = useLocale();
   if (!shouldUseDesignFixtures()) {
     if (screen.route === '/admin/security/audit-logs') {
       return <IdentitySecurityLiveTable screen={screen} kind="audit" />;
@@ -339,16 +358,16 @@ function DenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns
     return (
       <article className="platform-card platform-table-card">
         <p className="maps-settings-lead" role="status">
-          No live list API is wired for this screen. Design fixtures are disabled.
+          {t('admin.noLiveListApi', { defaultMessage: 'No live list API is wired for this screen. Design fixtures are disabled.' })}
         </p>
         <div className="platform-table-scroll">
-          <table aria-label={`${screen.title} records`}>
+          <table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
             <thead>
               <tr>{columns.map((column) => <th scope="col" key={column}>{column}</th>)}</tr>
             </thead>
             <tbody>
               <tr>
-                <td colSpan={Math.max(columns.length, 1)}>Live data unavailable for this route.</td>
+                <td colSpan={Math.max(columns.length, 1)}>{t('admin.liveDataUnavailable', { defaultMessage: 'Live data unavailable for this route.' })}</td>
               </tr>
             </tbody>
           </table>
@@ -359,20 +378,53 @@ function DenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns
   return <FixtureDenseTable screen={screen} rows={rows} columns={columns} />;
 }
 
-function Dashboard({ screen }: { screen: AdminScreen }) {
-  return <div className="platform-dashboard"><Metrics metrics={screen.metrics}/><div className="platform-dashboard-grid"><article className="platform-card platform-chart"><header><h2>{screen.batch==='K'?'Income Overview':screen.batch==='M'?'Delivery Overview':screen.batch==='O'?'Sign-in Overview':'Performance Over Time'}</h2><button type="button">This Month⌄</button></header><Bars/></article><article className="platform-card platform-chart platform-donut-card"><h2>{screen.batch==='M'?'By Channel':screen.batch==='O'?'Alerts by Severity':'By Category'}</h2><div><Donut value={screen.metrics?.[0]?.value}/><ul>{(screen.items??[]).slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></li>)}</ul></div></article></div><div className="platform-bottom-grid"><article className="platform-card platform-list"><header><h2>{screen.batch==='M'?'Recent Campaigns':screen.batch==='O'?'Recent Security Alerts':'Top Results'}</h2><button type="button">View all</button></header>{(screen.items??[]).slice(0,6).map((item,index)=><div key={item}><span className="platform-list-icon">{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article><article className="platform-card platform-actions"><h2>Quick Actions</h2>{['Create Record','Open Queue','Generate Report','View Analytics'].map((item,index)=><button type="button" key={item}><span>{['＋','▣','▤','◇'][index]}</span>{item}</button>)}</article></div></div>;
+function Dashboard({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
+  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
+  const listItems = dashboard.live ? breakdownToItems(dashboard.data?.breakdown) : (screen.items ?? []);
+  const chartTitle = screen.batch === 'K'
+    ? t('admin.incomeOverview', { defaultMessage: 'Income Overview' })
+    : screen.batch === 'M'
+      ? t('admin.deliveryOverview', { defaultMessage: 'Delivery Overview' })
+      : screen.batch === 'O'
+        ? t('admin.signInOverview', { defaultMessage: 'Sign-in Overview' })
+        : t('admin.performanceOverTime', { defaultMessage: 'Performance Over Time' });
+  const donutTitle = screen.batch === 'M'
+    ? t('admin.byChannel', { defaultMessage: 'By Channel' })
+    : screen.batch === 'O'
+      ? t('admin.alertsBySeverity', { defaultMessage: 'Alerts by Severity' })
+      : t('admin.byCategory', { defaultMessage: 'By Category' });
+  const listTitle = screen.batch === 'M'
+    ? t('admin.recentCampaigns', { defaultMessage: 'Recent Campaigns' })
+    : screen.batch === 'O'
+      ? t('admin.recentSecurityAlerts', { defaultMessage: 'Recent Security Alerts' })
+      : t('admin.topResults', { defaultMessage: 'Top Results' });
+  const quickActions = [
+    t('admin.createRecord', { defaultMessage: 'Create Record' }),
+    t('admin.openQueue', { defaultMessage: 'Open Queue' }),
+    t('admin.generateReport', { defaultMessage: 'Generate Report' }),
+    t('admin.viewAnalytics', { defaultMessage: 'View Analytics' }),
+  ];
+  return <div className="platform-dashboard">
+    {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
+    {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
+    <Metrics metrics={metrics}/><div className="platform-dashboard-grid"><article className="platform-card platform-chart"><header><h2>{chartTitle}</h2><button type="button">{t('admin.thisMonth', { defaultMessage: 'This Month⌄' })}</button></header><Bars series={dashboard.data?.series}/></article><article className="platform-card platform-chart platform-donut-card"><h2>{donutTitle}</h2><div><Donut value={dashboard.data?.donut?.value ?? metrics?.[0]?.value}/><ul>{listItems.slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></li>)}</ul></div></article></div><div className="platform-bottom-grid"><article className="platform-card platform-list"><header><h2>{listTitle}</h2><button type="button">{t('admin.viewAll', { defaultMessage: 'View all' })}</button></header>{listItems.slice(0,6).map((item,index)=><div key={item}><span className="platform-list-icon">{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article><article className="platform-card platform-actions"><h2>{t('admin.quickActions', { defaultMessage: 'Quick Actions' })}</h2>{quickActions.map((item,index)=><button type="button" key={item}><span>{['＋','▣','▤','◇'][index]}</span>{item}</button>)}</article></div></div>;
 }
 
 function Detail({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const publication = screen.batch==='J';
-  return <div className="platform-detail"><article className="platform-card platform-detail-hero">{publication&&<div className="publication-cover small"><span>WALKING IN</span><strong>DOMINION</strong></div>}<div><span className="platform-overline">{publication?'Publication':'Record'} detail</span><h2>{screen.title}</h2><p>{screen.subtitle}</p><Badge value={screen.details?.Status??'Active'}/></div></article>{screen.tabs&&<PlatformTabs tabs={screen.tabs}/>}<div className="platform-detail-grid"><article className="platform-card platform-definition"><h3>Information</h3><dl>{Object.entries(screen.details??{}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key==='Status'?<Badge value={value}/>:value}</dd></div>)}</dl></article><article className="platform-card platform-detail-chart"><h3>Summary</h3>{screen.metrics&&<Metrics metrics={screen.metrics}/>}<Bars compact/><button className="platform-primary" type="button">{screen.action??'View Report'}</button></article></div></div>;
+  return <div className="platform-detail"><article className="platform-card platform-detail-hero">{publication&&<div className="publication-cover small"><span>{t('admin.walkingIn', { defaultMessage: 'WALKING IN' })}</span><strong>{t('admin.dominion', { defaultMessage: 'DOMINION' })}</strong></div>}<div><span className="platform-overline">{t(publication ? 'admin.publicationDetail' : 'admin.recordDetail', { defaultMessage: publication ? 'Publication detail' : 'Record detail' })}</span><h2>{screen.title}</h2><p>{screen.subtitle}</p><Badge value={screen.details?.Status??t('admin.statusActive', { defaultMessage: 'Active' })}/></div></article>{screen.tabs&&<PlatformTabs tabs={screen.tabs}/>}<div className="platform-detail-grid"><article className="platform-card platform-definition"><h3>{t('admin.information', { defaultMessage: 'Information' })}</h3><dl>{Object.entries(screen.details??{}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key==='Status'?<Badge value={value}/>:value}</dd></div>)}</dl></article><article className="platform-card platform-detail-chart"><h3>{t('admin.summary', { defaultMessage: 'Summary' })}</h3>{screen.metrics&&<Metrics metrics={screen.metrics}/>}<Bars compact/><button className="platform-primary" type="button">{screen.action??t('admin.viewReport', { defaultMessage: 'View Report' })}</button></article></div></div>;
 }
 
 function Workflow({ screen }: { screen: AdminScreen }) {
-  return <div className="platform-workflow"><aside className="platform-card platform-workflow-rail" aria-label="Publication workflow">{(screen.tabs??[]).map((tab,index)=><div className={tab===screen.title?'active':index<2?'done':''} key={tab}><span>{index<2?'✓':index+1}</span><b>{tab}</b></div>)}</aside><article className="platform-card platform-review"><header><div><span className="platform-overline">Review notes</span><h2>{screen.title}</h2><p>{screen.subtitle}</p></div><button type="button">Download Manuscript</button></header><div className="platform-review-score"><span>Overall Assessment</span><strong>★★★★★</strong></div>{Object.entries(screen.details??{}).map(([key,value])=><div className="platform-review-row" key={key}><span>{key}</span><b>{value}</b></div>)}<label><span>Comments</span><textarea defaultValue="The work is clear, accurate and ready to continue to the next publication stage."/></label><footer><button type="button">Request Revisions</button><button className="platform-primary" type="button">{screen.action}</button></footer></article></div>;
+  const { t } = useLocale();
+  return <div className="platform-workflow"><aside className="platform-card platform-workflow-rail" aria-label={t('admin.publicationWorkflow', { defaultMessage: 'Publication workflow' })}>{(screen.tabs??[]).map((tab,index)=><div className={tab===screen.title?'active':index<2?'done':''} key={tab}><span>{index<2?'✓':index+1}</span><b>{tab}</b></div>)}</aside><article className="platform-card platform-review"><header><div><span className="platform-overline">{t('admin.reviewNotes', { defaultMessage: 'Review notes' })}</span><h2>{screen.title}</h2><p>{screen.subtitle}</p></div><button type="button">{t('admin.downloadManuscript', { defaultMessage: 'Download Manuscript' })}</button></header><div className="platform-review-score"><span>{t('admin.overallAssessment', { defaultMessage: 'Overall Assessment' })}</span><strong>★★★★★</strong></div>{Object.entries(screen.details??{}).map(([key,value])=><div className="platform-review-row" key={key}><span>{key}</span><b>{value}</b></div>)}<label><span>{t('admin.comments', { defaultMessage: 'Comments' })}</span><textarea defaultValue={t('admin.reviewCommentsDefault', { defaultMessage: 'The work is clear, accurate and ready to continue to the next publication stage.' })}/></label><footer><button type="button">{t('admin.requestRevisions', { defaultMessage: 'Request Revisions' })}</button><button className="platform-primary" type="button">{screen.action}</button></footer></article></div>;
 }
 
 function Form({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
   const entries = Object.entries(screen.details ?? {});
@@ -403,33 +455,37 @@ function Form({ screen }: { screen: AdminScreen }) {
           </dl>
         )}
         {screen.items && wizard.isLast && (
-          <aside className="platform-summary"><h3>Summary</h3>{screen.items.map(item => <p key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></p>)}</aside>
+          <aside className="platform-summary"><h3>{t('admin.summary', { defaultMessage: 'Summary' })}</h3>{screen.items.map(item => <p key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></p>)}</aside>
         )}
-        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={screen.action ?? 'Submit'} primaryClassName="platform-primary" secondaryClassName="ghost-button" />
+        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={screen.action ?? t('common.submit', { defaultMessage: 'Submit' })} primaryClassName="platform-primary" secondaryClassName="ghost-button" />
       </article>
     </div>
   );
 }
 
 function FixtureSettings({ screen }: { screen: AdminScreen }) {
-  return <div className="platform-settings"><aside className="platform-card"><button className="active" type="button">General</button>{(screen.tabs??['Configuration','Policies','Advanced']).slice(1).map(tab=><button type="button" key={tab}>{tab}</button>)}<button type="button">Integrations</button><button type="button">Maintenance</button></aside><article className="platform-card platform-settings-body"><div className="platform-form-grid">{Object.entries(screen.details??{}).map(([label,value])=><label key={label}><span>{label}</span>{/enabled|active/i.test(value)?<span className="platform-toggle"><input type="checkbox" defaultChecked/><i/></span>:<input defaultValue={value}/>}</label>)}</div><h3>Configuration Rules</h3>{(screen.items??[]).map((item,index)=><div className="platform-setting-row" key={item}><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b><span className="platform-toggle"><input aria-label={`Toggle ${item}`} type="checkbox" defaultChecked={index<3}/><i/></span></div>)}<footer><button className="platform-primary" type="button">{screen.action}</button></footer></article></div>;
+  const { t } = useLocale();
+  return <div className="platform-settings"><aside className="platform-card"><button className="active" type="button">{t('admin.general', { defaultMessage: 'General' })}</button>{(screen.tabs??[t('admin.configuration', { defaultMessage: 'Configuration' }),t('admin.policies', { defaultMessage: 'Policies' }),t('admin.advanced', { defaultMessage: 'Advanced' })]).slice(1).map(tab=><button type="button" key={tab}>{tab}</button>)}<button type="button">{t('admin.integrations', { defaultMessage: 'Integrations' })}</button><button type="button">{t('admin.maintenance', { defaultMessage: 'Maintenance' })}</button></aside><article className="platform-card platform-settings-body"><div className="platform-form-grid">{Object.entries(screen.details??{}).map(([label,value])=><label key={label}><span>{label}</span>{/enabled|active/i.test(value)?<span className="platform-toggle"><input type="checkbox" defaultChecked/><i/></span>:<input defaultValue={value}/>}</label>)}</div><h3>{t('admin.configurationRules', { defaultMessage: 'Configuration Rules' })}</h3>{(screen.items??[]).map((item,index)=><div className="platform-setting-row" key={item}><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b><span className="platform-toggle"><input aria-label={t('admin.toggleItem', { defaultMessage: 'Toggle {item}', vars: { item } })} type="checkbox" defaultChecked={index<3}/><i/></span></div>)}<footer><button className="platform-primary" type="button">{screen.action}</button></footer></article></div>;
 }
 
 export function KcaSettingsPanel() {
+  const { t } = useLocale();
   const [status, setStatus] = useState<KcaGovernanceStatus | null>(null);
-  const [message, setMessage] = useState('Loading KCA governance…');
+  const [message, setMessage] = useState(() => t('admin.loadingKcaGovernance', { defaultMessage: 'Loading KCA governance…' }));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     void getKcaGovernance()
       .then((data) => {
         setStatus(data);
-        setMessage(data.configured ? 'Live KCA governance from the admin API.' : 'Using KCA defaults until you save.');
+        setMessage(data.configured
+          ? t('admin.kcaLiveFromApi', { defaultMessage: 'Live KCA governance from the admin API.' })
+          : t('admin.kcaUsingDefaults', { defaultMessage: 'Using KCA defaults until you save.' }));
       })
       .catch((error) => {
-        setMessage(platformErrorMessage(error, 'Could not load KCA governance. Requires kca.governance.view and recent MFA.'));
+        setMessage(platformErrorMessage(error, t('errors.loadKcaGovernance', { defaultMessage: 'Could not load KCA governance. Requires kca.governance.view and recent MFA.' })));
       });
-  }, []);
+  }, [t]);
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -445,9 +501,9 @@ export function KcaSettingsPanel() {
         certificate_signer_title: String(form.get('certificate_signer_title') || ''),
       });
       setStatus(data);
-      setMessage('KCA governance saved. Superadmins delegate kca.governance.manage and kca.certificates.revoke.');
+      setMessage(t('admin.kcaSaved', { defaultMessage: 'KCA governance saved. Superadmins delegate kca.governance.manage and kca.certificates.revoke.' }));
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Save failed. Confirm kca.governance.manage and recent MFA.'));
+      setMessage(platformErrorMessage(error, t('errors.saveKcaGovernance', { defaultMessage: 'Save failed. Confirm kca.governance.manage and recent MFA.' })));
     } finally {
       setBusy(false);
     }
@@ -457,39 +513,39 @@ export function KcaSettingsPanel() {
     <form className="platform-settings" onSubmit={(event) => void save(event)}>
       <article className="platform-card platform-settings-body">
         <header className="platform-settings-heading">
-          <span className="platform-overline">KINGDOM CITIZENS ACADEMY</span>
-          <h2>Certification governance</h2>
-          <p>Pass thresholds, signer identity, signed PDF requirement, and revocation authority are server-owned.</p>
+          <span className="platform-overline">{t('admin.kcaOverline', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</span>
+          <h2>{t('admin.certificationGovernance', { defaultMessage: 'Certification governance' })}</h2>
+          <p>{t('admin.kcaLead', { defaultMessage: 'Pass thresholds, signer identity, signed PDF requirement, and revocation authority are server-owned.' })}</p>
         </header>
         <p className="maps-settings-lead" role="status">
           {message}
         </p>
         <div className="platform-form-grid">
           <label>
-            <span>Pass threshold (%)</span>
+            <span>{t('admin.passThreshold', { defaultMessage: 'Pass threshold (%)' })}</span>
             <input defaultValue={status?.pass_threshold_percent ?? 70} max={100} min={1} name="pass_threshold_percent" type="number" />
           </label>
           <label>
-            <span>Attendance threshold (%)</span>
+            <span>{t('admin.attendanceThreshold', { defaultMessage: 'Attendance threshold (%)' })}</span>
             <input defaultValue={status?.attendance_threshold_percent ?? 75} max={100} min={1} name="attendance_threshold_percent" type="number" />
           </label>
           <label>
-            <span>Certificate signer name</span>
+            <span>{t('admin.certificateSignerName', { defaultMessage: 'Certificate signer name' })}</span>
             <input defaultValue={status?.certificate_signer_name ?? ''} name="certificate_signer_name" />
           </label>
           <label>
-            <span>Certificate signer title</span>
+            <span>{t('admin.certificateSignerTitle', { defaultMessage: 'Certificate signer title' })}</span>
             <input defaultValue={status?.certificate_signer_title ?? ''} name="certificate_signer_title" />
           </label>
           <label>
-            <span>Require final assessment</span>
+            <span>{t('admin.requireFinalAssessment', { defaultMessage: 'Require final assessment' })}</span>
             <span className="platform-toggle">
               <input defaultChecked={status?.require_final_assessment ?? true} name="require_final_assessment" type="checkbox" />
               <i />
             </span>
           </label>
           <label>
-            <span>Require signed PDF certificates</span>
+            <span>{t('admin.requireSignedPdf', { defaultMessage: 'Require signed PDF certificates' })}</span>
             <span className="platform-toggle">
               <input defaultChecked={status?.require_signed_pdf ?? false} name="require_signed_pdf" type="checkbox" />
               <i />
@@ -498,7 +554,7 @@ export function KcaSettingsPanel() {
         </div>
         <footer className="form-footer">
           <button className="platform-primary" disabled={busy} type="submit">
-            Save governance
+            {t('admin.saveGovernance', { defaultMessage: 'Save governance' })}
           </button>
         </footer>
       </article>
@@ -507,8 +563,9 @@ export function KcaSettingsPanel() {
 }
 
 function ConfigurationsSettingsPanel() {
+  const { t } = useLocale();
   const [items, setItems] = useState<PlatformConfiguration[]>([]);
-  const [message, setMessage] = useState('Loading platform configurations…');
+  const [message, setMessage] = useState(() => t('admin.loadingConfigurations', { defaultMessage: 'Loading platform configurations…' }));
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState('');
   const [valueType, setValueType] = useState<'string' | 'integer' | 'boolean' | 'json'>('string');
@@ -518,20 +575,22 @@ function ConfigurationsSettingsPanel() {
 
   const refresh = useCallback(async () => {
     if (!platformApiConfigured()) {
-      setMessage('Set NEXT_PUBLIC_FHC_API_URL to load platform configurations.');
+      setMessage(t('admin.setApiUrlConfigurations', { defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL to load platform configurations.' }));
       return;
     }
     setBusy(true);
     try {
       const result = await listConfigurations({ per_page: 50, sort: 'key' });
       setItems(result.items);
-      setMessage(result.items.length ? `Loaded ${result.pagination?.total ?? result.items.length} configuration(s).` : 'No configurations yet. Save one below.');
+      setMessage(result.items.length
+        ? t('admin.loadedConfigurations', { defaultMessage: 'Loaded {count} configuration(s).', vars: { count: result.pagination?.total ?? result.items.length } })
+        : t('admin.noConfigurations', { defaultMessage: 'No configurations yet. Save one below.' }));
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Could not load configurations. Confirm session, scope, and recent MFA.'));
+      setMessage(platformErrorMessage(error, t('errors.loadConfigurations', { defaultMessage: 'Could not load configurations. Confirm session, scope, and recent MFA.' })));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refresh();
@@ -540,7 +599,7 @@ function ConfigurationsSettingsPanel() {
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (!platformApiConfigured()) {
-      setMessage('Configure NEXT_PUBLIC_FHC_API_URL to persist configurations.');
+      setMessage(t('admin.configureApiUrlConfigurations', { defaultMessage: 'Configure NEXT_PUBLIC_FHC_API_URL to persist configurations.' }));
       return;
     }
     setBusy(true);
@@ -559,10 +618,10 @@ function ConfigurationsSettingsPanel() {
       });
       setKey('');
       setValue('');
-      setMessage('Configuration saved.');
+      setMessage(t('admin.configurationSaved', { defaultMessage: 'Configuration saved.' }));
       await refresh();
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Save failed. Confirm platform.configuration.manage and recent MFA.'));
+      setMessage(platformErrorMessage(error, t('errors.saveConfigurations', { defaultMessage: 'Save failed. Confirm platform.configuration.manage and recent MFA.' })));
       setBusy(false);
     }
   }
@@ -577,7 +636,7 @@ function ConfigurationsSettingsPanel() {
             <b>
               {item.classification === 'confidential'
                 ? item.has_value
-                  ? '•••• (confidential)'
+                  ? t('admin.confidentialMasked', { defaultMessage: '•••• (confidential)' })
                   : '—'
                 : String(item.value ?? '—')}
             </b>
@@ -586,23 +645,24 @@ function ConfigurationsSettingsPanel() {
         ))}
       </div>
       <div className="form-grid">
-        <label className="full"><span>Key</span><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="church.first_timer.follow_up_hours" disabled={busy} required /></label>
-        <label><span>Value type</span><select value={valueType} onChange={(e) => setValueType(e.target.value as typeof valueType)} disabled={busy}><option value="string">string</option><option value="integer">integer</option><option value="boolean">boolean</option><option value="json">json</option></select></label>
-        <label><span>Classification</span><select value={classification} onChange={(e) => setClassification(e.target.value as typeof classification)} disabled={busy}><option value="internal">internal</option><option value="confidential">confidential</option></select></label>
-        <label><span>Environment</span><input value={environment} onChange={(e) => setEnvironment(e.target.value)} disabled={busy} required /></label>
-        <label className="full"><span>Value</span><input value={value} onChange={(e) => setValue(e.target.value)} placeholder={valueType === 'boolean' ? 'true / false' : valueType === 'json' ? '{"key":"value"}' : 'Value'} disabled={busy} required={classification === 'internal' || valueType !== 'string'} /></label>
+        <label className="full"><span>{t('admin.key', { defaultMessage: 'Key' })}</span><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="church.first_timer.follow_up_hours" disabled={busy} required /></label>
+        <label><span>{t('admin.valueType', { defaultMessage: 'Value type' })}</span><select value={valueType} onChange={(e) => setValueType(e.target.value as typeof valueType)} disabled={busy}><option value="string">string</option><option value="integer">integer</option><option value="boolean">boolean</option><option value="json">json</option></select></label>
+        <label><span>{t('admin.classification', { defaultMessage: 'Classification' })}</span><select value={classification} onChange={(e) => setClassification(e.target.value as typeof classification)} disabled={busy}><option value="internal">internal</option><option value="confidential">confidential</option></select></label>
+        <label><span>{t('admin.environment', { defaultMessage: 'Environment' })}</span><input value={environment} onChange={(e) => setEnvironment(e.target.value)} disabled={busy} required /></label>
+        <label className="full"><span>{t('admin.value', { defaultMessage: 'Value' })}</span><input value={value} onChange={(e) => setValue(e.target.value)} placeholder={valueType === 'boolean' ? t('admin.trueFalsePlaceholder', { defaultMessage: 'true / false' }) : valueType === 'json' ? '{"key":"value"}' : t('admin.value', { defaultMessage: 'Value' })} disabled={busy} required={classification === 'internal' || valueType !== 'string'} /></label>
       </div>
       <div className="form-footer">
-        <button className="ghost-button" type="button" onClick={() => void refresh()} disabled={busy}>Refresh</button>
-        <button className="primary-button" type="submit" disabled={busy}>Save Changes</button>
+        <button className="ghost-button" type="button" onClick={() => void refresh()} disabled={busy}>{t('common.refresh', { defaultMessage: 'Refresh' })}</button>
+        <button className="primary-button" type="submit" disabled={busy}>{t('admin.saveChanges', { defaultMessage: 'Save Changes' })}</button>
       </div>
     </form>
   );
 }
 
 function FeatureFlagsSettingsPanel() {
+  const { t } = useLocale();
   const [items, setItems] = useState<FeatureFlag[]>([]);
-  const [message, setMessage] = useState('Loading feature flags…');
+  const [message, setMessage] = useState(() => t('admin.loadingFeatureFlags', { defaultMessage: 'Loading feature flags…' }));
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState('');
   const [environment, setEnvironment] = useState('production');
@@ -610,20 +670,22 @@ function FeatureFlagsSettingsPanel() {
 
   const refresh = useCallback(async () => {
     if (!platformApiConfigured()) {
-      setMessage('Set NEXT_PUBLIC_FHC_API_URL to load feature flags.');
+      setMessage(t('admin.setApiUrlFeatureFlags', { defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL to load feature flags.' }));
       return;
     }
     setBusy(true);
     try {
       const result = await listFeatureFlags({ per_page: 50, sort: 'key' });
       setItems(result.items);
-      setMessage(result.items.length ? `Loaded ${result.pagination?.total ?? result.items.length} feature flag(s).` : 'No feature flags yet. Save one below.');
+      setMessage(result.items.length
+        ? t('admin.loadedFeatureFlags', { defaultMessage: 'Loaded {count} feature flag(s).', vars: { count: result.pagination?.total ?? result.items.length } })
+        : t('admin.noFeatureFlags', { defaultMessage: 'No feature flags yet. Save one below.' }));
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Could not load feature flags. Confirm session, scope, and recent MFA.'));
+      setMessage(platformErrorMessage(error, t('errors.loadFeatureFlags', { defaultMessage: 'Could not load feature flags. Confirm session, scope, and recent MFA.' })));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refresh();
@@ -632,7 +694,7 @@ function FeatureFlagsSettingsPanel() {
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (!platformApiConfigured()) {
-      setMessage('Configure NEXT_PUBLIC_FHC_API_URL to persist feature flags.');
+      setMessage(t('admin.configureApiUrlFeatureFlags', { defaultMessage: 'Configure NEXT_PUBLIC_FHC_API_URL to persist feature flags.' }));
       return;
     }
     setBusy(true);
@@ -643,10 +705,10 @@ function FeatureFlagsSettingsPanel() {
         rollout_percentage: Number.parseInt(rollout, 10) || 0,
       });
       setKey('');
-      setMessage('Feature flag saved.');
+      setMessage(t('admin.featureFlagSaved', { defaultMessage: 'Feature flag saved.' }));
       await refresh();
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Save failed. Confirm platform.feature_flags.manage and recent MFA.'));
+      setMessage(platformErrorMessage(error, t('errors.saveFeatureFlags', { defaultMessage: 'Save failed. Confirm platform.feature_flags.manage and recent MFA.' })));
       setBusy(false);
     }
   }
@@ -657,9 +719,9 @@ function FeatureFlagsSettingsPanel() {
     try {
       const updated = flag.enabled ? await disableFeatureFlag(flag.id) : await enableFeatureFlag(flag.id);
       setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      setMessage(`${updated.key} is now ${updated.enabled ? 'enabled' : 'disabled'}.`);
+      setMessage(t('admin.featureFlagToggled', { defaultMessage: '{key} is now {state}.', vars: { key: updated.key, state: updated.enabled ? t('admin.enabled', { defaultMessage: 'enabled' }) : t('admin.disabled', { defaultMessage: 'disabled' }) } }));
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Enable/disable failed. Confirm permissions and recent MFA.'));
+      setMessage(platformErrorMessage(error, t('errors.toggleFeatureFlag', { defaultMessage: 'Enable/disable failed. Confirm permissions and recent MFA.' })));
     } finally {
       setBusy(false);
     }
@@ -675,7 +737,7 @@ function FeatureFlagsSettingsPanel() {
             <b>{flag.environment} · {flag.rollout_percentage}%</b>
             <span className="platform-toggle">
               <input
-                aria-label={`Toggle ${flag.key}`}
+                aria-label={t('admin.toggleItem', { defaultMessage: 'Toggle {item}', vars: { item: flag.key } })}
                 type="checkbox"
                 checked={flag.enabled}
                 disabled={busy}
@@ -687,21 +749,22 @@ function FeatureFlagsSettingsPanel() {
         ))}
       </div>
       <div className="form-grid">
-        <label className="full"><span>Key</span><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="church.follow_up_alerts" disabled={busy} required /></label>
-        <label><span>Environment</span><input value={environment} onChange={(e) => setEnvironment(e.target.value)} disabled={busy} required /></label>
-        <label><span>Rollout %</span><input type="number" min={0} max={100} value={rollout} onChange={(e) => setRollout(e.target.value)} disabled={busy} required /></label>
+        <label className="full"><span>{t('admin.key', { defaultMessage: 'Key' })}</span><input value={key} onChange={(e) => setKey(e.target.value)} placeholder="church.follow_up_alerts" disabled={busy} required /></label>
+        <label><span>{t('admin.environment', { defaultMessage: 'Environment' })}</span><input value={environment} onChange={(e) => setEnvironment(e.target.value)} disabled={busy} required /></label>
+        <label><span>{t('admin.rolloutPercent', { defaultMessage: 'Rollout %' })}</span><input type="number" min={0} max={100} value={rollout} onChange={(e) => setRollout(e.target.value)} disabled={busy} required /></label>
       </div>
       <div className="form-footer">
-        <button className="ghost-button" type="button" onClick={() => void refresh()} disabled={busy}>Refresh</button>
-        <button className="primary-button" type="submit" disabled={busy}>Save Changes</button>
+        <button className="ghost-button" type="button" onClick={() => void refresh()} disabled={busy}>{t('common.refresh', { defaultMessage: 'Refresh' })}</button>
+        <button className="primary-button" type="submit" disabled={busy}>{t('admin.saveChanges', { defaultMessage: 'Save Changes' })}</button>
       </div>
     </form>
   );
 }
 
 function ObjectStorageSettingsPanel() {
+  const { t } = useLocale();
   const [status, setStatus] = useState<ObjectStorageStatus | null>(null);
-  const [message, setMessage] = useState('Loading object storage configuration…');
+  const [message, setMessage] = useState(() => t('admin.loadingObjectStorage', { defaultMessage: 'Loading object storage configuration…' }));
   const [busy, setBusy] = useState(false);
   const [accessKeyId, setAccessKeyId] = useState('');
   const [secretAccessKey, setSecretAccessKey] = useState('');
@@ -1193,20 +1256,26 @@ function Operations({ screen }: { screen: AdminScreen }) {
   return <div className="platform-asset-grid">{(screen.items??[]).map((item,index)=><article className="platform-card platform-asset" key={item}>{covers?<div className={`publication-cover tone-${index}`}><span>{item.split(' — ')[0].split(' ').slice(0,2).join(' ')}</span><strong>{item.split(' — ')[0].split(' ').slice(2).join(' ')||'KINGDOM'}</strong></div>:<div className={`asset-preview tone-${index}`}>{['▧','▤','PDF','▣'][index%4]}</div>}<h3>{item.split(' — ')[0]}</h3><p>{item.split(' — ')[1]}</p><button type="button">View</button></article>)}</div>;
 }
 
-function Analytics({ screen }: { screen: AdminScreen }) {
+function Analytics({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
+  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
+  const listItems = dashboard.live ? breakdownToItems(dashboard.data?.breakdown) : (screen.items ?? []);
   const ai=screen.nav==='report-ai';
   if(ai) return <div className="platform-ai"><article className="platform-card platform-ai-sidebar"><span className="platform-ai-orb">✦</span><h2>{screen.title}</h2><p>AI-assisted insights grounded in ministry reporting data.</p>{['Overview','Content AI','Performance AI','Ask AI'].map((item,index)=><button className={index===0?'active':''} type="button" key={item}>{item}</button>)}</article><article className="platform-card platform-ai-body"><h2>Insights</h2><div className="platform-ai-grid">{(screen.items??[]).map((item,index)=><article key={item}><span>{['◎','◇','▤','✦'][index]}</span><h3>{item.split(' — ')[0]}</h3><strong>{['56','18','81%','2,345'][index]}</strong><p>Updated from the latest approved analytics data.</p><button type="button">{item.split(' — ')[1]}</button></article>)}</div><label><input aria-label={`Ask ${screen.title}`} placeholder={`Ask ${screen.title}...`}/><button type="button">↑</button></label></article></div>;
-  return <div className="platform-analytics"><Metrics metrics={screen.metrics}/><div className="platform-analytics-grid"><article className="platform-card platform-chart"><h2>Performance Trend</h2><Bars/></article><article className="platform-card platform-chart"><h2>By Category</h2><div className="platform-chart-split"><Donut value={screen.metrics?.[0]?.value}/><ul>{(screen.items??[]).slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b></li>)}</ul></div></article><article className="platform-card platform-list wide"><h2>Top Results</h2>{(screen.items??[]).map((item,index)=><div key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article></div></div>;
+  return <div className="platform-analytics">
+    {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
+    {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
+    <Metrics metrics={metrics}/><div className="platform-analytics-grid"><article className="platform-card platform-chart"><h2>Performance Trend</h2><Bars series={dashboard.data?.series}/></article><article className="platform-card platform-chart"><h2>By Category</h2><div className="platform-chart-split"><Donut value={dashboard.data?.donut?.value ?? metrics?.[0]?.value}/><ul>{listItems.slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b></li>)}</ul></div></article><article className="platform-card platform-list wide"><h2>Top Results</h2>{listItems.map((item,index)=><div key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article></div></div>;
 }
 
 function Restricted({ screen }: { screen: AdminScreen }) {
   return <div className="platform-restricted"><div className="platform-restricted-banner"><span>🔒</span><div><strong>Restricted information</strong><p>Access is audited and limited to explicitly authorized personnel.</p></div></div>{screen.rows?<DenseTable screen={screen}/>:<Detail screen={screen}/>}</div>;
 }
 
-export function PlatformScreenContent({ screen }: { screen: AdminScreen }) {
+export function PlatformScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   let content;
   switch(screen.kind){
-    case 'dashboard': content=<Dashboard screen={screen}/>; break;
+    case 'dashboard': content=<Dashboard screen={screen} requestedScope={requestedScope} />; break;
     case 'table': content=<><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>; break;
     case 'detail': case 'profile': return <Detail screen={screen}/>;
     case 'workflow': case 'approval': content=<Workflow screen={screen}/>; break;
@@ -1220,7 +1289,7 @@ export function PlatformScreenContent({ screen }: { screen: AdminScreen }) {
         const columns = screen.columns?.length ? screen.columns : CATALOG_FEED_COLUMNS;
         content = <><Metrics metrics={screen.metrics}/><DenseTable screen={{...screen, columns}} columns={columns}/></>;
       } else {
-        content = <Analytics screen={screen}/>;
+        content = <Analytics screen={screen} requestedScope={requestedScope} />;
       }
       break;
     }

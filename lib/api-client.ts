@@ -12,6 +12,8 @@ import {
   resolveApiOrigin,
   resolveApiV1BaseUrl,
 } from './api-config.ts';
+import { normalizeLocale } from './i18n/lookup.ts';
+import { readStoredLocale } from './i18n/persist.ts';
 import type {
   ApiErrorEnvelope,
   ApiRequestInit,
@@ -213,6 +215,12 @@ async function executeApiRequest(path: string, init: ApiRequestInit = {}): Promi
 
   const headers = headersFromInit(init);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+  if (!headers.has('Accept-Language')) {
+    const stored = readStoredLocale();
+    const fromDocument =
+      typeof document !== 'undefined' ? document.documentElement?.lang : '';
+    headers.set('Accept-Language', stored ?? normalizeLocale(fromDocument || undefined));
+  }
   if (rest.body != null && !headers.has('Content-Type') && !isFormDataBody(rest.body)) {
     headers.set('Content-Type', 'application/json');
   }

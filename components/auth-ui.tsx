@@ -38,21 +38,14 @@ import {
   writeRegisterDraft,
   type RegisterDraft,
 } from '@/lib/auth-session';
+import { useLocale } from '@/components/locale-provider';
+import { localeMeta, supportedLocales, type SupportedLocale } from '@/lib/i18n/types.ts';
 
-const languages = [
-  ['🇬🇧', 'English'],
-  ['🇫🇷', 'French'],
-  ['🇪🇸', 'Spanish'],
-  ['🇸🇦', 'Arabic'],
-  ['🇨🇳', 'Chinese'],
-  ['🇵🇹', 'Portuguese'],
-  ['🇳🇬', 'Hausa'],
-  ['🇳🇬', 'Yoruba'],
-  ['🇳🇬', 'Igbo'],
-  ['🇰🇪', 'Kiswahili'],
-  ['🇷🇺', 'Russian'],
-  ['🇩🇪', 'German'],
-] as const;
+const languages = supportedLocales.map((code) => ({
+  code,
+  flag: localeMeta[code].flag,
+  label: localeMeta[code].endonym,
+})) as ReadonlyArray<{ code: SupportedLocale; flag: string; label: string }>;
 
 const roles = [
   ['Member', 'Belong to a church and grow in community'],
@@ -61,10 +54,30 @@ const roles = [
   ['Leader / Pastor', 'Shepherd people and oversee ministry'],
 ] as const;
 
+const roleMessageKeys: Record<(typeof roles)[number][0], { title: string; copy: string }> = {
+  Member: { title: 'auth.roleMember', copy: 'auth.roleMemberCopy' },
+  'Volunteer / Worker': { title: 'auth.roleVolunteer', copy: 'auth.roleVolunteerCopy' },
+  'KCA Student': { title: 'auth.roleKcaStudent', copy: 'auth.roleKcaStudentCopy' },
+  'Leader / Pastor': { title: 'auth.roleLeader', copy: 'auth.roleLeaderCopy' },
+};
+
 const recoveryOptions = [
   ['Reset password by email', 'Calls POST /auth/password/forgot. Delivery depends on Laravel mail being configured.', '/forgot-password'],
   ['MFA recovery code', 'Use a one-time recovery code from authenticator setup via POST /auth/mfa/challenge.', '/otp?mode=recovery'],
 ] as const;
+
+const recoveryOptionKeys = [
+  { title: 'auth.recoveryResetByEmail', copy: 'auth.recoveryResetByEmailCopy' },
+  { title: 'auth.recoveryMfaCode', copy: 'auth.recoveryMfaCodeCopy' },
+] as const;
+
+const registerStepKeys: Record<(typeof registerSteps)[number][1], string> = {
+  Personal: 'auth.stepPersonal',
+  Contact: 'auth.stepContact',
+  Security: 'auth.stepSecurity',
+  'About You': 'auth.stepAboutYou',
+  Review: 'auth.stepReview',
+};
 
 function AuthBanner({ tone, children }: { tone: 'error' | 'success' | 'info'; children: ReactNode }) {
   return (
@@ -85,6 +98,7 @@ function Field({
   defaultValue?: string;
   draft?: RegisterDraft;
 }) {
+  const { t } = useLocale();
   const className = [field.wide ? 'wide' : undefined, error ? 'has-error' : undefined].filter(Boolean).join(' ') || undefined;
   const value = defaultValue ?? '';
   const inputType =
@@ -116,7 +130,7 @@ function Field({
           name={field.name}
           catalog={field.catalog}
           defaultValue={value || field.value}
-          placeholder={`Search ${field.label.toLowerCase()}`}
+          placeholder={t('common.searchField', { defaultMessage: 'Search {label}', vars: { label: field.label.toLowerCase() } })}
           required={field.name !== 'middle_name'}
         />
         {error ? <span className="field-error">{error}</span> : null}
@@ -173,6 +187,7 @@ function Field({
 }
 
 function RegisterReviewSummary({ draft }: { draft: RegisterDraft }) {
+  const { t } = useLocale();
   const fullName = [draft.given_name, draft.middle_name, draft.family_name].filter(Boolean).join(' ');
   const location = formatLocationLine({
     locality: draft.locality,
@@ -181,11 +196,18 @@ function RegisterReviewSummary({ draft }: { draft: RegisterDraft }) {
     countryLabel: draft.country_label,
   });
   const rows: Array<[string, string]> = [
-    ['Full name', fullName || '—'],
-    ['Email', draft.email || '—'],
-    ['Phone', draft.phone || '—'],
-    ['Location', location || '—'],
-    ['Role', draft.role || 'Member'],
+    [t('auth.fullName', { defaultMessage: 'Full name' }), fullName || '—'],
+    [t('auth.email', { defaultMessage: 'Email' }), draft.email || '—'],
+    [t('auth.phone', { defaultMessage: 'Phone' }), draft.phone || '—'],
+    [t('common.location', { defaultMessage: 'Location' }), location || '—'],
+    [
+      t('auth.role', { defaultMessage: 'Role' }),
+      draft.role
+        ? t(roleMessageKeys[draft.role as keyof typeof roleMessageKeys]?.title ?? 'auth.roleMember', {
+            defaultMessage: draft.role,
+          })
+        : t('auth.roleMember', { defaultMessage: 'Member' }),
+    ],
   ];
 
   return (
@@ -201,66 +223,72 @@ function RegisterReviewSummary({ draft }: { draft: RegisterDraft }) {
 }
 
 function AuthBrand({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const register = route.path.includes('/register');
   const recovery = route.path.includes('forgot') || route.path.includes('reset') || route.path.includes('recovery');
   const verify = route.path.includes('verify') || route.path.includes('/otp');
   const title = register
-    ? 'One Account. All Ministries.'
+    ? t('auth.brandRegisterTitle', { defaultMessage: 'One Account. All Ministries.' })
     : recovery
-      ? 'Trouble signing in?'
+      ? t('auth.brandRecoveryTitle', { defaultMessage: 'Trouble signing in?' })
       : verify
-        ? 'Secure verification'
+        ? t('auth.brandVerifyTitle', { defaultMessage: 'Secure verification' })
         : route.path.includes('/mfa')
-          ? 'Protect your account'
+          ? t('auth.brandMfaTitle', { defaultMessage: 'Protect your account' })
           : route.path.includes('/onboarding')
-            ? 'Set up your journey'
-            : 'Welcome Back';
+            ? t('auth.brandOnboardingTitle', { defaultMessage: 'Set up your journey' })
+            : t('auth.welcomeBack', { defaultMessage: 'Welcome Back' });
   const body = register
-    ? 'Create your Family House Connect account and access church, mission, KCA, giving, and growth in one place.'
+    ? t('auth.brandRegisterCopy', {
+        defaultMessage:
+          'Create your Family House Connect account and access church, mission, KCA, giving, and growth in one place.',
+      })
     : recovery
-      ? 'No worries. We will help you get safely back into your account.'
+      ? t('auth.brandRecoveryCopy', { defaultMessage: 'No worries. We will help you get safely back into your account.' })
       : verify
-        ? 'Confirm it is really you before continuing your Kingdom journey.'
-        : 'Your church, mission, KCA, giving, and growth — in one place.';
+        ? t('auth.brandVerifyCopy', { defaultMessage: 'Confirm it is really you before continuing your Kingdom journey.' })
+        : t('auth.brandSignInCopy', { defaultMessage: 'Your church, mission, KCA, giving, and growth — in one place.' });
   return (
     <aside className="auth-brand">
       <AppBrand variant="auth" />
       <h2>{title}</h2>
       <p>{body}</p>
       <ul className="check-list light">
-        <li>One account across every ministry</li>
-        <li>Email verification</li>
-        <li>Optional multi-factor security</li>
+        <li>{t('auth.brandBulletAccount', { defaultMessage: 'One account across every ministry' })}</li>
+        <li>{t('auth.brandBulletEmail', { defaultMessage: 'Email verification' })}</li>
+        <li>{t('auth.brandBulletMfa', { defaultMessage: 'Optional multi-factor security' })}</li>
       </ul>
     </aside>
   );
 }
 
 function AuthTabs({ active }: { active: 'signin' | 'register' }) {
+  const { t } = useLocale();
   return (
     <div className="auth-tabs">
       <Link className={active === 'signin' ? 'active' : ''} href="/login">
-        Sign In
+        {t('auth.signIn', { defaultMessage: 'Sign In' })}
       </Link>
       <Link className={active === 'register' ? 'active' : ''} href="/register">
-        Create Account
+        {t('auth.createAccount', { defaultMessage: 'Create Account' })}
       </Link>
     </div>
   );
 }
 
 function RegisterStepper({ path }: { path: string }) {
+  const { t } = useLocale();
   const current = Math.max(
     0,
     registerSteps.findIndex(([stepPath]) => path === stepPath || (path === '/register' && stepPath === '/register/personal')),
   );
   return (
     <aside className="auth-stepper">
-      <h3>Create Account</h3>
+      <h3>{t('auth.createAccount', { defaultMessage: 'Create Account' })}</h3>
       {registerSteps.map(([stepPath, label], index) => (
         <Link className={index < current ? 'done' : index === current ? 'active' : ''} href={stepPath} key={stepPath}>
           <span>{index < current ? '✓' : index + 1}</span>
-          <b>{label}</b>
+          <b>{t(registerStepKeys[label], { defaultMessage: label })}</b>
         </Link>
       ))}
     </aside>
@@ -268,6 +296,7 @@ function RegisterStepper({ path }: { path: string }) {
 }
 
 function OtpInputs({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const { t } = useLocale();
   const refs = useRef<Array<HTMLInputElement | null>>([]);
 
   const update = (index: number, nextValue: string) => {
@@ -292,7 +321,7 @@ function OtpInputs({ value, onChange }: { value: string[]; onChange: (next: stri
   };
 
   return (
-    <div className="otp-row" role="group" aria-label="Verification code">
+    <div className="otp-row" role="group" aria-label={t('auth.verificationCode', { defaultMessage: 'Verification code' })}>
       {value.map((digit, index) => (
         <input
           key={index}
@@ -302,7 +331,7 @@ function OtpInputs({ value, onChange }: { value: string[]; onChange: (next: stri
           inputMode="numeric"
           maxLength={6}
           value={digit}
-          aria-label={`Digit ${index + 1}`}
+          aria-label={t('auth.otpDigit', { defaultMessage: 'Digit {n}', vars: { n: index + 1 } })}
           onChange={(event) => update(index, event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Backspace' && !value[index] && index > 0) refs.current[index - 1]?.focus();
@@ -314,17 +343,18 @@ function OtpInputs({ value, onChange }: { value: string[]; onChange: (next: stri
 }
 
 function PasswordRules({ password = '' }: { password?: string }) {
+  const { t } = useLocale();
   const rules = [
-    ['12+ characters', password.length >= 12],
-    ['One uppercase letter', /[A-Z]/.test(password)],
-    ['One lowercase letter', /[a-z]/.test(password)],
-    ['One number', /\d/.test(password)],
-    ['One special character', /[^A-Za-z0-9]/.test(password)],
+    ['minLength', t('auth.passwordRuleLength', { defaultMessage: '12+ characters' }), password.length >= 12],
+    ['uppercase', t('auth.passwordRuleUppercase', { defaultMessage: 'One uppercase letter' }), /[A-Z]/.test(password)],
+    ['lowercase', t('auth.passwordRuleLowercase', { defaultMessage: 'One lowercase letter' }), /[a-z]/.test(password)],
+    ['number', t('auth.passwordRuleNumber', { defaultMessage: 'One number' }), /\d/.test(password)],
+    ['special', t('auth.passwordRuleSpecial', { defaultMessage: 'One special character' }), /[^A-Za-z0-9]/.test(password)],
   ] as const;
   return (
     <ul className="password-rules">
-      {rules.map(([label, ok]) => (
-        <li className={ok ? 'ok' : ''} key={label}>
+      {rules.map(([id, label, ok]) => (
+        <li className={ok ? 'ok' : ''} key={id}>
           {ok ? '✓' : '○'} {label}
         </li>
       ))}
@@ -337,10 +367,14 @@ function continueTo(router: ReturnType<typeof useRouter>, path: string) {
 }
 
 function ApiConfigMissing() {
+  const { t } = useLocale();
   return (
     <AuthBanner tone="error">
-      Authentication is not configured. Set <code>NEXT_PUBLIC_FHC_API_URL</code> (…/api/v1) or{' '}
-      <code>NEXT_PUBLIC_FHC_API_BASE_URL</code> (origin) for your Laravel API.
+      {t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' })}{' '}
+      {t('errors.authNotConfigured', {
+        defaultMessage:
+          'Set NEXT_PUBLIC_FHC_API_URL (…/api/v1) or NEXT_PUBLIC_FHC_API_BASE_URL (origin) for your Laravel API.',
+      })}
     </AuthBanner>
   );
 }
@@ -348,17 +382,16 @@ function ApiConfigMissing() {
 /** POST /auth/logout then return to sign-in. Used by /logout and member sidebar. */
 export function LogoutScreen() {
   const router = useRouter();
+  const { t } = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
+  const apiReady = isAuthApiConfigured();
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (!isAuthApiConfigured()) {
-        if (!cancelled) {
-          setError('Authentication API is not configured.');
-          setBusy(false);
-        }
+      if (!apiReady) {
+        if (!cancelled) setBusy(false);
         return;
       }
       try {
@@ -376,22 +409,30 @@ export function LogoutScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, apiReady]);
+
+  const displayError = !apiReady
+    ? t('errors.authNotConfigured', { defaultMessage: 'Authentication API is not configured.' })
+    : error;
 
   return (
     <div className="auth-shell">
       <aside className="auth-brand">
         <AppBrand variant="auth" />
-        <h2>Signing out</h2>
-        <p>Ending your secure browser session.</p>
+        <h2>{t('auth.signingOutTitle', { defaultMessage: 'Signing out' })}</h2>
+        <p>{t('auth.signingOutCopy', { defaultMessage: 'Ending your secure browser session.' })}</p>
       </aside>
       <div className="site-form auth-form auth-center">
-        {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
-        <p className="auth-copy">{busy ? 'Signing you out…' : 'Sign-out did not complete.'}</p>
+        {displayError ? <AuthBanner tone="error">{displayError}</AuthBanner> : null}
+        <p className="auth-copy">
+          {busy
+            ? t('common.signingOut', { defaultMessage: 'Signing you out…' })
+            : t('auth.signOutFailed', { defaultMessage: 'Sign-out did not complete.' })}
+        </p>
         {!busy ? (
           <div className="form-actions" style={{ justifyContent: 'center' }}>
             <Link className="site-button" href="/login">
-              Back to Sign In
+              {t('auth.backToSignIn', { defaultMessage: 'Back to Sign In' })}
             </Link>
           </div>
         ) : null}
@@ -403,6 +444,7 @@ export function LogoutScreen() {
 /** Live logout control for member chrome (POST /auth/logout). */
 export function MemberLogoutButton({ className = 'logout' }: { className?: string }) {
   const router = useRouter();
+  const { t } = useLocale();
   const [busy, setBusy] = useState(false);
 
   return (
@@ -415,13 +457,14 @@ export function MemberLogoutButton({ className = 'logout' }: { className?: strin
         router.push('/logout');
       }}
     >
-      ↪ {busy ? 'Signing out…' : 'Logout'}
+      ↪ {busy ? t('common.signingOut') : t('common.logout')}
     </button>
   );
 }
 
 export function AuthScreen({ route }: { route: SiteRoute }) {
   const router = useRouter();
+  const { locale, setLocale, t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [resetToken, setResetToken] = useState('');
   const [resetEmail, setResetEmail] = useState('');
@@ -429,7 +472,6 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [success, setSuccess] = useState<string | null>(null);
-  const [language, setLanguage] = useState('English');
   const [role, setRole] = useState('Member');
   const [passwordPreview, setPasswordPreview] = useState('');
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
@@ -458,9 +500,13 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
       setOtpMode(params.get('mode') === 'recovery' ? 'recovery' : 'totp');
     }
     if (path === '/verify-email' && params.get('registered') === '1') {
-      setSuccess('Your account was created. Check your email for a verification link, then confirm below.');
+      setSuccess(
+        t('auth.accountCreatedCheckEmail', {
+          defaultMessage: 'Your account was created. Check your email for a verification link, then confirm below.',
+        }),
+      );
     }
-  }, [path]);
+  }, [path, t]);
 
   useEffect(() => {
     if (path !== '/verify-email' || !apiReady || typeof window === 'undefined') return;
@@ -477,7 +523,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
     void verifyEmail({ id, hash, expires, signature })
       .then(() => {
         if (cancelled) return;
-        setSuccess('Email verified. You can continue.');
+        setSuccess(t('auth.emailVerifiedContinue', { defaultMessage: 'Email verified. You can continue.' }));
         setDone(true);
       })
       .catch((err) => {
@@ -492,7 +538,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
     return () => {
       cancelled = true;
     };
-  }, [path, apiReady]);
+  }, [path, apiReady, t]);
 
   useEffect(() => {
     if (!(path.includes('/verify-email') || path.includes('/otp') || path.includes('/verify-phone'))) return;
@@ -547,7 +593,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!apiReady) {
-            setError('Authentication API is not configured.');
+            setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
             return;
           }
           const form = new FormData(event.currentTarget);
@@ -578,15 +624,15 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         }}
       >
         <AuthTabs active="signin" />
-        <h3>Sign In</h3>
-        <p className="auth-copy">Sign in to continue your Family House journey.</p>
+        <h3>{t('auth.signIn')}</h3>
+        <p className="auth-copy">{t('auth.signInCopy')}</p>
         {!apiReady ? <ApiConfigMissing /> : null}
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         <div className="form-grid">
           {fields.map((field) => (
             <Field
               key={field.name}
-              field={field.name === 'identity' ? { ...field, label: 'Email Address', type: 'email' } : field}
+              field={field.name === 'identity' ? { ...field, label: t('auth.emailAddress'), type: 'email' } : field}
               defaultValue=""
               error={fieldErrors[field.name === 'identity' ? 'email' : field.name]?.[0]}
             />
@@ -594,15 +640,16 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         </div>
         <div className="auth-meta">
           <label>
-            <input type="checkbox" name="remember" /> Remember me
+            <input type="checkbox" name="remember" /> {t('auth.rememberMe')}
           </label>
-          <Link href="/forgot-password">Forgot password?</Link>
+          <Link href="/forgot-password">{t('auth.forgotPassword')}</Link>
         </div>
         <button className="site-button wide-btn" type="submit" disabled={busy || !apiReady}>
-          {busy ? 'Signing in…' : 'Sign In'}
+          {busy ? t('auth.signingIn') : t('auth.signIn')}
         </button>
         <p className="auth-switch">
-          New here? <Link href="/register">Create your account</Link>
+          {t('auth.newHere', { defaultMessage: 'New here?' })}{' '}
+          <Link href="/register">{t('auth.createYourAccount', { defaultMessage: 'Create your account' })}</Link>
         </p>
       </form>
     );
@@ -626,13 +673,17 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               const password = String(form.get('password') ?? '');
               const confirm = String(form.get('confirm') ?? '');
               if (password !== confirm) {
-                setFieldErrors({ confirm: ['Passwords do not match.'] });
-                setError('Passwords do not match.');
+                const mismatch = t('auth.passwordsDoNotMatch', { defaultMessage: 'Passwords do not match.' });
+                setFieldErrors({ confirm: [mismatch] });
+                setError(mismatch);
                 return;
               }
               if (password.length < 12) {
-                setFieldErrors({ password: ['Password must be at least 12 characters.'] });
-                setError('Password must be at least 12 characters.');
+                const tooShort = t('auth.passwordMinLength', {
+                  defaultMessage: 'Password must be at least 12 characters.',
+                });
+                setFieldErrors({ password: [tooShort] });
+                setError(tooShort);
                 return;
               }
             }
@@ -646,12 +697,17 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             }
 
             if (!apiReady) {
-              setError('Authentication API is not configured.');
+              setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
               return;
             }
 
             if (!isRegisterDraftComplete(nextDraft)) {
-              setError('Missing required registration details. Go back and complete Personal, Contact, and Security.');
+              setError(
+                t('auth.missingRegistrationDetails', {
+                  defaultMessage:
+                    'Missing required registration details. Go back and complete Personal, Contact, and Security.',
+                }),
+              );
               return;
             }
 
@@ -674,7 +730,11 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               clearRegisterDraft();
               setPendingAuthEmail(user.email);
               setDone(true);
-              setSuccess('Account created. We sent a verification link to your email.');
+              setSuccess(
+                t('auth.accountCreatedSentEmail', {
+                  defaultMessage: 'Account created. We sent a verification link to your email.',
+                }),
+              );
               router.push('/verify-email?registered=1');
             } catch (err) {
               applyError(err);
@@ -688,13 +748,23 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           }}
         >
           <AuthTabs active="register" />
-          <h3>{path === '/register' ? 'Create Your Account' : route.title}</h3>
+          <h3>
+            {path === '/register'
+              ? t('auth.createYourAccountTitle', { defaultMessage: 'Create Your Account' })
+              : t(`routes.${path}`, { defaultMessage: route.title })}
+          </h3>
           <p className="auth-copy">
             {path === '/register'
-              ? 'Join Family House Connect in a few guided steps. We will verify your email before opening your dashboard.'
+              ? t('auth.registerIntroCopy', {
+                  defaultMessage:
+                    'Join Family House Connect in a few guided steps. We will verify your email before opening your dashboard.',
+                })
               : path.includes('/review')
-                ? 'Confirm your details, then we will create your account and send an email verification link.'
-                : 'Complete this step to create your member account.'}
+                ? t('auth.registerReviewCopy', {
+                    defaultMessage:
+                      'Confirm your details, then we will create your account and send an email verification link.',
+                  })
+                : t('auth.registerStepCopy', { defaultMessage: 'Complete this step to create your member account.' })}
           </p>
           {!apiReady && path.includes('/review') ? <ApiConfigMissing /> : null}
           {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
@@ -732,33 +802,36 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           {path.includes('/review') ? (
             <div className="choice-grid">
               <label>
-                <input type="checkbox" name="terms" required /> I agree to the Family House Connect terms and privacy
-                policy
+                <input type="checkbox" name="terms" required />{' '}
+                {t('auth.agreeTerms', {
+                  defaultMessage: 'I agree to the Family House Connect terms and privacy policy',
+                })}
               </label>
             </div>
           ) : null}
           <div className="form-actions">
             {path === '/register' ? (
               <Link className="site-button secondary" href="/login">
-                Sign In instead
+                {t('auth.signInInstead', { defaultMessage: 'Sign In instead' })}
               </Link>
             ) : (
               <button type="button" className="site-button secondary" onClick={() => router.back()}>
-                Back
+                {t('common.back', { defaultMessage: 'Back' })}
               </button>
             )}
             <button className="site-button" type="submit" disabled={busy || (path.includes('/review') && !apiReady)}>
               {busy
-                ? 'Creating account…'
+                ? t('auth.creatingAccount', { defaultMessage: 'Creating account…' })
                 : done
-                  ? 'Account created'
+                  ? t('auth.accountCreated', { defaultMessage: 'Account created' })
                   : path === '/register'
-                    ? 'Start Registration'
-                    : (route.action ?? 'Continue')}
+                    ? t('auth.startRegistration', { defaultMessage: 'Start Registration' })
+                    : t(`routes.${path}.action`, { defaultMessage: route.action ?? 'Continue' })}
             </button>
           </div>
           <p className="auth-switch">
-            Already have an account? <Link href="/login">Sign in</Link>
+            {t('auth.alreadyHaveAccount', { defaultMessage: 'Already have an account?' })}{' '}
+            <Link href="/login">{t('auth.signIn', { defaultMessage: 'Sign in' })}</Link>
           </p>
         </form>
       </div>
@@ -770,14 +843,18 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!apiReady) {
-            setError('Authentication API is not configured.');
+            setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
             return;
           }
           startBusy();
           try {
             const user = await fetchBrowserUser();
             if (!user.email_verified_at) {
-              setError('Your email is not verified yet. Open the link from your email, then try again.');
+              setError(
+                t('auth.emailNotVerifiedYet', {
+                  defaultMessage: 'Your email is not verified yet. Open the link from your email, then try again.',
+                }),
+              );
               return;
             }
             clearPendingAuthEmail();
@@ -787,7 +864,10 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             applyError(err);
             setError(
               formatAuthError(err) +
-                ' Open the verification link from your email (or resend), then confirm here.',
+                ' ' +
+                t('auth.openVerificationLinkHint', {
+                  defaultMessage: 'Open the verification link from your email (or resend), then confirm here.',
+                }),
             );
           } finally {
             setBusy(false);
@@ -795,16 +875,22 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         }}
       >
         <div className="auth-icon">✉</div>
-        <h3>Verify Your Email</h3>
+        <h3>{t('auth.verifyYourEmail', { defaultMessage: 'Verify Your Email' })}</h3>
         <p className="auth-copy">
-          We sent a verification link to <b>{pendingEmail ?? 'your email address'}</b>. Open that signed link, then
-          confirm below. We check your live session with the API — this page will not pretend the email is verified.
+          {t('auth.verifyEmailSentTo', { defaultMessage: 'We sent a verification link to' })}{' '}
+          <b>{pendingEmail ?? t('auth.yourEmailAddress', { defaultMessage: 'your email address' })}</b>
+          {t('auth.verifyEmailCopyAfter', {
+            defaultMessage:
+              '. Open that signed link, then confirm below. We check your live session with the API — this page will not pretend the email is verified.',
+          })}
         </p>
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         {success ? <AuthBanner tone="success">{success}</AuthBanner> : null}
         {!apiReady ? <ApiConfigMissing /> : null}
         <button className="site-button wide-btn" type="submit" disabled={busy || !apiReady}>
-          {busy ? 'Checking…' : 'I have verified my email'}
+          {busy
+            ? t('auth.checking', { defaultMessage: 'Checking…' })
+            : t('auth.iHaveVerifiedEmail', { defaultMessage: 'I have verified my email' })}
         </button>
         <div className="auth-meta center">
           <button
@@ -817,7 +903,10 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               try {
                 await sendEmailVerificationNotification();
                 setSuccess(
-                  'Verification request accepted. If mail is configured, check your inbox for the signed link.',
+                  t('auth.verificationRequestAccepted', {
+                    defaultMessage:
+                      'Verification request accepted. If mail is configured, check your inbox for the signed link.',
+                  }),
                 );
                 setSeconds(60);
               } catch (err) {
@@ -827,9 +916,16 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               }
             }}
           >
-            {seconds > 0 ? `Resend Email in 00:${String(seconds).padStart(2, '0')}` : busy ? 'Sending…' : 'Resend Email'}
+            {seconds > 0
+              ? t('auth.resendEmailIn', {
+                  defaultMessage: 'Resend Email in {time}',
+                  vars: { time: `00:${String(seconds).padStart(2, '0')}` },
+                })
+              : busy
+                ? t('auth.sending', { defaultMessage: 'Sending…' })
+                : t('auth.resendEmail', { defaultMessage: 'Resend Email' })}
           </button>
-          <Link href="/register/contact">Change email address</Link>
+          <Link href="/register/contact">{t('auth.changeEmailAddress', { defaultMessage: 'Change email address' })}</Link>
         </div>
       </form>
     );
@@ -840,7 +936,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!apiReady) {
-            setError('Authentication API is not configured.');
+            setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
             return;
           }
           startBusy();
@@ -848,7 +944,11 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             if (otpMode === 'recovery') {
               const code = recoveryCode.trim();
               if (!code) {
-                setError('Enter a one-time MFA recovery code from authenticator setup.');
+                setError(
+                  t('auth.enterRecoveryCode', {
+                    defaultMessage: 'Enter a one-time MFA recovery code from authenticator setup.',
+                  }),
+                );
                 setBusy(false);
                 return;
               }
@@ -856,7 +956,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             } else {
               const code = otpDigits.join('');
               if (!/^\d{6}$/.test(code)) {
-                setError('Enter the 6-digit authenticator code.');
+                setError(t('auth.enterOtp', { defaultMessage: 'Enter the 6-digit authenticator code.' }));
                 setBusy(false);
                 return;
               }
@@ -872,17 +972,26 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         }}
       >
         <div className="auth-icon">🔐</div>
-        <h3>{otpMode === 'recovery' ? 'Enter MFA Recovery Code' : 'Enter Authenticator Code'}</h3>
+        <h3>
+          {otpMode === 'recovery'
+            ? t('auth.enterRecovery', { defaultMessage: 'Enter MFA Recovery Code' })
+            : t('auth.enterAuthenticator', { defaultMessage: 'Enter Authenticator Code' })}
+        </h3>
         <p className="auth-copy">
           {otpMode === 'recovery'
-            ? 'Use a single-use recovery code from MFA setup. This calls POST /auth/mfa/challenge — not email/SMS recovery.'
-            : 'Enter the 6-digit code from your authenticator app to continue.'}
+            ? t('auth.recoveryChallengeCopy', {
+                defaultMessage:
+                  'Use a single-use recovery code from MFA setup. This calls POST /auth/mfa/challenge — not email/SMS recovery.',
+              })
+            : t('auth.authenticatorCopy', {
+                defaultMessage: 'Enter the 6-digit code from your authenticator app to continue.',
+              })}
         </p>
         {!apiReady ? <ApiConfigMissing /> : null}
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         {otpMode === 'recovery' ? (
           <label className="wide">
-            Recovery code
+            {t('auth.recoveryCode', { defaultMessage: 'Recovery code' })}
             <input
               name="recovery_code"
               value={recoveryCode}
@@ -895,7 +1004,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           <OtpInputs value={otpDigits} onChange={setOtpDigits} />
         )}
         <button className="site-button wide-btn" type="submit" disabled={busy || !apiReady}>
-          {busy ? 'Verifying…' : 'Verify Code'}
+          {busy ? t('auth.verifying', { defaultMessage: 'Verifying…' }) : t('auth.verifyCode', { defaultMessage: 'Verify Code' })}
         </button>
         <div className="auth-meta center">
           <button
@@ -903,9 +1012,11 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             className="linkish"
             onClick={() => setOtpMode((mode) => (mode === 'totp' ? 'recovery' : 'totp'))}
           >
-            {otpMode === 'recovery' ? 'Use authenticator code instead' : 'Use a recovery code instead'}
+            {otpMode === 'recovery'
+              ? t('auth.useAuthenticatorInstead', { defaultMessage: 'Use authenticator code instead' })
+              : t('auth.useRecoveryInstead', { defaultMessage: 'Use a recovery code instead' })}
           </button>
-          <Link href="/login">Back to Sign In</Link>
+          <Link href="/login">{t('auth.backToSignIn', { defaultMessage: 'Back to Sign In' })}</Link>
         </div>
       </form>
     );
@@ -913,19 +1024,25 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
     body = (
       <div className="site-form auth-form auth-center">
         <div className="auth-icon">📱</div>
-        <h3>Verify Your Phone</h3>
+        <h3>{t('auth.verifyYourPhone', { defaultMessage: 'Verify Your Phone' })}</h3>
         <p className="auth-copy">
-          Phone SMS verification is not available on the browser auth API yet. Continue with email verification and
-          optional authenticator MFA.
+          {t('auth.verifyPhoneCopy', {
+            defaultMessage:
+              'Phone SMS verification is not available on the browser auth API yet. Continue with email verification and optional authenticator MFA.',
+          })}
         </p>
-        <AuthBanner tone="info">Use email verification and authenticator MFA to secure your account.</AuthBanner>
+        <AuthBanner tone="info">
+          {t('auth.verifyPhoneHint', {
+            defaultMessage: 'Use email verification and authenticator MFA to secure your account.',
+          })}
+        </AuthBanner>
         <div className="form-actions" style={{ justifyContent: 'center' }}>
           <Link className="site-button" href="/verify-email">
-            Continue with email
+            {t('auth.continueWithEmail', { defaultMessage: 'Continue with email' })}
           </Link>
         </div>
         <p className="auth-switch">
-          <Link href="/login">Back to Sign In</Link>
+          <Link href="/login">{t('auth.backToSignIn', { defaultMessage: 'Back to Sign In' })}</Link>
         </p>
       </div>
     );
@@ -936,7 +1053,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!apiReady) {
-            setError('Authentication API is not configured.');
+            setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
             return;
           }
           const form = new FormData(event.currentTarget);
@@ -946,7 +1063,10 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             await requestPasswordReset(email);
             setDone(true);
             setSuccess(
-              'If an account exists for that email, a reset was accepted. Delivery depends on Laravel mail being configured — this app does not claim the message was delivered.',
+              t('auth.resetAccepted', {
+                defaultMessage:
+                  'If an account exists for that email, a reset was accepted. Delivery depends on Laravel mail being configured — this app does not claim the message was delivered.',
+              }),
             );
           } catch (err) {
             applyError(err);
@@ -955,8 +1075,12 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           }
         }}
       >
-        <h3>Forgot Password</h3>
-        <p className="auth-copy">Enter the email on your account and we will send a reset link if it matches.</p>
+        <h3>{t('auth.forgotPasswordTitle', { defaultMessage: 'Forgot Password' })}</h3>
+        <p className="auth-copy">
+          {t('auth.forgotPasswordCopy', {
+            defaultMessage: 'Enter the email on your account and we will send a reset link if it matches.',
+          })}
+        </p>
         {!apiReady ? <ApiConfigMissing /> : null}
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         {success ? <AuthBanner tone="success">{success}</AuthBanner> : null}
@@ -964,17 +1088,27 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           {fields.map((field) => (
             <Field
               key={field.name}
-              field={{ ...field, label: 'Email Address', type: 'email', name: 'identity' }}
+              field={{
+                ...field,
+                label: t('auth.emailAddress', { defaultMessage: 'Email Address' }),
+                type: 'email',
+                name: 'identity',
+              }}
               defaultValue=""
               error={fieldErrors.email?.[0]}
             />
           ))}
         </div>
         <button className="site-button wide-btn" type="submit" disabled={busy || !apiReady || done}>
-          {busy ? 'Sending…' : done ? 'Link sent' : 'Send Reset Link'}
+          {busy
+            ? t('auth.sending', { defaultMessage: 'Sending…' })
+            : done
+              ? t('auth.linkSent', { defaultMessage: 'Link sent' })
+              : t('auth.sendResetLink', { defaultMessage: 'Send Reset Link' })}
         </button>
         <p className="auth-switch">
-          <Link href="/account-recovery">More recovery options</Link> · <Link href="/login">Back to Sign In</Link>
+          <Link href="/account-recovery">{t('auth.moreRecoveryOptions', { defaultMessage: 'More recovery options' })}</Link> ·{' '}
+          <Link href="/login">{t('auth.backToSignIn', { defaultMessage: 'Back to Sign In' })}</Link>
         </p>
       </form>
     );
@@ -985,7 +1119,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!apiReady) {
-            setError('Authentication API is not configured.');
+            setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
             return;
           }
           const form = new FormData(event.currentTarget);
@@ -994,12 +1128,17 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           const password = String(form.get('password') ?? '');
           const passwordConfirmation = String(form.get('confirm') ?? form.get('password_confirmation') ?? '');
           if (!tokenValue) {
-            setError('This reset link is missing a token. Open the link from your email.');
+            setError(
+              t('auth.resetLinkMissingToken', {
+                defaultMessage: 'This reset link is missing a token. Open the link from your email.',
+              }),
+            );
             return;
           }
           if (password !== passwordConfirmation) {
-            setFieldErrors({ confirm: ['Passwords do not match.'] });
-            setError('Passwords do not match.');
+            const mismatch = t('auth.passwordsDoNotMatch', { defaultMessage: 'Passwords do not match.' });
+            setFieldErrors({ confirm: [mismatch] });
+            setError(mismatch);
             return;
           }
           startBusy();
@@ -1011,7 +1150,11 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               password_confirmation: passwordConfirmation,
             });
             setDone(true);
-            setSuccess('Password updated. You can sign in with your new password.');
+            setSuccess(
+              t('auth.passwordUpdatedSignIn', {
+                defaultMessage: 'Password updated. You can sign in with your new password.',
+              }),
+            );
             window.setTimeout(() => router.push('/login'), 800);
           } catch (err) {
             applyError(err);
@@ -1024,15 +1167,17 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           if (target.name === 'password') setPasswordPreview(target.value);
         }}
       >
-        <h3>Reset Your Password</h3>
-        <p className="auth-copy">Choose a strong password for your Family House account.</p>
+        <h3>{t('auth.resetYourPassword', { defaultMessage: 'Reset Your Password' })}</h3>
+        <p className="auth-copy">
+          {t('auth.resetPasswordCopy', { defaultMessage: 'Choose a strong password for your Family House account.' })}
+        </p>
         {!apiReady ? <ApiConfigMissing /> : null}
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         {success ? <AuthBanner tone="success">{success}</AuthBanner> : null}
         <input type="hidden" name="token" value={resetToken} />
         <div className="form-grid">
           <label className="wide">
-            Email Address
+            {t('auth.emailAddress', { defaultMessage: 'Email Address' })}
             <input name="email" type="email" defaultValue={resetEmail} required autoComplete="email" key={resetEmail || 'email'} />
             {fieldErrors.email?.[0] ? <span className="field-error">{fieldErrors.email[0]}</span> : null}
           </label>
@@ -1047,7 +1192,11 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         </div>
         <PasswordRules password={passwordPreview} />
         <button className="site-button wide-btn" type="submit" disabled={busy || !apiReady || done}>
-          {busy ? 'Updating…' : done ? 'Password updated' : 'Reset Password'}
+          {busy
+            ? t('auth.updating', { defaultMessage: 'Updating…' })
+            : done
+              ? t('auth.passwordUpdated', { defaultMessage: 'Password updated' })
+              : t('auth.resetPassword', { defaultMessage: 'Reset Password' })}
         </button>
       </form>
     );
@@ -1058,18 +1207,23 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!apiReady) {
-            setError('Authentication API is not configured.');
+            setError(t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' }));
             return;
           }
           if (!mfaEnrollment) {
-            setError('Authenticator setup is not ready yet. Wait a moment and try again.');
+            setError(
+              t('auth.mfaSetupNotReady', {
+                defaultMessage: 'Authenticator setup is not ready yet. Wait a moment and try again.',
+              }),
+            );
             return;
           }
           const form = new FormData(event.currentTarget);
           const code = String(form.get('code') ?? '').replace(/\D/g, '');
           if (!/^\d{6}$/.test(code)) {
-            setFieldErrors({ code: ['Enter the 6-digit authenticator code.'] });
-            setError('Enter the 6-digit authenticator code.');
+            const otpError = t('auth.enterOtp', { defaultMessage: 'Enter the 6-digit authenticator code.' });
+            setFieldErrors({ code: [otpError] });
+            setError(otpError);
             return;
           }
           startBusy();
@@ -1084,17 +1238,19 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           }
         }}
       >
-        <h3>Set Up Two-Factor Authentication</h3>
+        <h3>{t('auth.mfaSetupTitle', { defaultMessage: 'Set Up Two-Factor Authentication' })}</h3>
         <p className="auth-copy">
-          Add an authenticator app for an extra layer of protection. You can also skip and enable this later from
-          Settings.
+          {t('auth.mfaSetupCopy', {
+            defaultMessage:
+              'Add an authenticator app for an extra layer of protection. You can also skip and enable this later from Settings.',
+          })}
         </p>
         {!apiReady ? <ApiConfigMissing /> : null}
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         <div className="mfa-methods">
           <button className="active" type="button">
-            Authenticator App
-            <small>Recommended</small>
+            {t('auth.authenticatorApp', { defaultMessage: 'Authenticator App' })}
+            <small>{t('auth.recommended', { defaultMessage: 'Recommended' })}</small>
           </button>
         </div>
         <div className="qr-panel">
@@ -1102,21 +1258,30 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             {mfaSetupLoading ? '…' : mfaEnrollment ? '✓' : '!'}
           </div>
           <div>
-            <b>{mfaSetupLoading ? 'Preparing authenticator…' : 'Add this secret to your authenticator app'}</b>
+            <b>
+              {mfaSetupLoading
+                ? t('auth.preparingAuthenticator', { defaultMessage: 'Preparing authenticator…' })
+                : t('auth.addSecretToAuthenticator', { defaultMessage: 'Add this secret to your authenticator app' })}
+            </b>
             {mfaEnrollment ? (
               <>
                 <p>
-                  Secret: <code className="mfa-secret">{mfaEnrollment.secret}</code>
+                  {t('auth.secretLabel', { defaultMessage: 'Secret' })}:{' '}
+                  <code className="mfa-secret">{mfaEnrollment.secret}</code>
                 </p>
-                <p className="auth-copy">Then enter the 6-digit code below to enable MFA.</p>
+                <p className="auth-copy">
+                  {t('auth.mfaEnableCodeCopy', { defaultMessage: 'Then enter the 6-digit code below to enable MFA.' })}
+                </p>
                 {mfaEnrollment.recovery_codes?.length ? (
                   <p className="auth-copy">
-                    Save your recovery codes in a safe place. They will not be shown again.
+                    {t('auth.saveRecoveryCodes', {
+                      defaultMessage: 'Save your recovery codes in a safe place. They will not be shown again.',
+                    })}
                   </p>
                 ) : null}
               </>
             ) : (
-              <p>We will show your authenticator secret once setup is ready.</p>
+              <p>{t('auth.mfaSecretPending', { defaultMessage: 'We will show your authenticator secret once setup is ready.' })}</p>
             )}
           </div>
         </div>
@@ -1136,10 +1301,14 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         </div>
         <div className="form-actions">
           <button type="button" className="site-button secondary" onClick={() => router.push('/onboarding/role')}>
-            Maybe Later
+            {t('auth.maybeLater', { defaultMessage: 'Maybe Later' })}
           </button>
           <button className="site-button" type="submit" disabled={busy || !apiReady || !mfaEnrollment}>
-            {busy ? 'Enabling…' : done ? 'Enabled' : 'Verify and Enable'}
+            {busy
+              ? t('auth.enabling', { defaultMessage: 'Enabling…' })
+              : done
+                ? t('auth.enabled', { defaultMessage: 'Enabled' })
+                : t('auth.verifyAndEnable', { defaultMessage: 'Verify and Enable' })}
           </button>
         </div>
       </form>
@@ -1165,7 +1334,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           from this app.
         </AuthBanner>
         <p className="auth-switch">
-          <Link href="/login">Back to Sign In</Link>
+          <Link href="/login">{t('auth.backToSignIn')}</Link>
         </p>
       </div>
     );
@@ -1178,18 +1347,23 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           continueTo(router, path);
         }}
       >
-        <h3>Choose Your Language</h3>
-        <p className="auth-copy">Pick the language you prefer for Family House Connect.</p>
+        <h3>{t('auth.chooseLanguage')}</h3>
+        <p className="auth-copy">{t('auth.chooseLanguageCopy')}</p>
         <div className="language-grid">
-          {languages.map(([flag, label]) => (
-            <button className={language === label ? 'active' : ''} key={label} type="button" onClick={() => setLanguage(label)}>
-              <span>{flag}</span>
-              {label}
+          {languages.map((option) => (
+            <button
+              className={locale === option.code ? 'active' : ''}
+              key={option.code}
+              type="button"
+              onClick={() => setLocale(option.code)}
+            >
+              <span>{option.flag}</span>
+              {option.label}
             </button>
           ))}
         </div>
         <button className="site-button wide-btn" type="submit">
-          Continue with {language}
+          {t('common.continueWith', { vars: { language: localeMeta[locale].endonym } })}
         </button>
       </form>
     );
@@ -1202,8 +1376,8 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           continueTo(router, path);
         }}
       >
-        <h3>How will you use Family House?</h3>
-        <p className="auth-copy">This helps us personalise your dashboard. You can change it later.</p>
+        <h3>{t('auth.howWillYouUse')}</h3>
+        <p className="auth-copy">{t('auth.roleCopy')}</p>
         <div className="role-grid">
           {roles.map(([title, bodyText]) => (
             <button className={role === title ? 'active' : ''} key={title} type="button" onClick={() => setRole(title)}>

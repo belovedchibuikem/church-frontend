@@ -22,6 +22,12 @@ import {
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { TableRowActions } from './table-row-actions';
+import { useLocale } from '@/components/locale-provider';
+import {
+  breakdownToItems,
+  dashboardModuleForScreen,
+} from '../lib/admin-dashboard-api';
+import { useAdminDashboard } from '../lib/use-admin-dashboard';
 
 function isPublicId(value: string | undefined | null): boolean {
   return Boolean(value && /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(value.trim()));
@@ -46,8 +52,13 @@ function nowDateTimeLocal(): string {
 const missionPalette = ['#4318ff', '#6f52ed', '#0ea36c', '#f59e0b', '#ef4444'];
 
 function MissionStatus({ value }: { value: string }) {
+  const { t } = useLocale();
   const state = value.toLowerCase().replaceAll(' ', '-').replaceAll('(', '').replaceAll(')', '');
-  return <span className={`mission-status mission-status-${state}`}>{value}</span>;
+  return (
+    <span className={`mission-status mission-status-${state}`}>
+      {t(`mission.status.${state}`, { defaultMessage: value })}
+    </span>
+  );
 }
 
 function MissionMetrics({ metrics = [] }: { metrics?: Metric[] }) {
@@ -59,15 +70,38 @@ function MissionMetrics({ metrics = [] }: { metrics?: Metric[] }) {
 }
 
 function MissionTabs({ tabs = [], active = 0 }: { tabs?: string[]; active?: number }) {
-  return <nav className="mission-tabs" aria-label="Screen sections" role="tablist">{tabs.map((tab, index) => <button className={index === active ? 'active' : ''} type="button" role="tab" aria-selected={index === active} tabIndex={index === active ? 0 : -1} key={tab}>{tab}</button>)}</nav>;
+  const { t } = useLocale();
+  return (
+    <nav className="mission-tabs" aria-label={t('common.screenSections', { defaultMessage: 'Screen sections' })} role="tablist">
+      {tabs.map((tab, index) => (
+        <button className={index === active ? 'active' : ''} type="button" role="tab" aria-selected={index === active} tabIndex={index === active ? 0 : -1} key={tab}>{tab}</button>
+      ))}
+    </nav>
+  );
 }
 
 function MissionToolbar({ action, tabs }: { action?: string; tabs?: string[] }) {
-  return <div className="mission-toolbar">
-    <div className="mission-filter-set">{(tabs ?? ['All Statuses', 'All Locations']).slice(0, 3).map(item => <button type="button" aria-label={`Filter by ${item}`} key={item}>{item}<span aria-hidden="true">⌄</span></button>)}</div>
-    <label className="mission-search"><span aria-hidden="true">⌕</span><input aria-label="Search records" placeholder="Search..." /></label>
-    {action && <button className="mission-primary-button" type="button">{action}</button>}
-  </div>;
+  const { t } = useLocale();
+  const filters = tabs ?? [
+    t('common.allStatuses', { defaultMessage: 'All Statuses' }),
+    t('common.allLocations', { defaultMessage: 'All Locations' }),
+  ];
+  return (
+    <div className="mission-toolbar">
+      <div className="mission-filter-set">
+        {filters.slice(0, 3).map((item) => (
+          <button type="button" aria-label={t('common.filterBy', { defaultMessage: 'Filter by {item}', vars: { item } })} key={item}>
+            {item}<span aria-hidden="true">⌄</span>
+          </button>
+        ))}
+      </div>
+      <label className="mission-search">
+        <span aria-hidden="true">⌕</span>
+        <input aria-label={t('common.searchRecords', { defaultMessage: 'Search records' })} placeholder={t('common.searchPlaceholder', { defaultMessage: 'Search...' })} />
+      </label>
+      {action && <button className="mission-primary-button" type="button">{action}</button>}
+    </div>
+  );
 }
 
 function CaptureSoulForm({
@@ -81,6 +115,7 @@ function CaptureSoulForm({
   defaultCrusadeId?: string;
   onCaptured: () => Promise<void>;
 }) {
+  const { t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -95,15 +130,15 @@ function CaptureSoulForm({
     const middleName = formText(form, 'middle_name');
     const preferredName = formText(form, 'preferred_name');
     if (!isPublicId(crusadeId)) {
-      setMessage('Select a live crusade public id.');
+      setMessage(t('errors.selectLiveCrusade', { defaultMessage: 'Select a live crusade public id.' }));
       return;
     }
     if (!personId && (!givenName || !familyName)) {
-      setMessage('Provide a person public id, or given name and family name.');
+      setMessage(t('errors.personIdOrName', { defaultMessage: 'Provide a person public id, or given name and family name.' }));
       return;
     }
     if (personId && !isPublicId(personId)) {
-      setMessage('person_id must be a public id (ULID).');
+      setMessage(t('errors.personIdMustBePublic', { defaultMessage: 'person_id must be a public id (ULID).' }));
       return;
     }
     setBusy(true);
@@ -120,11 +155,11 @@ function CaptureSoulForm({
         },
         { scope: defaultOpsScope(screen.scope) },
       );
-      setMessage(`Captured soul ${soul.id}.`);
+      setMessage(t('mission.capturedSoul', { defaultMessage: 'Captured soul {id}.', vars: { id: soul.id } }));
       formEl.reset();
       await onCaptured();
     } catch (err) {
-      setMessage(operationsErrorMessage(err, 'Soul capture failed.'));
+      setMessage(operationsErrorMessage(err, t('errors.soulCaptureFailed', { defaultMessage: 'Soul capture failed.' })));
     } finally {
       setBusy(false);
     }
@@ -132,43 +167,46 @@ function CaptureSoulForm({
 
   return (
     <form className="mission-form-card" onSubmit={(event) => void onSubmit(event)} style={{ marginBottom: 16 }}>
-      <header><h2>Capture soul</h2><p>POST uses the crusade public id and Idempotency-Key. Names are used only when no person id is sent.</p></header>
+      <header>
+        <h2>{t('mission.captureSoul', { defaultMessage: 'Capture soul' })}</h2>
+        <p>{t('mission.captureHelp', { defaultMessage: 'POST uses the crusade public id and Idempotency-Key. Names are used only when no person id is sent.' })}</p>
+      </header>
       <div className="mission-form-grid">
         <label>
-          <span>Crusade *</span>
+          <span>{t('mission.crusadeRequired', { defaultMessage: 'Crusade *' })}</span>
           <select name="crusade_id" defaultValue={defaultCrusadeId && isPublicId(defaultCrusadeId) ? defaultCrusadeId : ''}>
-            <option value="">Select crusade</option>
+            <option value="">{t('mission.selectCrusade', { defaultMessage: 'Select crusade' })}</option>
             {crusades.map((crusade) => (
               <option key={crusade.id} value={crusade.id}>{crusade.name} · {crusade.id}</option>
             ))}
           </select>
         </label>
         <label>
-          <span>Person id</span>
-          <input name="person_id" autoComplete="off" placeholder="Optional person public id" />
+          <span>{t('mission.personId', { defaultMessage: 'Person id' })}</span>
+          <input name="person_id" autoComplete="off" placeholder={t('mission.optionalPersonPublicId', { defaultMessage: 'Optional person public id' })} />
         </label>
         <label>
-          <span>Given name</span>
-          <input name="given_name" autoComplete="off" placeholder="Required without person id" />
+          <span>{t('account.givenName', { defaultMessage: 'Given name' })}</span>
+          <input name="given_name" autoComplete="off" placeholder={t('mission.requiredWithoutPersonId', { defaultMessage: 'Required without person id' })} />
         </label>
         <label>
-          <span>Family name</span>
-          <input name="family_name" autoComplete="off" placeholder="Required without person id" />
+          <span>{t('account.familyName', { defaultMessage: 'Family name' })}</span>
+          <input name="family_name" autoComplete="off" placeholder={t('mission.requiredWithoutPersonId', { defaultMessage: 'Required without person id' })} />
         </label>
         <label>
-          <span>Middle name</span>
+          <span>{t('account.middleName', { defaultMessage: 'Middle name' })}</span>
           <input name="middle_name" autoComplete="off" />
         </label>
         <label>
-          <span>Preferred name</span>
+          <span>{t('account.preferredName', { defaultMessage: 'Preferred name' })}</span>
           <input name="preferred_name" autoComplete="off" />
         </label>
       </div>
-      {crusades.length === 0 ? <p className="field-help" role="status">No live crusades in this scope. Capture needs a crusade id.</p> : null}
+      {crusades.length === 0 ? <p className="field-help" role="status">{t('errors.noLiveCrusades', { defaultMessage: 'No live crusades in this scope. Capture needs a crusade id.' })}</p> : null}
       {message ? <p className="field-help" role="status">{message}</p> : null}
       <footer>
         <button className="mission-primary-button" type="submit" disabled={busy || crusades.length === 0}>
-          {busy ? 'Capturing…' : 'Capture soul'}
+          {busy ? t('mission.capturing', { defaultMessage: 'Capturing…' }) : t('mission.captureSoul', { defaultMessage: 'Capture soul' })}
         </button>
       </footer>
     </form>
@@ -184,6 +222,7 @@ function RecordFollowUpForm({
   souls: SoulRecord[];
   onRecorded: () => Promise<void>;
 }) {
+  const { t } = useLocale();
   const [soulId, setSoulId] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -202,15 +241,15 @@ function RecordFollowUpForm({
     const outcome = formText(form, 'outcome_code');
     const occurredAt = toIsoDate(formText(form, 'occurred_at'));
     if (!isPublicId(selectedSoulId)) {
-      setMessage('Select a live soul public id from the table.');
+      setMessage(t('errors.selectLiveSoul', { defaultMessage: 'Select a live soul public id from the table.' }));
       return;
     }
     if (!isPublicId(selectedMentorId)) {
-      setMessage('Selected soul has no mentor assignment id.');
+      setMessage(t('errors.noMentorAssignmentId', { defaultMessage: 'Selected soul has no mentor assignment id.' }));
       return;
     }
     if (!channel || !outcome || !occurredAt) {
-      setMessage('Channel, outcome, and occurred_at are required.');
+      setMessage(t('errors.channelOutcomeOccurredRequired', { defaultMessage: 'Channel, outcome, and occurred_at are required.' }));
       return;
     }
     setBusy(true);
@@ -226,12 +265,12 @@ function RecordFollowUpForm({
         },
         { scope: defaultOpsScope(screen.scope) },
       );
-      setMessage(`Recorded follow-up ${interaction.id}.`);
+      setMessage(t('mission.recordedFollowUp', { defaultMessage: 'Recorded follow-up {id}.', vars: { id: interaction.id } }));
       formEl.reset();
       setSoulId('');
       await onRecorded();
     } catch (err) {
-      setMessage(operationsErrorMessage(err, 'Follow-up recording failed.'));
+      setMessage(operationsErrorMessage(err, t('errors.followUpRecordingFailed', { defaultMessage: 'Follow-up recording failed.' })));
     } finally {
       setBusy(false);
     }
@@ -239,12 +278,15 @@ function RecordFollowUpForm({
 
   return (
     <form className="mission-form-card" onSubmit={(event) => void onSubmit(event)} style={{ marginBottom: 16 }}>
-      <header><h2>Record soul follow-up</h2><p>Uses the selected soul id and its mentor assignment id. Idempotency-Key is sent by the client.</p></header>
+      <header>
+        <h2>{t('mission.recordFollowUp', { defaultMessage: 'Record soul follow-up' })}</h2>
+        <p>{t('mission.recordFollowUpHelp', { defaultMessage: 'Uses the selected soul id and its mentor assignment id. Idempotency-Key is sent by the client.' })}</p>
+      </header>
       <div className="mission-form-grid">
         <label>
-          <span>Soul *</span>
+          <span>{t('mission.soulRequired', { defaultMessage: 'Soul *' })}</span>
           <select name="soul_id" value={soulId} onChange={(event) => setSoulId(event.target.value)}>
-            <option value="">Select soul</option>
+            <option value="">{t('mission.selectSoul', { defaultMessage: 'Select soul' })}</option>
             {souls.map((soul) => (
               <option key={soul.id} value={soul.id}>
                 {soul.person_id ?? soul.id} · {soul.id}
@@ -253,11 +295,11 @@ function RecordFollowUpForm({
           </select>
         </label>
         <label>
-          <span>Mentor assignment</span>
-          <input name="mentor_assignment_id" readOnly value={mentorId} placeholder="Assigned after mentor assignment" />
+          <span>{t('mission.mentorAssignment', { defaultMessage: 'Mentor assignment' })}</span>
+          <input name="mentor_assignment_id" readOnly value={mentorId} placeholder={t('mission.assignedAfterMentor', { defaultMessage: 'Assigned after mentor assignment' })} />
         </label>
         <label>
-          <span>Channel *</span>
+          <span>{t('mission.channelRequired', { defaultMessage: 'Channel *' })}</span>
           <select name="channel_code" defaultValue="phone">
             {['phone', 'visit', 'whatsapp', 'sms', 'email'].map((code) => (
               <option key={code} value={code}>{code}</option>
@@ -265,7 +307,7 @@ function RecordFollowUpForm({
           </select>
         </label>
         <label>
-          <span>Outcome *</span>
+          <span>{t('mission.outcomeRequired', { defaultMessage: 'Outcome *' })}</span>
           <select name="outcome_code" defaultValue="connected">
             {['connected', 'contacted', 'no_answer', 'requested_follow_up', 'not_interested'].map((code) => (
               <option key={code} value={code}>{code}</option>
@@ -273,16 +315,16 @@ function RecordFollowUpForm({
           </select>
         </label>
         <label>
-          <span>Occurred at *</span>
+          <span>{t('mission.occurredAtRequired', { defaultMessage: 'Occurred at *' })}</span>
           <input name="occurred_at" type="datetime-local" defaultValue={nowDateTimeLocal()} />
         </label>
       </div>
-      {souls.length === 0 ? <p className="field-help" role="status">No live souls in this scope.</p> : null}
-      {selected && !mentorId ? <p className="field-help" role="status">This soul has no mentor assignment yet.</p> : null}
+      {souls.length === 0 ? <p className="field-help" role="status">{t('errors.noLiveSouls', { defaultMessage: 'No live souls in this scope.' })}</p> : null}
+      {selected && !mentorId ? <p className="field-help" role="status">{t('errors.soulHasNoMentor', { defaultMessage: 'This soul has no mentor assignment yet.' })}</p> : null}
       {message ? <p className="field-help" role="status">{message}</p> : null}
       <footer>
         <button className="mission-primary-button" type="submit" disabled={busy || souls.length === 0}>
-          {busy ? 'Recording…' : 'Record follow-up'}
+          {busy ? t('mission.recording', { defaultMessage: 'Recording…' }) : t('mission.recordFollowUpAction', { defaultMessage: 'Record follow-up' })}
         </button>
       </footer>
     </form>
@@ -290,6 +332,7 @@ function RecordFollowUpForm({
 }
 
 function MissionTable({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const fixtureRows = screen.rows ?? [];
   const columns = screen.columns ?? Object.keys(fixtureRows[0] ?? {});
   const entityKey = resolveEntityKey(screen.route, screen.id);
@@ -299,7 +342,12 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
     live ? [] : (fixtureRows as Array<Record<string, string>>),
   );
   const [message, setMessage] = useState(
-    live ? 'Loading…' : `Showing 1 to ${fixtureRows.length} of ${Math.max(fixtureRows.length, 24)} records`,
+    live
+      ? t('common.loading', { defaultMessage: 'Loading…' })
+      : t('common.showingRange', {
+          defaultMessage: 'Showing 1 to {to} of {total} records',
+          vars: { to: fixtureRows.length, total: Math.max(fixtureRows.length, 24) },
+        }),
   );
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -316,17 +364,20 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
       if (dataset === 'crusades') setCrusades(result.items as CrusadeRecord[]);
       setMessage(
         result.pagination.total === 0
-          ? 'No mission records in this scope.'
-          : `Showing ${result.items.length} of ${result.pagination.total} records`,
+          ? t('errors.noMissionRecords', { defaultMessage: 'No mission records in this scope.' })
+          : t('common.showingOf', {
+              defaultMessage: 'Showing {shown} of {total} records',
+              vars: { shown: result.items.length, total: result.pagination.total },
+            }),
       );
     } catch (err) {
       setRows([]);
       if (dataset === 'souls') setSouls([]);
       if (dataset === 'crusades') setCrusades([]);
-      setError(operationsErrorMessage(err, 'Unable to load mission operations.'));
-      setMessage('Live mission data unavailable');
+      setError(operationsErrorMessage(err, t('errors.unableToLoadMission', { defaultMessage: 'Unable to load mission operations.' })));
+      setMessage(t('errors.liveMissionUnavailable', { defaultMessage: 'Live mission data unavailable' }));
     }
-  }, [columns, dataset, live, screen.scope]);
+  }, [columns, dataset, live, screen.scope, t]);
 
   useEffect(() => {
     void refresh();
@@ -350,7 +401,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
   async function onAssignMentor(row: Record<string, string>) {
     const soulId = row.__id;
     if (!soulId || soulId === '—') return;
-    const teamAssignmentId = window.prompt('Mission team assignment id (ULID):');
+    const teamAssignmentId = window.prompt(t('mission.teamAssignmentPrompt', { defaultMessage: 'Mission team assignment id (ULID):' }));
     if (!teamAssignmentId) return;
     setBusyId(soulId);
     setError(null);
@@ -362,7 +413,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
       );
       await refresh();
     } catch (err) {
-      setError(operationsErrorMessage(err, 'Mentor assignment failed.'));
+      setError(operationsErrorMessage(err, t('errors.mentorAssignmentFailed', { defaultMessage: 'Mentor assignment failed.' })));
     } finally {
       setBusyId(null);
     }
@@ -371,7 +422,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
   async function onCompleteFollowUp(row: Record<string, string>) {
     const soulId = row.__id;
     if (!soulId || soulId === '—') return;
-    const reason = window.prompt('Completion reason code (e.g. discipleship_connected):', 'discipleship_connected');
+    const reason = window.prompt(t('mission.completionReasonPrompt', { defaultMessage: 'Completion reason code (e.g. discipleship_connected):' }), 'discipleship_connected');
     if (!reason) return;
     setBusyId(soulId);
     setError(null);
@@ -379,7 +430,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
       await completeSoulFollowUp(soulId, reason.trim(), defaultOpsScope(screen.scope));
       await refresh();
     } catch (err) {
-      setError(operationsErrorMessage(err, 'Follow-up completion failed.'));
+      setError(operationsErrorMessage(err, t('errors.followUpCompletionFailed', { defaultMessage: 'Follow-up completion failed.' })));
     } finally {
       setBusyId(null);
     }
@@ -397,19 +448,23 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
       <MissionToolbar action={screen.action} tabs={screen.tabs} />
       {error ? <p className="field-help" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       <div className="mission-table-scroll">
-        <table className="mission-table" aria-label={`${screen.title} records`}>
+        <table className="mission-table" aria-label={t('common.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
           <thead>
             <tr>
               {columns.map((column) => (
                 <th scope="col" key={column}>{column}</th>
               ))}
-              <th scope="col">Actions</th>
+              <th scope="col">{t('common.actions', { defaultMessage: 'Actions' })}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1}>{error ? 'Unable to load records.' : 'No records.'}</td>
+                <td colSpan={columns.length + 1}>
+                  {error
+                    ? t('errors.unableToLoadRecords', { defaultMessage: 'Unable to load records.' })
+                    : t('common.noRecords', { defaultMessage: 'No records.' })}
+                </td>
               </tr>
             ) : (
               rows.map((row, rowIndex) => (
@@ -446,7 +501,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                             disabled={busyId === row.__id}
                             onClick={() => void onAssignMentor(row)}
                           >
-                            Assign mentor
+                            {t('mission.assignMentor', { defaultMessage: 'Assign mentor' })}
                           </button>
                           <button
                             type="button"
@@ -455,7 +510,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                             disabled={busyId === row.__id}
                             onClick={() => void onCompleteFollowUp(row)}
                           >
-                            Complete follow-up
+                            {t('mission.completeFollowUp', { defaultMessage: 'Complete follow-up' })}
                           </button>
                         </>
                       ) : null}
@@ -469,12 +524,12 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
       </div>
       <footer className="mission-table-footer">
         <span>{message}</span>
-        <div role="navigation" aria-label={`${screen.title} pagination`}>
-          <button type="button" aria-label="Previous page">‹</button>
-          <button className="active" type="button" aria-label="Page 1" aria-current="page">1</button>
-          <button type="button" aria-label="Page 2">2</button>
-          <button type="button" aria-label="Page 3">3</button>
-          <button type="button" aria-label="Next page">›</button>
+        <div role="navigation" aria-label={t('common.paginationAria', { defaultMessage: '{title} pagination', vars: { title: screen.title } })}>
+          <button type="button" aria-label={t('common.previousPage', { defaultMessage: 'Previous page' })}>‹</button>
+          <button className="active" type="button" aria-label={t('common.pageN', { defaultMessage: 'Page {n}', vars: { n: 1 } })} aria-current="page">1</button>
+          <button type="button" aria-label={t('common.pageN', { defaultMessage: 'Page {n}', vars: { n: 2 } })}>2</button>
+          <button type="button" aria-label={t('common.pageN', { defaultMessage: 'Page {n}', vars: { n: 3 } })}>3</button>
+          <button type="button" aria-label={t('common.nextPage', { defaultMessage: 'Next page' })}>›</button>
         </div>
       </footer>
     </section>
@@ -482,36 +537,103 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
   );
 }
 
-function MissionLineChart({ title = 'Souls Over Time' }: { title?: string }) {
-  return <article className="mission-chart-card">
-    <header><h3>{title}</h3><span>This Month⌄</span></header>
-    <svg className="mission-line-chart" viewBox="0 0 520 210" role="img" aria-label={`${title} chart`}>
-      <defs><linearGradient id="mission-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#5530e8" stopOpacity=".22"/><stop offset="1" stopColor="#5530e8" stopOpacity="0"/></linearGradient></defs>
-      {[30, 75, 120, 165].map(y => <line x1="28" x2="500" y1={y} y2={y} key={y}/>) }
-      <path className="mission-chart-area" d="M28 177 L98 134 L168 142 L238 103 L308 118 L378 90 L448 76 L500 40 L500 190 L28 190 Z" fill="url(#mission-area)"/>
-      <polyline points="28,177 98,134 168,142 238,103 308,118 378,90 448,76 500,40"/>
-      {[['28','177'],['98','134'],['168','142'],['238','103'],['308','118'],['378','90'],['448','76'],['500','40']].map(([x,y]) => <circle cx={x} cy={y} r="5" key={`${x}-${y}`}/>) }
-    </svg>
-    <div className="mission-chart-labels"><span>May 1</span><span>May 5</span><span>May 10</span><span>May 15</span><span>May 20</span></div>
-  </article>;
+function MissionLineChart({ title }: { title?: string }) {
+  const { t } = useLocale();
+  const chartTitle = title ?? t('mission.soulsOverTime', { defaultMessage: 'Souls Over Time' });
+  return (
+    <article className="mission-chart-card">
+      <header>
+        <h3>{chartTitle}</h3>
+        <span>{t('common.thisMonth', { defaultMessage: 'This Month⌄' })}</span>
+      </header>
+      <svg className="mission-line-chart" viewBox="0 0 520 210" role="img" aria-label={t('common.chartAria', { defaultMessage: '{title} chart', vars: { title: chartTitle } })}>
+        <defs><linearGradient id="mission-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#5530e8" stopOpacity=".22"/><stop offset="1" stopColor="#5530e8" stopOpacity="0"/></linearGradient></defs>
+        {[30, 75, 120, 165].map(y => <line x1="28" x2="500" y1={y} y2={y} key={y}/>) }
+        <path className="mission-chart-area" d="M28 177 L98 134 L168 142 L238 103 L308 118 L378 90 L448 76 L500 40 L500 190 L28 190 Z" fill="url(#mission-area)"/>
+        <polyline points="28,177 98,134 168,142 238,103 308,118 378,90 448,76 500,40"/>
+        {[['28','177'],['98','134'],['168','142'],['238','103'],['308','118'],['378','90'],['448','76'],['500','40']].map(([x,y]) => <circle cx={x} cy={y} r="5" key={`${x}-${y}`}/>) }
+      </svg>
+      <div className="mission-chart-labels">
+        <span>{t('mission.chartMay1', { defaultMessage: 'May 1' })}</span>
+        <span>{t('mission.chartMay5', { defaultMessage: 'May 5' })}</span>
+        <span>{t('mission.chartMay10', { defaultMessage: 'May 10' })}</span>
+        <span>{t('mission.chartMay15', { defaultMessage: 'May 15' })}</span>
+        <span>{t('mission.chartMay20', { defaultMessage: 'May 20' })}</span>
+      </div>
+    </article>
+  );
 }
 
 function MissionDonut({ title, items, center = '12,458' }: { title: string; items: string[]; center?: string }) {
-  return <article className="mission-donut-card"><h3>{title}</h3><div className="mission-donut-layout">
-    <div className="mission-donut" role="img" aria-label={`${title} donut chart. Total ${center}. ${items.join(', ')}`}><div><strong>{center}</strong><span>Total</span></div></div>
-    <ul>{items.map((item, index) => <li key={item}><i style={{ backgroundColor: missionPalette[index % missionPalette.length] }}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1] ?? `${Math.max(8, 48 - index * 9)}%`}</b></li>)}</ul>
-  </div></article>;
+  const { t } = useLocale();
+  const totalLabel = t('common.total', { defaultMessage: 'Total' });
+  return (
+    <article className="mission-donut-card">
+      <h3>{title}</h3>
+      <div className="mission-donut-layout">
+        <div
+          className="mission-donut"
+          role="img"
+          aria-label={t('common.donutAria', {
+            defaultMessage: '{title} donut chart. Total {center}. {items}',
+            vars: { title, center, items: items.join(', ') },
+          })}
+        >
+          <div><strong>{center}</strong><span>{totalLabel}</span></div>
+        </div>
+        <ul>{items.map((item, index) => <li key={item}><i style={{ backgroundColor: missionPalette[index % missionPalette.length] }}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1] ?? `${Math.max(8, 48 - index * 9)}%`}</b></li>)}</ul>
+      </div>
+    </article>
+  );
 }
 
-function MissionDashboard({ screen }: { screen: AdminScreen }) {
-  return <div className="mission-dashboard">
-    <MissionMetrics metrics={screen.metrics}/>
-    <div className="mission-dashboard-charts"><MissionLineChart/><MissionDonut title="Souls by Status" center="12,458" items={['Won — 44%', 'Following Up — 31%', 'Discipled — 19%', 'Other — 6%']}/></div>
-    <div className="mission-dashboard-bottom">
-      <article className="mission-list-card"><header><h3 aria-level={2}>Top Crusades</h3><button type="button">View all crusades</button></header>{(screen.rows ?? []).map((row, index) => <div className="mission-ranked-row" key={row['Crusade Name']}><span>{index + 1}</span><b>{row['Crusade Name']}</b><strong>{row.Souls}</strong></div>)}</article>
-      <article className="mission-action-card"><header><h3 aria-level={2}>Quick Actions</h3></header><div>{(screen.items ?? []).map((item, index) => <button type="button" key={item}><i aria-hidden="true">{['＋', '♙', '✉', '▤'][index]}</i><span>{item}</span></button>)}</div></article>
+function MissionDashboard({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
+  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
+  const statusItems = dashboard.live
+    ? breakdownToItems(dashboard.data?.breakdown)
+    : [
+      t('mission.wonPct', { defaultMessage: 'Won — 44%' }),
+      t('mission.followingUpPct', { defaultMessage: 'Following Up — 31%' }),
+      t('mission.discipledPct', { defaultMessage: 'Discipled — 19%' }),
+      t('mission.otherPct', { defaultMessage: 'Other — 6%' }),
+    ];
+  const rows = dashboard.live ? (dashboard.data?.recent_rows ?? []) : (screen.rows ?? []);
+  const donut = dashboard.data?.donut;
+
+  return (
+    <div className="mission-dashboard">
+      {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
+      {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
+      <MissionMetrics metrics={metrics}/>
+      <div className="mission-dashboard-charts">
+        <MissionLineChart/>
+        <MissionDonut
+          title={t('mission.soulsByStatus', { defaultMessage: 'Souls by Status' })}
+          center={donut?.value ?? '12,458'}
+          items={statusItems}
+        />
+      </div>
+      <div className="mission-dashboard-bottom">
+        <article className="mission-list-card">
+          <header>
+            <h3 aria-level={2}>{t('mission.topCrusades', { defaultMessage: 'Top Crusades' })}</h3>
+            <button type="button">{t('mission.viewAllCrusades', { defaultMessage: 'View all crusades' })}</button>
+          </header>
+          {rows.map((row, index) => (
+            <div className="mission-ranked-row" key={row['Crusade Name'] ?? index}>
+              <span>{index + 1}</span><b>{row['Crusade Name']}</b><strong>{row.Souls}</strong>
+            </div>
+          ))}
+        </article>
+        <article className="mission-action-card">
+          <header><h3 aria-level={2}>{t('common.quickActions', { defaultMessage: 'Quick Actions' })}</h3></header>
+          <div>{(screen.items ?? []).map((item, index) => <button type="button" key={item}><i aria-hidden="true">{['＋', '♙', '✉', '▤'][index]}</i><span>{item}</span></button>)}</div>
+        </article>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function MissionDetailHero({ screen, badge }: { screen: AdminScreen; badge?: string }) {
@@ -523,15 +645,25 @@ function MissionDefinitionList({ details = {} }: { details?: Row }) {
 }
 
 function CrusadeDetail({ screen }: { screen: AdminScreen }) {
-  return <div className="mission-crusade-detail">
-    <MissionDetailHero screen={screen} badge="Completed"/>
-    <MissionMetrics metrics={screen.metrics}/>
-    <div className="mission-detail-grid"><article className="mission-panel"><h3>Crusade Details</h3><MissionDefinitionList details={screen.details}/></article><MissionLineChart title="Soul Trend"/></div>
-    <div className="mission-link-grid">{(screen.items ?? []).map((item, index) => <button type="button" key={item}><i aria-hidden="true">{['♙', '↻', '▤', '₦'][index]}</i><span>{item}</span><b aria-hidden="true">→</b></button>)}</div>
-  </div>;
+  const { t } = useLocale();
+  return (
+    <div className="mission-crusade-detail">
+      <MissionDetailHero screen={screen} badge="Completed"/>
+      <MissionMetrics metrics={screen.metrics}/>
+      <div className="mission-detail-grid">
+        <article className="mission-panel">
+          <h3>{t('mission.crusadeDetails', { defaultMessage: 'Crusade Details' })}</h3>
+          <MissionDefinitionList details={screen.details}/>
+        </article>
+        <MissionLineChart title={t('mission.soulTrend', { defaultMessage: 'Soul Trend' })}/>
+      </div>
+      <div className="mission-link-grid">{(screen.items ?? []).map((item, index) => <button type="button" key={item}><i aria-hidden="true">{['♙', '↻', '▤', '₦'][index]}</i><span>{item}</span><b aria-hidden="true">→</b></button>)}</div>
+    </div>
+  );
 }
 
 function MissionWizard({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const details = Object.entries(screen.details ?? {});
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
@@ -562,47 +694,129 @@ function MissionWizard({ screen }: { screen: AdminScreen }) {
             {details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
         )}
-        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel="Create crusade" primaryClassName="mission-primary-button" secondaryClassName="mission-secondary-button" />
+        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={t('mission.createCrusade', { defaultMessage: 'Create crusade' })} primaryClassName="mission-primary-button" secondaryClassName="mission-secondary-button" />
       </section>
     </div>
   );
 }
 
 function InvitationReview({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const entries = Object.entries(screen.details ?? {});
-  return <div className="mission-invitation-review">
-    <div className="mission-review-progress" role="list" aria-label="Invitation review progress"><span role="listitem" className="done" aria-label="Invitation details complete">✓</span><i aria-hidden="true"/><span role="listitem" className="done" aria-label="Invitee message complete">✓</span><i aria-hidden="true"/><span role="listitem" className="active" aria-current="step" aria-label="Step 3, Review">3</span><b>Review</b></div>
-    <div className="mission-review-columns">
-      <article className="mission-panel"><h3>Invitation Details</h3><MissionDefinitionList details={Object.fromEntries(entries.slice(0, 8))}/><h4>Documents</h4><div className="mission-document-list">{(screen.items ?? []).map(item => <button type="button" key={item}>▧ <span>{item}</span><b>View</b></button>)}</div></article>
-      <article className="mission-panel"><h3>Invitee Message</h3><blockquote>{screen.details?.Message}</blockquote><label className="mission-response-field"><span>Response note</span><textarea placeholder="Add an optional note..."/></label></article>
+  return (
+    <div className="mission-invitation-review">
+      <div className="mission-review-progress" role="list" aria-label={t('mission.invitationReviewProgress', { defaultMessage: 'Invitation review progress' })}>
+        <span role="listitem" className="done" aria-label={t('mission.invitationDetailsComplete', { defaultMessage: 'Invitation details complete' })}>✓</span>
+        <i aria-hidden="true"/>
+        <span role="listitem" className="done" aria-label={t('mission.inviteeMessageComplete', { defaultMessage: 'Invitee message complete' })}>✓</span>
+        <i aria-hidden="true"/>
+        <span role="listitem" className="active" aria-current="step" aria-label={t('mission.step3Review', { defaultMessage: 'Step 3, Review' })}>3</span>
+        <b>{t('common.review', { defaultMessage: 'Review' })}</b>
+      </div>
+      <div className="mission-review-columns">
+        <article className="mission-panel">
+          <h3>{t('mission.invitationDetails', { defaultMessage: 'Invitation Details' })}</h3>
+          <MissionDefinitionList details={Object.fromEntries(entries.slice(0, 8))}/>
+          <h4>{t('common.documents', { defaultMessage: 'Documents' })}</h4>
+          <div className="mission-document-list">{(screen.items ?? []).map(item => <button type="button" key={item}>▧ <span>{item}</span><b>{t('common.view', { defaultMessage: 'View' })}</b></button>)}</div>
+        </article>
+        <article className="mission-panel">
+          <h3>{t('mission.inviteeMessage', { defaultMessage: 'Invitee Message' })}</h3>
+          <blockquote>{screen.details?.Message}</blockquote>
+          <label className="mission-response-field">
+            <span>{t('mission.responseNote', { defaultMessage: 'Response note' })}</span>
+            <textarea placeholder={t('mission.optionalNotePlaceholder', { defaultMessage: 'Add an optional note...' })}/>
+          </label>
+        </article>
+      </div>
+      <footer className="mission-review-actions">
+        <button className="mission-danger-outline" type="button">{t('mission.decline', { defaultMessage: 'Decline' })}</button>
+        <button className="mission-secondary-button" type="button">{t('mission.requestMoreInfo', { defaultMessage: 'Request More Info' })}</button>
+        <button className="mission-success-button" type="button">{screen.action}</button>
+      </footer>
     </div>
-    <footer className="mission-review-actions"><button className="mission-danger-outline" type="button">Decline</button><button className="mission-secondary-button" type="button">Request More Info</button><button className="mission-success-button" type="button">{screen.action}</button></footer>
-  </div>;
+  );
 }
 
 function PlanningView({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const details = Object.entries(screen.details ?? {});
-  return <div className="mission-planning"><MissionTabs tabs={screen.tabs}/><div className="mission-planning-grid">
-    <article className="mission-panel mission-planning-summary"><span className="mission-progress-ring" role="progressbar" aria-label="Planning completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={100}>100%</span><h3>7 / 7 Steps Complete</h3><p>Planning is complete and ready for execution.</p>{(screen.items ?? []).map(item => <div key={item}><i aria-hidden="true">✓</i><span>{item.split(' — ')[0]}</span><MissionStatus value={item.split(' — ')[1]}/></div>)}</article>
-    <article className="mission-panel mission-planning-details"><h3>General Plan</h3>{details.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</article>
-  </div></div>;
+  return (
+    <div className="mission-planning">
+      <MissionTabs tabs={screen.tabs}/>
+      <div className="mission-planning-grid">
+        <article className="mission-panel mission-planning-summary">
+          <span className="mission-progress-ring" role="progressbar" aria-label={t('mission.planningCompletion', { defaultMessage: 'Planning completion' })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={100}>100%</span>
+          <h3>{t('mission.stepsComplete', { defaultMessage: '7 / 7 Steps Complete' })}</h3>
+          <p>{t('mission.planningReady', { defaultMessage: 'Planning is complete and ready for execution.' })}</p>
+          {(screen.items ?? []).map(item => <div key={item}><i aria-hidden="true">✓</i><span>{item.split(' — ')[0]}</span><MissionStatus value={item.split(' — ')[1]}/></div>)}
+        </article>
+        <article className="mission-panel mission-planning-details">
+          <h3>{t('mission.generalPlan', { defaultMessage: 'General Plan' })}</h3>
+          {details.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+        </article>
+      </div>
+    </div>
+  );
 }
 
 function TeamDetail({ screen }: { screen: AdminScreen }) {
-  return <div className="mission-team-detail"><MissionDetailHero screen={screen}/><MissionMetrics metrics={screen.metrics}/><div className="mission-team-grid">
-    <article className="mission-panel"><h3>Team Description</h3><p>{screen.details?.Description}</p><div className="mission-team-leader"><span>BD</span><div><small>Team Leader</small><strong>{screen.details?.Leader}</strong></div><MissionStatus value="Leader"/></div></article>
-    <article className="mission-panel"><header><h3>Team Members</h3><button type="button">View all members</button></header><div className="mission-member-list">{(screen.items ?? []).map(item => <div key={item}><span>{item.slice(0, 1)}</span><b>{item.split(' — ')[0]}</b><small>{item.split(' — ')[1]}</small></div>)}</div></article>
-  </div></div>;
+  const { t } = useLocale();
+  return (
+    <div className="mission-team-detail">
+      <MissionDetailHero screen={screen}/>
+      <MissionMetrics metrics={screen.metrics}/>
+      <div className="mission-team-grid">
+        <article className="mission-panel">
+          <h3>{t('mission.teamDescription', { defaultMessage: 'Team Description' })}</h3>
+          <p>{screen.details?.Description}</p>
+          <div className="mission-team-leader">
+            <span>BD</span>
+            <div>
+              <small>{t('mission.teamLeader', { defaultMessage: 'Team Leader' })}</small>
+              <strong>{screen.details?.Leader}</strong>
+            </div>
+            <MissionStatus value="Leader"/>
+          </div>
+        </article>
+        <article className="mission-panel">
+          <header>
+            <h3>{t('mission.teamMembers', { defaultMessage: 'Team Members' })}</h3>
+            <button type="button">{t('mission.viewAllMembers', { defaultMessage: 'View all members' })}</button>
+          </header>
+          <div className="mission-member-list">{(screen.items ?? []).map(item => <div key={item}><span>{item.slice(0, 1)}</span><b>{item.split(' — ')[0]}</b><small>{item.split(' — ')[1]}</small></div>)}</div>
+        </article>
+      </div>
+    </div>
+  );
 }
 
 function SoulDetail({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const entries = Object.entries(screen.details ?? {});
-  return <div className="mission-soul-detail">
-    <MissionDetailHero screen={screen} badge="New"/>
-    <div className="mission-soul-layout"><article className="mission-panel mission-person-card"><div className="mission-person-avatar">CO</div><h3>{screen.title}</h3><p>Won at Lagos Mega Crusade</p><MissionStatus value="New Soul"/><div className="mission-person-actions">{(screen.items ?? []).map(item => <button type="button" key={item}>{item}</button>)}</div></article>
-      <article className="mission-panel"><h3>Information</h3><dl className="mission-profile-details">{entries.map(([label, value]) => <div className={label === 'Spiritual Information' ? 'wide' : ''} key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><footer><button className="mission-danger-outline" type="button">Declare</button><button className="mission-secondary-button" type="button">Discipleship Status</button><button className="mission-primary-button" type="button">Register</button></footer></article>
+  return (
+    <div className="mission-soul-detail">
+      <MissionDetailHero screen={screen} badge="New"/>
+      <div className="mission-soul-layout">
+        <article className="mission-panel mission-person-card">
+          <div className="mission-person-avatar">CO</div>
+          <h3>{screen.title}</h3>
+          <p>{t('mission.wonAtLagos', { defaultMessage: 'Won at Lagos Mega Crusade' })}</p>
+          <MissionStatus value="New Soul"/>
+          <div className="mission-person-actions">{(screen.items ?? []).map(item => <button type="button" key={item}>{item}</button>)}</div>
+        </article>
+        <article className="mission-panel">
+          <h3>{t('common.information', { defaultMessage: 'Information' })}</h3>
+          <dl className="mission-profile-details">{entries.map(([label, value]) => <div className={label === 'Spiritual Information' ? 'wide' : ''} key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+          <footer>
+            <button className="mission-danger-outline" type="button">{t('mission.declare', { defaultMessage: 'Declare' })}</button>
+            <button className="mission-secondary-button" type="button">{t('mission.discipleshipStatus', { defaultMessage: 'Discipleship Status' })}</button>
+            <button className="mission-primary-button" type="button">{t('common.register', { defaultMessage: 'Register' })}</button>
+          </footer>
+        </article>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function MissionBars({ items }: { items: string[] }) {
@@ -610,13 +824,36 @@ function MissionBars({ items }: { items: string[] }) {
 }
 
 function DistributionView({ screen }: { screen: AdminScreen }) {
-  return <div className="mission-distribution"><MissionMetrics metrics={screen.metrics}/><div className="mission-analytics-grid">
-    <MissionDonut title="Distribution by Team" center="245" items={screen.items ?? []}/>
-    <article className="mission-panel"><header><h3>Recent Distributions</h3><button type="button">View all</button></header><div className="mission-compact-table">{(screen.rows ?? []).map(row => <div key={row.Crusade}><b>{row.Crusade}</b><span>{row.Mentor}</span><strong>{row.Souls} souls</strong><small>{row.Date}</small></div>)}</div></article>
-  </div><button className="mission-primary-button mission-full-action" type="button">{screen.action}</button></div>;
+  const { t } = useLocale();
+  return (
+    <div className="mission-distribution">
+      <MissionMetrics metrics={screen.metrics}/>
+      <div className="mission-analytics-grid">
+        <MissionDonut title={t('mission.distributionByTeam', { defaultMessage: 'Distribution by Team' })} center="245" items={screen.items ?? []}/>
+        <article className="mission-panel">
+          <header>
+            <h3>{t('mission.recentDistributions', { defaultMessage: 'Recent Distributions' })}</h3>
+            <button type="button">{t('common.viewAll', { defaultMessage: 'View all' })}</button>
+          </header>
+          <div className="mission-compact-table">
+            {(screen.rows ?? []).map(row => (
+              <div key={row.Crusade}>
+                <b>{row.Crusade}</b>
+                <span>{row.Mentor}</span>
+                <strong>{t('mission.soulsCount', { defaultMessage: '{count} souls', vars: { count: row.Souls } })}</strong>
+                <small>{row.Date}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
+      <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>
+    </div>
+  );
 }
 
 function FollowUpView({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const live = shouldUseOperationsLiveData();
   const [souls, setSouls] = useState<SoulRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -629,9 +866,9 @@ function FollowUpView({ screen }: { screen: AdminScreen }) {
       setError(null);
     } catch (err) {
       setSouls([]);
-      setError(operationsErrorMessage(err, 'Unable to load souls for follow-up.'));
+      setError(operationsErrorMessage(err, t('errors.unableToLoadSoulsForFollowUp', { defaultMessage: 'Unable to load souls for follow-up.' })));
     }
-  }, [live, screen.scope]);
+  }, [live, screen.scope, t]);
 
   useEffect(() => {
     void refresh();
@@ -646,52 +883,181 @@ function FollowUpView({ screen }: { screen: AdminScreen }) {
     );
   }
 
-  return <div className="mission-follow-up"><MissionMetrics metrics={screen.metrics}/><div className="mission-analytics-grid">
-    <MissionDonut title="Follow-Up by Status" center="1,842" items={screen.items ?? []}/>
-    <article className="mission-panel mission-overdue"><header><h3>Overdue Follow-Ups</h3><button type="button">View all</button></header>{(screen.rows ?? []).map(row => <div key={row.Name}><span className="mission-mini-avatar">{row.Name?.slice(0, 1)}</span><b>{row.Name}</b><small>{row.Mentor}</small><MissionStatus value={row.Status ?? 'Overdue'}/></div>)}</article>
-  </div><button className="mission-primary-button mission-full-action" type="button">{screen.action}</button></div>;
+  return (
+    <div className="mission-follow-up">
+      <MissionMetrics metrics={screen.metrics}/>
+      <div className="mission-analytics-grid">
+        <MissionDonut title={t('mission.followUpByStatus', { defaultMessage: 'Follow-Up by Status' })} center="1,842" items={screen.items ?? []}/>
+        <article className="mission-panel mission-overdue">
+          <header>
+            <h3>{t('mission.overdueFollowUps', { defaultMessage: 'Overdue Follow-Ups' })}</h3>
+            <button type="button">{t('common.viewAll', { defaultMessage: 'View all' })}</button>
+          </header>
+          {(screen.rows ?? []).map(row => (
+            <div key={row.Name}>
+              <span className="mission-mini-avatar">{row.Name?.slice(0, 1)}</span>
+              <b>{row.Name}</b>
+              <small>{row.Mentor}</small>
+              <MissionStatus value={row.Status ?? 'Overdue'}/>
+            </div>
+          ))}
+        </article>
+      </div>
+      <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>
+    </div>
+  );
 }
 
 function GapDashboard({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const items = screen.items ?? [];
   const midpoint = Math.ceil(items.length / 2);
-  return <div className="mission-gap-dashboard"><MissionMetrics metrics={screen.metrics}/><div className="mission-gap-grid">
-    <article className="mission-panel"><h3>{screen.id === 'I-19' ? 'Gap by Crusade' : 'Follow-Up Coverage by Crusade'}</h3><MissionBars items={items.slice(0, midpoint)}/></article>
-    <MissionDonut title="Gap by Days" center="768" items={items.slice(midpoint)}/>
-  </div>{screen.action && <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>}</div>;
+  return (
+    <div className="mission-gap-dashboard">
+      <MissionMetrics metrics={screen.metrics}/>
+      <div className="mission-gap-grid">
+        <article className="mission-panel">
+          <h3>{screen.id === 'I-19' ? t('mission.gapByCrusade', { defaultMessage: 'Gap by Crusade' }) : t('mission.followUpCoverageByCrusade', { defaultMessage: 'Follow-Up Coverage by Crusade' })}</h3>
+          <MissionBars items={items.slice(0, midpoint)}/>
+        </article>
+        <MissionDonut title={t('mission.gapByDays', { defaultMessage: 'Gap by Days' })} center="768" items={items.slice(midpoint)}/>
+      </div>
+      {screen.action && <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>}
+    </div>
+  );
 }
 
 function PartnerDetail({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const details = Object.entries(screen.details ?? {});
-  return <div className="mission-partner-detail"><MissionDetailHero screen={screen}/><div className="mission-partner-grid">
-    <article className="mission-panel mission-partner-profile"><div className="mission-partner-logo">BSN</div><h3>{screen.title}</h3><p>Making the Bible available and affordable.</p><button className="mission-secondary-button" type="button">Visit website ↗</button><div><MissionStatus value="Strategic Partner"/></div></article>
-    <article className="mission-panel"><h3>Partner Information</h3><MissionDefinitionList details={Object.fromEntries(details.slice(0, 6))}/></article>
-    <article className="mission-panel mission-partnership"><h3>About Partner</h3><p>{screen.details?.['About Partner']}</p><h3>Current Partnership</h3><ul>{String(screen.details?.['Current Partnership'] ?? '').split(';').map(item => <li key={item}>✓ {item.trim()}</li>)}</ul></article>
-  </div></div>;
+  return (
+    <div className="mission-partner-detail">
+      <MissionDetailHero screen={screen}/>
+      <div className="mission-partner-grid">
+        <article className="mission-panel mission-partner-profile">
+          <div className="mission-partner-logo">BSN</div>
+          <h3>{screen.title}</h3>
+          <p>{t('mission.bibleAvailable', { defaultMessage: 'Making the Bible available and affordable.' })}</p>
+          <button className="mission-secondary-button" type="button">{t('mission.visitWebsite', { defaultMessage: 'Visit website ↗' })}</button>
+          <div><MissionStatus value="Strategic Partner"/></div>
+        </article>
+        <article className="mission-panel">
+          <h3>{t('mission.partnerInformation', { defaultMessage: 'Partner Information' })}</h3>
+          <MissionDefinitionList details={Object.fromEntries(details.slice(0, 6))}/>
+        </article>
+        <article className="mission-panel mission-partnership">
+          <h3>{t('mission.aboutPartner', { defaultMessage: 'About Partner' })}</h3>
+          <p>{screen.details?.['About Partner']}</p>
+          <h3>{t('mission.currentPartnership', { defaultMessage: 'Current Partnership' })}</h3>
+          <ul>{String(screen.details?.['Current Partnership'] ?? '').split(';').map(item => <li key={item}>✓ {item.trim()}</li>)}</ul>
+        </article>
+      </div>
+    </div>
+  );
 }
 
 function ReportsView({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const items = screen.items ?? [];
-  return <div className="mission-reports"><div className="mission-report-grid"><article className="mission-panel"><h3>Popular Reports</h3>{items.slice(0, 7).map(item => <button type="button" key={item}><span>▧</span><b>{item}</b><i>→</i></button>)}</article><article className="mission-panel"><h3>Recent Reports</h3>{items.slice(7).map((item, index) => <div className="mission-report-item" key={item}><span>▤</span><div><b>{item}</b><small>{['May 15, 2024', 'May 13, 2024', 'May 10, 2024', 'May 2, 2024'][index]}</small></div><button type="button">Download</button></div>)}</article></div><button className="mission-primary-button mission-full-action" type="button">{screen.action}</button></div>;
+  const reportDates = [
+    t('mission.reportDateMay15', { defaultMessage: 'May 15, 2024' }),
+    t('mission.reportDateMay13', { defaultMessage: 'May 13, 2024' }),
+    t('mission.reportDateMay10', { defaultMessage: 'May 10, 2024' }),
+    t('mission.reportDateMay2', { defaultMessage: 'May 2, 2024' }),
+  ];
+  return (
+    <div className="mission-reports">
+      <div className="mission-report-grid">
+        <article className="mission-panel">
+          <h3>{t('mission.popularReports', { defaultMessage: 'Popular Reports' })}</h3>
+          {items.slice(0, 7).map(item => <button type="button" key={item}><span>▧</span><b>{item}</b><i>→</i></button>)}
+        </article>
+        <article className="mission-panel">
+          <h3>{t('mission.recentReports', { defaultMessage: 'Recent Reports' })}</h3>
+          {items.slice(7).map((item, index) => (
+            <div className="mission-report-item" key={item}>
+              <span>▤</span>
+              <div><b>{item}</b><small>{reportDates[index]}</small></div>
+              <button type="button">{t('common.download', { defaultMessage: 'Download' })}</button>
+            </div>
+          ))}
+        </article>
+      </div>
+      <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>
+    </div>
+  );
 }
 
 function MissionAssistant({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const suggestions = (screen.items ?? []).slice(0, 4);
   const insight = (screen.items ?? [])[4]?.replace('AI Insight — ', '');
-  return <div className="mission-ai">
-    <section className="mission-ai-hero"><div className="mission-ai-orb">✦</div><h2>How can I help your mission today?</h2><p>Ask for performance insights, projections, follow-up opportunities, or partner recommendations.</p><div className="mission-ai-chips">{suggestions.map(item => <button type="button" key={item}>{item}</button>)}</div></section>
-    <article className="mission-ai-insight"><header><span aria-hidden="true">✦</span><div><small>AI Insight</small><strong>Follow-up opportunity detected</strong></div><MissionStatus value="Live"/></header><p>{insight}</p><div className="mission-ai-numbers"><span><b>312</b> souls overdue</span><span><b>6</b> mentors available</span><span><b>+18%</b> potential lift</span></div><button className="mission-secondary-button" type="button">View Details</button></article>
-    <form className="mission-ai-composer" aria-label="Mission AI prompt"><input aria-label="Ask Mission AI" placeholder="Ask anything about missions..."/><button type="submit" aria-label="Send message">↑</button></form>
-  </div>;
+  return (
+    <div className="mission-ai">
+      <section className="mission-ai-hero">
+        <div className="mission-ai-orb">✦</div>
+        <h2>{t('mission.assistantHeadline', { defaultMessage: 'How can I help your mission today?' })}</h2>
+        <p>{t('mission.assistantCopy', { defaultMessage: 'Ask for performance insights, projections, follow-up opportunities, or partner recommendations.' })}</p>
+        <div className="mission-ai-chips">{suggestions.map(item => <button type="button" key={item}>{item}</button>)}</div>
+      </section>
+      <article className="mission-ai-insight">
+        <header>
+          <span aria-hidden="true">✦</span>
+          <div>
+            <small>{t('mission.aiInsight', { defaultMessage: 'AI Insight' })}</small>
+            <strong>{t('mission.followUpOpportunity', { defaultMessage: 'Follow-up opportunity detected' })}</strong>
+          </div>
+          <MissionStatus value="Live"/>
+        </header>
+        <p>{insight}</p>
+        <div className="mission-ai-numbers">
+          <span><b>312</b> {t('mission.soulsOverdue', { defaultMessage: 'souls overdue' })}</span>
+          <span><b>6</b> {t('mission.mentorsAvailable', { defaultMessage: 'mentors available' })}</span>
+          <span><b>+18%</b> {t('mission.potentialLift', { defaultMessage: 'potential lift' })}</span>
+        </div>
+        <button className="mission-secondary-button" type="button">{t('common.viewDetails', { defaultMessage: 'View Details' })}</button>
+      </article>
+      <form className="mission-ai-composer" aria-label={t('mission.aiPromptAria', { defaultMessage: '{mission} AI prompt', vars: { mission: t('nav.mission') } })}>
+        <input aria-label={t('mission.askMissionAi', { defaultMessage: 'Ask {mission} AI', vars: { mission: t('nav.mission') } })} placeholder={t('mission.askAnythingPlaceholder', { defaultMessage: 'Ask anything about missions...' })}/>
+        <button type="submit" aria-label={t('common.sendMessage', { defaultMessage: 'Send message' })}>↑</button>
+      </form>
+    </div>
+  );
 }
 
 function GenericDetail({ screen }: { screen: AdminScreen }) {
-  return <div className="mission-generic-detail"><MissionDetailHero screen={screen}/>{screen.metrics && <MissionMetrics metrics={screen.metrics}/>}<div className="mission-detail-grid"><article className="mission-panel"><h3>Overview</h3><MissionDefinitionList details={screen.details}/></article>{screen.items && <article className="mission-panel"><h3>Related Information</h3><div className="mission-member-list">{screen.items.map(item => <div key={item}><span>◇</span><b>{item}</b><small>View details</small></div>)}</div></article>}</div></div>;
+  const { t } = useLocale();
+  return (
+    <div className="mission-generic-detail">
+      <MissionDetailHero screen={screen}/>
+      {screen.metrics && <MissionMetrics metrics={screen.metrics}/>}
+      <div className="mission-detail-grid">
+        <article className="mission-panel">
+          <h3>{t('common.overview', { defaultMessage: 'Overview' })}</h3>
+          <MissionDefinitionList details={screen.details}/>
+        </article>
+        {screen.items && (
+          <article className="mission-panel">
+            <h3>{t('common.relatedInformation', { defaultMessage: 'Related Information' })}</h3>
+            <div className="mission-member-list">
+              {screen.items.map(item => (
+                <div key={item}>
+                  <span>◇</span>
+                  <b>{item}</b>
+                  <small>{t('common.viewDetails', { defaultMessage: 'View details' })}</small>
+                </div>
+              ))}
+            </div>
+          </article>
+        )}
+      </div>
+    </div>
+  );
 }
 
-export function MissionScreenContent({ screen }: { screen: AdminScreen }) {
+export function MissionScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   switch (screen.id) {
-    case 'I-01': return <MissionDashboard screen={screen}/>;
+    case 'I-01': return <MissionDashboard screen={screen} requestedScope={requestedScope} />;
     case 'I-03': return <CrusadeDetail screen={screen}/>;
     case 'I-04': return <MissionWizard screen={screen}/>;
     case 'I-06': return <InvitationReview screen={screen}/>;

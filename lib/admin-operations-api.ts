@@ -127,6 +127,9 @@ export type PrayerRequestRecord = {
   person_id?: string | null;
   person_name?: string | null;
   person_email?: string | null;
+  assigned_to_person_id?: string | null;
+  assigned_to_name?: string | null;
+  assigned_at?: string | null;
   subject: string;
   body: string;
   status: string;
@@ -415,6 +418,20 @@ export function transitionPrayerRequest(
     { status },
     { scope },
   );
+}
+
+export async function assignPrayerRequest(
+  prayerId: string,
+  input: { assigned_to_person_id: string; note?: string },
+  scope?: AdminScope,
+): Promise<PrayerRequestRecord> {
+  const result = await opsMutate<{ prayer_request: PrayerRequestRecord }>(
+    `admin/church/prayer-requests/${encodeURIComponent(prayerId)}/assignments`,
+    'POST',
+    input,
+    { scope },
+  );
+  return result.prayer_request;
 }
 
 export function listPastoralNeeds(params: ListQuery = {}): Promise<OpsListResult<PastoralNeedRecord>> {

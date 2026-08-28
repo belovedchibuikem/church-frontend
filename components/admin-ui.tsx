@@ -43,6 +43,12 @@ import {
 import { KcaScreenContent } from './kca-ui';
 import { MissionScreenContent } from './mission-ui';
 import { PlatformScreenContent, DemoDatasetBanner } from './platform-ui';
+import {
+  breakdownToItems,
+  dashboardModuleForScreen,
+  formatRelativeTime,
+} from '../lib/admin-dashboard-api';
+import { useAdminDashboard } from '../lib/use-admin-dashboard';
 import { AdminInteractionShell } from './admin-interaction-shell';
 import { getAdminBreadcrumbs, getInteractionRouteMap, type AdminBreadcrumb } from '../lib/admin-navigation';
 import { AppBrand } from './app-brand';
@@ -61,6 +67,7 @@ import { getAdminModuleForRoute } from '../lib/admin-modules';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
 import { catalogOptions, churchTypeOptions, statusOptions } from '../lib/form-catalogs';
 import {
+  assignPrayerRequest,
   completeFollowUpTask,
   createChurch,
   defaultOpsScope,
@@ -96,8 +103,68 @@ import {
   resolveCatalogDataset,
   shouldUseCatalogLiveData,
 } from '../lib/admin-catalog-api';
+import { useLocale } from '@/components/locale-provider';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 
 const CATALOG_FEED_COLUMNS = ['Item', 'Detail', 'Time'];
+
+type AdminTranslate = (key: string, options?: { defaultMessage?: string; vars?: Record<string, string | number> }) => string;
+
+function adminChromeKey(label: string): string {
+  switch (label) {
+    case 'Dashboard':
+      return 'common.dashboard';
+    case 'Settings':
+      return 'common.settings';
+    case 'Search':
+      return 'common.search';
+    case 'Filters':
+      return 'common.filters';
+    case 'Save':
+      return 'common.save';
+    case 'Cancel':
+      return 'common.cancel';
+    case 'Logout':
+      return 'common.logout';
+    case 'Submit':
+      return 'common.submit';
+    case 'Back':
+      return 'common.back';
+    case 'Next':
+      return 'common.next';
+    case 'Church':
+      return 'nav.church';
+    case 'Mission':
+      return 'nav.mission';
+    case 'KCA':
+      return 'nav.kca';
+    case 'Press':
+      return 'nav.press';
+    case 'Events':
+      return 'nav.events';
+    case 'Notifications':
+      return 'common.notifications';
+    case 'Translations':
+      return 'admin.translations';
+    case 'View':
+      return 'common.view';
+    case 'Edit':
+      return 'common.edit';
+    case 'Delete':
+      return 'common.delete';
+    default: {
+      const slug = label
+        .replace(/&/g, ' And ')
+        .replace(/[^A-Za-z0-9]+(.)/g, (_, char: string) => char.toUpperCase())
+        .replace(/[^A-Za-z0-9]/g, '');
+      return `admin.${slug.charAt(0).toLowerCase()}${slug.slice(1)}`;
+    }
+  }
+}
+
+function adminChrome(t: AdminTranslate, label: string): string {
+  return t(adminChromeKey(label), { defaultMessage: label });
+}
 
 const navByBatch = {
   A: [
@@ -305,30 +372,38 @@ function Brand({ dark = true }: { dark?: boolean }) {
 }
 
 function Sidebar({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const allItems = enterpriseNavGroups.flatMap((group) => group.items);
   const exact = allItems.filter((item) => item.href === screen.route);
   const prefix = allItems.filter((item) => item.href !== '/admin' && screen.route.startsWith(`${item.href}/`)).sort((left, right) => right.href.length - left.href.length);
   const activeHref = (exact[0] ?? prefix[0])?.href;
-  return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label="Enterprise administration navigation">{enterpriseNavGroups.map((group) => {
+  return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label={t('admin.enterpriseNavAria', { defaultMessage: 'Enterprise administration navigation' })}>{enterpriseNavGroups.map((group) => {
     const groupActive = group.items.some((item) => item.href === activeHref);
+    const groupLabel = adminChrome(t, group.label);
     return <details className={`enterprise-nav-group ${groupActive ? 'active' : ''}`} data-nav-group={group.id} data-nav-active={groupActive ? 'true' : 'false'} open={groupActive} key={group.id}>
-      <summary data-nav-group-summary={group.id} aria-label={`${group.label} menu`}><span className="nav-icon" aria-hidden="true">{group.icon}</span><span className="nav-group-label">{group.label}</span><span className="nav-chevron" aria-hidden="true">⌄</span></summary>
+      <summary data-nav-group-summary={group.id} aria-label={`${groupLabel} menu`}><span className="nav-icon" aria-hidden="true">{group.icon}</span><span className="nav-group-label">{groupLabel}</span><span className="nav-chevron" aria-hidden="true">⌄</span></summary>
       <div className="enterprise-nav-items">{group.items.map((item) => {
         const active = item.href === activeHref;
-        return <Link className={`nav-item nav-subitem ${active ? 'active' : ''}`} href={item.href} key={`${group.id}-${item.href}`} aria-label={`${group.label}: ${item.label}`} aria-current={active ? 'page' : undefined}><span className="nav-icon nav-subicon" aria-hidden="true">{item.icon}</span><span className="nav-label">{item.label}</span></Link>;
+        const itemLabel = adminChrome(t, item.label);
+        return <Link className={`nav-item nav-subitem ${active ? 'active' : ''}`} href={item.href} key={`${group.id}-${item.href}`} aria-label={`${groupLabel}: ${itemLabel}`} aria-current={active ? 'page' : undefined}><span className="nav-icon nav-subicon" aria-hidden="true">{item.icon}</span><span className="nav-label">{itemLabel}</span></Link>;
       })}</div>
     </details>;
   })}</nav></aside>;
 }
 
 function Topbar({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const adminModule = getAdminModuleForRoute(screen.route);
-  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label="Toggle navigation" aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label="All modules" data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>All modules</b></button><span className="current-module-label"><small>Current module</small><strong>{adminModule.label}</strong></span><span className="topbar-spacer"/><Link href="/admin/screens" className="screen-index-link" aria-label="Preview-only screen directory" title="Preview-only screen directory">Preview directory</Link><button className="top-icon" type="button" aria-label="Notifications">♧</button><button className="top-icon" type="button" aria-label="Unread alerts">♧<span className="dot" /></button><button className="avatar" type="button" aria-label="Admin profile menu" data-admin-intent="profile-menu">JD</button></header>;
+  const allModules = t('admin.allModules', { defaultMessage: 'All modules' });
+  const previewDirectory = t('admin.previewDirectory', { defaultMessage: 'Preview directory' });
+  const previewDirectoryAria = t('admin.previewDirectoryAria', { defaultMessage: 'Preview-only screen directory' });
+  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label={t('admin.toggleNavigation', { defaultMessage: 'Toggle navigation' })} aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label={allModules} data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>{allModules}</b></button><span className="current-module-label"><small>{t('admin.currentModule', { defaultMessage: 'Current module' })}</small><strong>{adminChrome(t, adminModule.label)}</strong></span><span className="topbar-spacer"/><Link href="/admin/screens" className="screen-index-link" aria-label={previewDirectoryAria} title={previewDirectoryAria}>{previewDirectory}</Link><LocaleSwitcher /><button className="top-icon" type="button" aria-label={t('common.notifications', { defaultMessage: 'Notifications' })}>♧</button><button className="top-icon" type="button" aria-label={t('admin.unreadAlerts', { defaultMessage: 'Unread alerts' })}>♧<span className="dot" /></button><button className="avatar" type="button" aria-label={t('admin.profileMenu', { defaultMessage: 'Admin profile menu' })} data-admin-intent="profile-menu">JD</button></header>;
 }
 
 function Breadcrumbs({ items }: { items: AdminBreadcrumb[] }) {
+  const { t } = useLocale();
   if (items.length < 2) return null;
-  return <nav className="admin-breadcrumbs" aria-label="Breadcrumb">{items.map((item, index) => index === items.length - 1 ? <span aria-current="page" key={item.route}>{item.label}</span> : <Link href={item.route} key={item.route}>{item.label}</Link>)}</nav>;
+  return <nav className="admin-breadcrumbs" aria-label={t('admin.breadcrumb', { defaultMessage: 'Breadcrumb' })}>{items.map((item, index) => index === items.length - 1 ? <span aria-current="page" key={item.route}>{item.label}</span> : <Link href={item.route} key={item.route}>{item.label}</Link>)}</nav>;
 }
 
 function StatusBadge({ value }: { value: string }) {
@@ -337,11 +412,12 @@ function StatusBadge({ value }: { value: string }) {
 }
 
 function PageHeader({ screen, hideAction = false }: { screen: AdminScreen; hideAction?: boolean }) {
+  const { t } = useLocale();
   const showNigeriaFlag = screen.id === 'C-03' || screen.id === 'C-11';
   const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
   const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
   const showHeaderAction = !hideAction && !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label="More options">•••</button></div></div>{screen.tabs && !platformBatch && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
@@ -352,16 +428,42 @@ function MetricCards({ metrics = [] }: { metrics?: Metric[] }) {
   return <div className="metric-grid">{metrics.map((metric, index) => <article className={`card metric-card ${index === 0 ? 'metric-selected' : ''}`} key={metric.label}><span className="metric-label">{metric.label}</span><div className="metric-row"><strong className={`metric-value ${index === 0 ? 'violet' : ''}`}>{metric.value}</strong>{metric.trend && <span className="trend">{metric.trend}</span>}</div></article>)}</div>;
 }
 
-function ChartCard({ title, value, green = false, bars = false }: { title: string; value?: string; green?: boolean; bars?: boolean }) {
-  return <article className="card chart-card"><h2 className="card-title">{title}</h2>{value && <><span className="chart-kicker">This {title.includes('Giving') ? 'Week' : 'Month'}</span><strong className="chart-value">{value}</strong></>}{bars ? <div className="bar-chart">{[46,78,54,92,63,88,66,96,72,86,70,98].map((height,index)=><i key={index} style={{height:`${height}%`}} />)}</div> : <div className={`chart ${green ? 'green' : ''}`} />}<div className="chart-axis"><span>May 1</span><span>May 7</span><span>May 13</span></div></article>;
+function ChartCard({ title, value, green = false, bars = false, series }: { title: string; value?: string; green?: boolean; bars?: boolean; series?: Array<{ label: string; value: number }> }) {
+  const max = Math.max(1, ...(series?.map((point) => point.value) ?? [1]));
+  const barValues = series?.length
+    ? series.map((point) => Math.max(8, Math.round((point.value / max) * 100)))
+    : [46, 78, 54, 92, 63, 88, 66, 96, 72, 86, 70, 98];
+  const axisLabels = series?.length ? series.map((point) => point.label) : ['May 1', 'May 7', 'May 13'];
+  return <article className="card chart-card"><h2 className="card-title">{title}</h2>{value && <><span className="chart-kicker">This {title.includes('Giving') ? 'Week' : 'Month'}</span><strong className="chart-value">{value}</strong></>}{bars ? <div className="bar-chart">{barValues.map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}</div> : <div className={`chart ${green ? 'green' : ''}`} />}<div className="chart-axis">{axisLabels.map((label) => <span key={label}>{label}</span>)}</div></article>;
 }
 
-function DashboardView({ screen }: { screen: AdminScreen }) {
-  return <><DemoDatasetBanner /><MetricCards metrics={screen.metrics} /><div className="dashboard-grid"><ChartCard title="New Registrations" value="12,842" /><ChartCard title="Giving (USD)" value="$1,246,830" /><ChartCard title="Active Users" value="95,221" green /></div></>;
+function DashboardLiveNotice({ loading, error }: { loading?: boolean; error?: string | null }) {
+  if (!loading && !error) return null;
+  return <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>{loading ? 'Loading live dashboard data…' : error}</p>;
 }
 
-function SearchBar({ placeholder = 'Search by name, email, phone or ID...' }: { placeholder?: string }) {
-  return <div className="search-row"><label className="search-box"><span>⌕</span><input aria-label="Search" placeholder={placeholder} /></label><button className="filter-button">▽ Filters</button></div>;
+function DashboardView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
+  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
+  const receipts = dashboard.data?.metrics.find((metric) => metric.label === 'Total Receipts')?.value;
+  const members = dashboard.data?.metrics.find((metric) => metric.label === 'Members')?.value;
+  return <><DemoDatasetBanner /><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="dashboard-grid"><ChartCard title="New Registrations" value={members} series={dashboard.data?.series} bars /><ChartCard title="Giving (USD)" value={receipts ?? dashboard.data?.metrics[0]?.value} series={dashboard.data?.series} bars /><ChartCard title="Active Users" value={dashboard.data?.metrics.find((metric) => metric.label === 'Countries')?.value} green series={dashboard.data?.series} /></div></>;
+}
+
+function SearchBar({ placeholder }: { placeholder?: string }) {
+  const { t } = useLocale();
+  return (
+    <div className="search-row">
+      <label className="search-box">
+        <span>⌕</span>
+        <input
+          aria-label={t('common.search', { defaultMessage: 'Search' })}
+          placeholder={placeholder ?? t('common.searchPlaceholder', { defaultMessage: 'Search by name, email, phone or ID...' })}
+        />
+      </label>
+      <button className="filter-button">▽ {t('common.filters', { defaultMessage: 'Filters' })}</button>
+    </div>
+  );
 }
 
 function identityErrorMessage(error: unknown): string {
@@ -411,6 +513,7 @@ function IdentityLoadState({ message, tone = 'neutral' }: { message: string; ton
 }
 
 function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
   const suspendedOnly = screen.route.includes('/suspended');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -474,11 +577,26 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
   }
 
   const metrics = [
-    { label: suspendedOnly ? 'Suspended' : 'Loaded', value: String(total) },
-    { label: 'Active (page)', value: String(users.filter((user) => user.account_status === 'active').length) },
-    { label: 'Suspended (page)', value: String(users.filter((user) => user.account_status === 'suspended').length) },
-    { label: 'Verified email', value: String(users.filter((user) => Boolean(user.email_verified_at)).length) },
+    { label: suspendedOnly ? t('admin.suspended', { defaultMessage: 'Suspended' }) : t('admin.loaded', { defaultMessage: 'Loaded' }), value: String(total) },
+    { label: t('admin.activePage', { defaultMessage: 'Active (page)' }), value: String(users.filter((user) => user.account_status === 'active').length) },
+    { label: t('admin.suspendedPage', { defaultMessage: 'Suspended (page)' }), value: String(users.filter((user) => user.account_status === 'suspended').length) },
+    { label: t('admin.verifiedEmail', { defaultMessage: 'Verified email' }), value: String(users.filter((user) => Boolean(user.email_verified_at)).length) },
   ];
+  const userColumns = suspendedOnly
+    ? [
+        t('admin.user', { defaultMessage: 'User' }),
+        t('admin.email', { defaultMessage: 'Email' }),
+        t('admin.reason', { defaultMessage: 'Reason' }),
+        t('admin.suspendedOn', { defaultMessage: 'Suspended On' }),
+        t('admin.status', { defaultMessage: 'Status' }),
+      ]
+    : [
+        t('admin.user', { defaultMessage: 'User' }),
+        t('admin.email', { defaultMessage: 'Email' }),
+        t('admin.role', { defaultMessage: 'Role' }),
+        t('admin.status', { defaultMessage: 'Status' }),
+        t('admin.created', { defaultMessage: 'Created' }),
+      ];
 
   return (
     <>
@@ -489,15 +607,15 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
         <table>
           <thead>
             <tr>
-              {(suspendedOnly ? ['User', 'Email', 'Reason', 'Suspended On', 'Status'] : ['User', 'Email', 'Role', 'Status', 'Created']).map((column) => (
+              {userColumns.map((column) => (
                 <th key={column}>{column}</th>
               ))}
-              <th>Actions</th>
+              <th>{t('admin.actions', { defaultMessage: 'Actions' })}</th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 ? (
-              <tr><td colSpan={6}>{error ? 'No users loaded.' : 'No users match this scope.'}</td></tr>
+              <tr><td colSpan={6}>{error ? t('admin.noUsersLoaded', { defaultMessage: 'No users loaded.' }) : t('admin.noUsersInScope', { defaultMessage: 'No users match this scope.' })}</td></tr>
             ) : users.map((user) => {
               const role = user.roles?.[0]?.name ?? user.roles?.[0]?.code ?? '—';
               return (
@@ -517,9 +635,9 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
                   <td className="actions-cell">
                     <div className="row-actions">
                       {user.account_status === 'suspended' ? (
-                        <button type="button" className="table-action" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onReactivate(user)}>Reactivate</button>
+                        <button type="button" className="table-action" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onReactivate(user)}>{t('admin.reactivate', { defaultMessage: 'Reactivate' })}</button>
                       ) : (
-                        <button type="button" className="table-action is-danger" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onSuspend(user)}>Suspend</button>
+                        <button type="button" className="table-action is-danger" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onSuspend(user)}>{t('admin.suspend', { defaultMessage: 'Suspend' })}</button>
                       )}
                     </div>
                   </td>
@@ -535,6 +653,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
 }
 
 function IdentityRolesTable({ requestedScope }: { requestedScope?: string }) {
+  const { t } = useLocale();
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -559,31 +678,37 @@ function IdentityRolesTable({ requestedScope }: { requestedScope?: string }) {
 
   return (
     <>
-      <MetricCards metrics={[{ label: 'Total Roles', value: String(total) }, { label: 'Loaded', value: String(roles.length) }, { label: 'System catalogue', value: 'Read-only' }, { label: 'Source', value: 'API' }]} />
+      <MetricCards metrics={[
+        { label: t('admin.totalRoles', { defaultMessage: 'Total Roles' }), value: String(total) },
+        { label: t('admin.loaded', { defaultMessage: 'Loaded' }), value: String(roles.length) },
+        { label: t('admin.systemCatalogue', { defaultMessage: 'System catalogue' }), value: t('admin.readOnly', { defaultMessage: 'Read-only' }) },
+        { label: t('admin.source', { defaultMessage: 'Source' }), value: t('admin.api', { defaultMessage: 'API' }) },
+      ]} />
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>
-          <thead><tr><th>Role Name</th><th>Code</th><th>Permissions</th><th>Status</th></tr></thead>
+          <thead><tr><th>{t('admin.roleName', { defaultMessage: 'Role Name' })}</th><th>{t('admin.code', { defaultMessage: 'Code' })}</th><th>{t('admin.permissions', { defaultMessage: 'Permissions' })}</th><th>{t('admin.status', { defaultMessage: 'Status' })}</th></tr></thead>
           <tbody>
             {roles.length === 0 ? (
-              <tr><td colSpan={4}>{error ? 'Roles unavailable.' : 'No roles returned.'}</td></tr>
+              <tr><td colSpan={4}>{error ? t('admin.rolesUnavailable', { defaultMessage: 'Roles unavailable.' }) : t('admin.noRolesReturned', { defaultMessage: 'No roles returned.' })}</td></tr>
             ) : roles.map((role) => (
               <tr key={role.id}>
                 <td>{role.name}</td>
                 <td><code>{role.code}</code></td>
                 <td>{role.permissions?.length ?? '—'}</td>
-                <td><StatusBadge value="Active" /></td>
+                <td><StatusBadge value={t('admin.active', { defaultMessage: 'Active' })} /></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="pagination"><span>Showing {roles.length} of {total} roles (create/update not exposed by API)</span></div>
+        <div className="pagination"><span>{t('admin.showingRolesReadOnly', { vars: { count: roles.length, total }, defaultMessage: `Showing ${roles.length} of ${total} roles (create/update not exposed by API)` })}</span></div>
       </div>
     </>
   );
 }
 
 function IdentityAccessDecisionsTable({ requestedScope }: { requestedScope?: string }) {
+  const { t } = useLocale();
   const [rows, setRows] = useState<AdminAccessDecision[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -611,28 +736,29 @@ function IdentityAccessDecisionsTable({ requestedScope }: { requestedScope?: str
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>
-          <thead><tr><th>Date &amp; Time</th><th>Actor</th><th>Permission</th><th>Scope</th><th>Result</th></tr></thead>
+          <thead><tr><th>{t('admin.dateTime', { defaultMessage: 'Date & Time' })}</th><th>{t('admin.actor', { defaultMessage: 'Actor' })}</th><th>{t('admin.permission', { defaultMessage: 'Permission' })}</th><th>{t('admin.scope', { defaultMessage: 'Scope' })}</th><th>{t('admin.result', { defaultMessage: 'Result' })}</th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={5}>{error ? 'Access decisions unavailable.' : 'No access decisions yet.'}</td></tr>
+              <tr><td colSpan={5}>{error ? t('admin.accessDecisionsUnavailable', { defaultMessage: 'Access decisions unavailable.' }) : t('admin.noAccessDecisions', { defaultMessage: 'No access decisions yet.' })}</td></tr>
             ) : rows.map((row) => (
               <tr key={row.id}>
                 <td>{formatTimestamp(row.decided_at)}</td>
                 <td>{row.actor_user_id ?? '—'}</td>
                 <td><code>{row.permission_code}</code></td>
                 <td>{row.scope_type ? `${row.scope_type}:${row.scope_id ?? ''}` : '—'}</td>
-                <td><StatusBadge value={row.allowed ? 'Allowed' : 'Denied'} /></td>
+                <td><StatusBadge value={row.allowed ? t('admin.allowed', { defaultMessage: 'Allowed' }) : t('admin.denied', { defaultMessage: 'Denied' })} /></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="pagination"><span>Showing {rows.length} of {total} access decisions</span></div>
+        <div className="pagination"><span>{t('admin.showingAccessDecisions', { vars: { count: rows.length, total }, defaultMessage: `Showing ${rows.length} of ${total} access decisions` })}</span></div>
       </div>
     </>
   );
 }
 
 function IdentityAuditEventsPanel({ compact = false, requestedScope }: { compact?: boolean; requestedScope?: string }) {
+  const { t } = useLocale();
   const [rows, setRows] = useState<AdminAuditEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -658,7 +784,7 @@ function IdentityAuditEventsPanel({ compact = false, requestedScope }: { compact
   if (compact) {
     return (
       <div className="card list-card">
-        <h2 className="card-title">Recent Audit Events</h2>
+        <h2 className="card-title">{t('admin.recentAuditEvents', { defaultMessage: 'Recent Audit Events' })}</h2>
         {error && <IdentityLoadState message={error} tone="danger" />}
         {(rows.length ? rows : []).map((row) => (
           <div className="rank-row" key={row.id}>
@@ -666,8 +792,8 @@ function IdentityAuditEventsPanel({ compact = false, requestedScope }: { compact
             <strong>{formatTimestamp(row.occurred_at)}</strong>
           </div>
         ))}
-        {!error && rows.length === 0 && <p className="field-help">No audit events yet.</p>}
-        <p className="field-help">Total recorded: {total}</p>
+        {!error && rows.length === 0 && <p className="field-help">{t('admin.noAuditEvents', { defaultMessage: 'No audit events yet.' })}</p>}
+        <p className="field-help">{t('admin.totalRecorded', { vars: { total }, defaultMessage: `Total recorded: ${total}` })}</p>
       </div>
     );
   }
@@ -677,10 +803,10 @@ function IdentityAuditEventsPanel({ compact = false, requestedScope }: { compact
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>
-          <thead><tr><th>Occurred</th><th>Actor</th><th>Action</th><th>Target</th><th>Scope</th></tr></thead>
+          <thead><tr><th>{t('admin.occurred', { defaultMessage: 'Occurred' })}</th><th>{t('admin.actor', { defaultMessage: 'Actor' })}</th><th>{t('admin.action', { defaultMessage: 'Action' })}</th><th>{t('admin.target', { defaultMessage: 'Target' })}</th><th>{t('admin.scope', { defaultMessage: 'Scope' })}</th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={5}>{error ? 'Audit events unavailable.' : 'No audit events yet.'}</td></tr>
+              <tr><td colSpan={5}>{error ? t('admin.auditEventsUnavailable', { defaultMessage: 'Audit events unavailable.' }) : t('admin.noAuditEvents', { defaultMessage: 'No audit events yet.' })}</td></tr>
             ) : rows.map((row) => (
               <tr key={row.id}>
                 <td>{formatTimestamp(row.occurred_at)}</td>
@@ -692,13 +818,14 @@ function IdentityAuditEventsPanel({ compact = false, requestedScope }: { compact
             ))}
           </tbody>
         </table>
-        <div className="pagination"><span>Showing {rows.length} of {total} audit events</span></div>
+        <div className="pagination"><span>{t('admin.showingAuditEvents', { vars: { count: rows.length, total }, defaultMessage: `Showing ${rows.length} of ${total} audit events` })}</span></div>
       </div>
     </>
   );
 }
 
 function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: string }) {
+  const { t } = useLocale();
   const [rows, setRows] = useState<AdminScopeAssignment[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -769,15 +896,21 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
       <form className="card settings-card" onSubmit={(event) => void onAssignScope(event)}>
         <p className="maps-settings-lead">
           {apiReady
-            ? 'Assign a scope to an existing role assignment. Scope record values must be live ULIDs.'
-            : 'The Laravel API is not configured; scope assignment submit is blocked.'}
+            ? t('admin.assignScopeCopy', {
+                defaultMessage: 'Assign a scope to an existing role assignment. Scope record values must be live ULIDs.',
+              })
+            : t('admin.assignScopeBlocked', {
+                defaultMessage: 'The Laravel API is not configured; scope assignment submit is blocked.',
+              })}
         </p>
         <div className="form-grid">
           <label>
-            <span>Role assignment *</span>
+            <span>{t('admin.roleAssignmentRequired', { defaultMessage: 'Role assignment *' })}</span>
             <select name="role_assignment_id" defaultValue="" required disabled={!apiReady || assignments.length === 0}>
               <option value="" disabled>
-                {assignments.length ? 'Select a live role assignment' : 'No live role assignments loaded'}
+                {assignments.length
+                  ? t('admin.selectRoleAssignment', { defaultMessage: 'Select a live role assignment' })
+                  : t('admin.noRoleAssignmentsLoaded', { defaultMessage: 'No live role assignments loaded' })}
               </option>
               {assignments.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -785,7 +918,7 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
             </select>
           </label>
           <label>
-            <span>Scope Type *</span>
+            <span>{t('admin.scopeTypeRequired', { defaultMessage: 'Scope Type *' })}</span>
             <select name="scope_type" defaultValue="administrative_unit" disabled={!apiReady}>
               {IDENTITY_SCOPE_TYPE_VALUES.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -793,36 +926,36 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
             </select>
           </label>
           <label className="full">
-            <span>Country</span>
-            <SearchSelect name="country_id" catalog="country" options={catalogOptions.country} placeholder="Search country" disabled={!apiReady} />
+            <span>{t('admin.country', { defaultMessage: 'Country' })}</span>
+            <SearchSelect name="country_id" catalog="country" options={catalogOptions.country} placeholder={t('admin.searchCountry', { defaultMessage: 'Search country' })} disabled={!apiReady} />
           </label>
           <label className="full">
-            <span>Administrative Unit</span>
-            <SearchSelect name="administrative_unit_id" catalog="administrativeUnit" options={catalogOptions.administrativeUnit} placeholder="Search administrative unit" disabled={!apiReady} />
+            <span>{t('admin.administrativeUnit', { defaultMessage: 'Administrative Unit' })}</span>
+            <SearchSelect name="administrative_unit_id" catalog="administrativeUnit" options={catalogOptions.administrativeUnit} placeholder={t('admin.searchAdministrativeUnit', { defaultMessage: 'Search administrative unit' })} disabled={!apiReady} />
           </label>
           <label>
-            <span>Church</span>
-            <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder="Search church" disabled={!apiReady} />
+            <span>{t('admin.church', { defaultMessage: 'Church' })}</span>
+            <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder={t('admin.searchChurch', { defaultMessage: 'Search church' })} disabled={!apiReady} />
           </label>
           <label>
-            <span>Home church</span>
-            <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder="Search home church" disabled={!apiReady} />
+            <span>{t('admin.homeChurch', { defaultMessage: 'Home church' })}</span>
+            <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder={t('admin.searchHomeChurch', { defaultMessage: 'Search home church' })} disabled={!apiReady} />
           </label>
         </div>
         {message ? <p className="field-help" role="status">{message}</p> : null}
         <div className="form-footer">
-          <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : 'The Laravel API is not configured'}>
-            {busy ? 'Assigning…' : 'Assign Scope'}
+          <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The Laravel API is not configured' })}>
+            {busy ? t('admin.assigning', { defaultMessage: 'Assigning…' }) : t('admin.assignScope', { defaultMessage: 'Assign Scope' })}
           </button>
         </div>
       </form>
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>
-          <thead><tr><th>User</th><th>Role</th><th>Scope</th><th>Assigned</th></tr></thead>
+          <thead><tr><th>{t('admin.user', { defaultMessage: 'User' })}</th><th>{t('admin.role', { defaultMessage: 'Role' })}</th><th>{t('admin.scope', { defaultMessage: 'Scope' })}</th><th>{t('admin.assigned', { defaultMessage: 'Assigned' })}</th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={4}>{error ? 'Scope assignments unavailable.' : 'No scope assignments in this scope.'}</td></tr>
+              <tr><td colSpan={4}>{error ? t('admin.scopeAssignmentsUnavailable', { defaultMessage: 'Scope assignments unavailable.' }) : t('admin.noScopeAssignments', { defaultMessage: 'No scope assignments in this scope.' })}</td></tr>
             ) : rows.map((row) => (
               <tr key={row.id}>
                 <td>{row.role_assignment?.user.name ?? '—'}<br /><small>{row.role_assignment?.user.email}</small></td>
@@ -833,7 +966,7 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
             ))}
           </tbody>
         </table>
-        <div className="pagination"><span>Showing {rows.length} of {total} assignments</span></div>
+        <div className="pagination"><span>{t('admin.showingAssignments', { vars: { count: rows.length, total }, defaultMessage: `Showing ${rows.length} of ${total} assignments` })}</span></div>
       </div>
     </>
   );
@@ -844,6 +977,7 @@ function isOpsPublicId(value: string): boolean {
 }
 
 function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset: OpsDatasetKey }) {
+  const { t } = useLocale();
   const columns = screen.columns ?? [];
   const entityKey = resolveEntityKey(screen.route, screen.id);
   const reviewLabel = screen.nav === 'applications' ? 'Review' : undefined;
@@ -985,34 +1119,36 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
       <MetricCards metrics={[{ label: 'Total', value: String(total) }, ...(screen.metrics ?? []).slice(1, 4)]} />
       {dataset === 'first-timers' ? (
         <form className="card form-card" onSubmit={(event) => void onRegisterFirstTimer(event)}>
-          <h2 className="section-title">Register first timer</h2>
-          <p className="page-subtitle">Choose a person and church from live records. Empty catalogs are not treated as success.</p>
+          <h2 className="section-title">{t('admin.registerFirstTimer', { defaultMessage: 'Register first timer' })}</h2>
+          <p className="page-subtitle">{t('admin.registerFirstTimerCopy', { defaultMessage: 'Choose a person and church from live records. Empty catalogs are not treated as success.' })}</p>
           <div className="form-grid">
             <label>
-              <span>Person *</span>
-              <SearchSelect name="person_id" catalog="person" options={catalogOptions.person} placeholder="Search person" />
+              <span>{t('admin.personRequired', { defaultMessage: 'Person *' })}</span>
+              <SearchSelect name="person_id" catalog="person" options={catalogOptions.person} placeholder={t('admin.searchPerson', { defaultMessage: 'Search person' })} />
             </label>
             <label>
-              <span>Church *</span>
-              <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder="Search church" />
+              <span>{t('admin.churchRequired', { defaultMessage: 'Church *' })}</span>
+              <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder={t('admin.searchChurch', { defaultMessage: 'Search church' })} />
             </label>
             <label>
-              <span>Home church</span>
-              <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder="Search home church" />
+              <span>{t('admin.homeChurch', { defaultMessage: 'Home church' })}</span>
+              <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder={t('admin.searchHomeChurch', { defaultMessage: 'Search home church' })} />
             </label>
             <label>
-              <span>Follow-up person</span>
-              <SearchSelect name="assigned_follow_up_person_id" catalog="person" options={catalogOptions.person} placeholder="Optional follow-up person" />
+              <span>{t('admin.followUpPerson', { defaultMessage: 'Follow-up person' })}</span>
+              <SearchSelect name="assigned_follow_up_person_id" catalog="person" options={catalogOptions.person} placeholder={t('admin.optionalFollowUpPerson', { defaultMessage: 'Optional follow-up person' })} />
             </label>
             <label>
-              <span>Registered at</span>
+              <span>{t('admin.registeredAt', { defaultMessage: 'Registered at' })}</span>
               <input name="registered_at" type="datetime-local" />
             </label>
           </div>
           {registerMessage ? <p className="field-help" role="status">{registerMessage}</p> : null}
           <div className="form-footer">
             <button className="primary-button" type="submit" disabled={registerBusy}>
-              {registerBusy ? 'Registering…' : 'Register first timer'}
+              {registerBusy
+                ? t('admin.registering', { defaultMessage: 'Registering…' })
+                : t('admin.registerFirstTimer', { defaultMessage: 'Register first timer' })}
             </button>
           </div>
         </form>
@@ -1022,11 +1158,11 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
       <div className="card table-card">
         <table>
           <thead>
-            <tr>{columns.map((column) => <th key={column}>{column}</th>)}<th>Actions</th></tr>
+            <tr>{columns.map((column) => <th key={column}>{column}</th>)}<th>{t('admin.actions', { defaultMessage: 'Actions' })}</th></tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={columns.length + 1}>{error ? 'Unable to load records.' : message}</td></tr>
+              <tr><td colSpan={columns.length + 1}>{error ? t('admin.unableToLoadRecords', { defaultMessage: 'Unable to load records.' }) : message}</td></tr>
             ) : (
               rows.map((row) => (
                 <tr key={row.__id}>
@@ -1217,6 +1353,7 @@ function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
 }
 
 function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const columns = screen.columns ?? [];
   const columnKey = columns.join('\0');
   const dataset = resolveCatalogDataset(screen);
@@ -1304,6 +1441,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
 }
 
 function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
   if (!shouldUseDesignFixtures()) {
     if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended' || screen.route === '/admin/people') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.route === '/admin/roles') return <IdentityRolesTable requestedScope={requestedScope} />;
@@ -1379,13 +1517,22 @@ function TasksView({ screen }: { screen: AdminScreen }) {
 }
 
 function KpiView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
+  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
+  const breakdownItems = dashboard.live
+    ? breakdownToItems(dashboard.data?.breakdown)
+    : (screen.items ?? ['Active Churches — 24,518', 'Home Churches — 18,642', 'Members — 1,638,732', 'Leaders — 98,431']);
+  const topCountries = dashboard.live
+    ? breakdownToItems(dashboard.data?.breakdown)
+    : ['Nigeria — 4,354', 'Ghana — 2,491', 'Kenya — 1,637', 'South Africa — 1,348'];
+
   if (screen.route === '/admin/audit' && !shouldUseDesignFixtures()) {
-    return <><MetricCards metrics={screen.metrics} /><div className="analytics-grid kpi-two"><IdentityAuditEventsPanel compact requestedScope={requestedScope} /><ChartCard title="Audit Logs Trend" bars /></div></>;
+    return <><MetricCards metrics={metrics} /><div className="analytics-grid kpi-two"><IdentityAuditEventsPanel compact requestedScope={requestedScope} /><ChartCard title="Audit Logs Trend" bars series={dashboard.data?.series} /></div></>;
   }
   if (screen.batch === 'A') {
-    return <><MetricCards metrics={screen.metrics} /><div className="analytics-grid kpi-two">{screen.id === 'A-12' ? <><ChartCard title="Member Growth" /><ChartCard title="Giving Trend (USD)" bars /></> : <><div className="card list-card"><h2 className="card-title">Top Admin Actions</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Audit Logs Trend" bars /></>}</div></>;
+    return <><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="analytics-grid kpi-two">{screen.id === 'A-12' ? <><ChartCard title="Member Growth" series={dashboard.data?.series} /><ChartCard title="Giving Trend (USD)" bars series={dashboard.data?.series} /></> : <><div className="card list-card"><h2 className="card-title">Top Admin Actions</h2>{(screen.items ?? []).map(item => <div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Audit Logs Trend" bars series={dashboard.data?.series} /></>}</div></>;
   }
-  return <><MetricCards metrics={screen.metrics} /><div className="analytics-grid"><div className="card list-card"><h2 className="card-title">Organization Overview</h2>{(screen.items ?? ['Active Churches — 24,518','Home Churches — 18,642','Members — 1,638,732','Leaders — 98,431']).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Churches Growth" /><div className="card list-card"><h2 className="card-title">Top Countries by Churches</h2>{['Nigeria — 4,354','Ghana — 2,491','Kenya — 1,637','South Africa — 1,348'].map((item,index)=><div className="bar-rank" key={item}><span>{item.split(' — ')[0]}</span><i style={{width:`${92-index*15}%`}}/><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Giving Trend (USD)" bars /></div></>;
+  return <><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="analytics-grid"><div className="card list-card"><h2 className="card-title">Organization Overview</h2>{breakdownItems.map(item => <div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Churches Growth" series={dashboard.data?.series} /><div className="card list-card"><h2 className="card-title">Top Countries by Churches</h2>{topCountries.map((item, index) => <div className="bar-rank" key={item}><span>{item.split(' — ')[0]}</span><i style={{ width: `${92 - index * 15}%` }} /><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Giving Trend (USD)" bars series={dashboard.data?.series} /></div></>;
 }
 
 function DetailView({ screen }: { screen: AdminScreen }) {
@@ -1417,6 +1564,7 @@ const formFields = [
 ];
 
 function FormFields() {
+  const { t } = useLocale();
   return (
     <div className="form-grid">
       {formFields.map((field) => (
@@ -1578,6 +1726,7 @@ function formatProfileDate(value?: string | null): string {
 }
 
 function ProfileView({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
   const isOwnAdminProfile = screen.route === '/admin/profile';
   const [user, setUser] = useState<AdminProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1596,11 +1745,11 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
   }, [isOwnAdminProfile]);
 
   if (!isOwnAdminProfile) {
-    return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">GE</div><h2>Profile details unavailable</h2></article></div>;
+    return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">GE</div><h2>{t('admin.profileUnavailable', { defaultMessage: 'Profile details unavailable' })}</h2></article></div>;
   }
 
   if (error) return <div className="card empty-state" role="alert">{error}</div>;
-  if (!user) return <div className="card empty-state" role="status">Loading your profile…</div>;
+  if (!user) return <div className="card empty-state" role="status">{t('admin.loadingProfile', { defaultMessage: 'Loading your profile…' })}</div>;
 
   const legalName = [user.profile.given_name, user.profile.middle_name, user.profile.family_name]
     .filter((part): part is string => Boolean(part?.trim()))
@@ -1608,22 +1757,23 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
   const name = user.profile.preferred_name?.trim() || legalName || user.email;
   const status = user.account_status ?? 'unknown';
   const details: Record<string, string> = {
-    'Full Name': name,
-    'Email Address': user.email,
-    Role: user.roles?.join(', ') || 'No role assigned',
-    'Time Zone': user.preferences?.timezone || 'Not provided',
-    Language: user.preferences?.locale || 'Not provided',
-    'Account Status': status,
-    'Last Active': formatProfileDate(user.last_active_at),
-    'Member Since': formatProfileDate(user.member_since),
+    [t('admin.fullName', { defaultMessage: 'Full Name' })]: name,
+    [t('auth.emailAddress', { defaultMessage: 'Email Address' })]: user.email,
+    [t('admin.role', { defaultMessage: 'Role' })]: user.roles?.join(', ') || t('admin.noRoleAssigned', { defaultMessage: 'No role assigned' }),
+    [t('account.timezone', { defaultMessage: 'Timezone' })]: user.preferences?.timezone || t('common.notProvided', { defaultMessage: 'Not provided' }),
+    [t('common.language', { defaultMessage: 'Language' })]: user.preferences?.locale || t('common.notProvided', { defaultMessage: 'Not provided' }),
+    [t('admin.accountStatus', { defaultMessage: 'Account Status' })]: status,
+    [t('admin.lastActive', { defaultMessage: 'Last Active' })]: formatProfileDate(user.last_active_at),
+    [t('admin.memberSince', { defaultMessage: 'Member Since' })]: formatProfileDate(user.member_since),
   };
 
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'ME';
 
-  return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">{initials}</div><h2>{name}</h2><StatusBadge value={status} /></article><article className="card details-card profile-details"><dl>{Object.entries(details).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card account-card"><h2>Account Status</h2><strong className="trend">{status}</strong><p>Last Active<br/><b>{formatProfileDate(user.last_active_at)}</b></p><p>Member Since<br/><b>{formatProfileDate(user.member_since)}</b></p></article><Link href="/account/profile" className="primary-button profile-save">Update Profile</Link></div>;
+  return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">{initials}</div><h2>{name}</h2><StatusBadge value={status} /></article><article className="card details-card profile-details"><dl>{Object.entries(details).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card account-card"><h2>{t('admin.accountStatus', { defaultMessage: 'Account Status' })}</h2><strong className="trend">{status}</strong><p>{t('admin.lastActive', { defaultMessage: 'Last Active' })}<br/><b>{formatProfileDate(user.last_active_at)}</b></p><p>{t('admin.memberSince', { defaultMessage: 'Member Since' })}<br/><b>{formatProfileDate(user.member_since)}</b></p></article><Link href="/account/profile" className="primary-button profile-save">{t('admin.updateProfile', { defaultMessage: 'Update Profile' })}</Link></div>;
 }
 
 function PermissionsView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
   const [permissions, setPermissions] = useState<AdminPermission[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -1660,14 +1810,14 @@ function PermissionsView({ screen, requestedScope }: { screen: AdminScreen; requ
   return (
     <div className="permission-layout">
       <aside className="card module-list">
-        <strong>Modules</strong>
-        <button type="button" className={moduleFilter === 'all' ? 'active' : ''} onClick={() => setModuleFilter('all')}>All</button>
+        <strong>{t('admin.modules', { defaultMessage: 'Modules' })}</strong>
+        <button type="button" className={moduleFilter === 'all' ? 'active' : ''} onClick={() => setModuleFilter('all')}>{t('common.all', { defaultMessage: 'All' })}</button>
         {modules.map((module) => (
           <button type="button" className={moduleFilter === module ? 'active' : ''} key={module} onClick={() => setModuleFilter(module)}>{module}</button>
         ))}
       </aside>
       <div className="card permission-table">
-        <div className="permission-head" style={{ gridTemplateColumns: '1fr 220px' }}><strong>Permissions ({total})</strong><b>Id</b></div>
+        <div className="permission-head" style={{ gridTemplateColumns: '1fr 220px' }}><strong>{t('admin.permissionsCount', { vars: { total }, defaultMessage: `Permissions (${total})` })}</strong><b>{t('admin.id', { defaultMessage: 'Id' })}</b></div>
         {error && <IdentityLoadState message={error} tone="danger" />}
         {filtered.map((permission) => (
           <div className="permission-row" style={{ gridTemplateColumns: '1fr 220px' }} key={permission.id}>
@@ -1675,7 +1825,7 @@ function PermissionsView({ screen, requestedScope }: { screen: AdminScreen; requ
             <code>{permission.id}</code>
           </div>
         ))}
-        {!error && filtered.length === 0 && <IdentityLoadState message="No permissions in this module." />}
+        {!error && filtered.length === 0 && <IdentityLoadState message={t('admin.noPermissionsInModule', { defaultMessage: 'No permissions in this module.' })} />}
         <IdentityRoleGrantForm requestedScope={requestedScope} permissions={permissions} />
       </div>
     </div>
@@ -1694,6 +1844,7 @@ function IdentityRoleGrantForm({
   requestedScope?: string;
   permissions: AdminPermission[];
 }) {
+  const { t } = useLocale();
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1750,18 +1901,18 @@ function IdentityRoleGrantForm({
   return (
     <form className="form-grid" style={{ marginTop: 16 }} onSubmit={(event) => void onGrant(event)}>
       <label>
-        <span>Role *</span>
+        <span>{t('admin.roleRequired', { defaultMessage: 'Role *' })}</span>
         <select name="role_id" defaultValue="" required disabled={!apiReady || roles.length === 0}>
-          <option value="" disabled>{roles.length ? 'Select a live role' : 'No live roles loaded'}</option>
+          <option value="" disabled>{roles.length ? t('admin.selectLiveRole', { defaultMessage: 'Select a live role' }) : t('admin.noLiveRolesLoaded', { defaultMessage: 'No live roles loaded' })}</option>
           {roles.map((role) => (
             <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
           ))}
         </select>
       </label>
       <label>
-        <span>Permission *</span>
+        <span>{t('admin.permissionRequired', { defaultMessage: 'Permission *' })}</span>
         <select name="permission_id" defaultValue="" required disabled={!apiReady || permissions.length === 0}>
-          <option value="" disabled>{permissions.length ? 'Select a live permission' : 'No live permissions loaded'}</option>
+          <option value="" disabled>{permissions.length ? t('admin.selectLivePermission', { defaultMessage: 'Select a live permission' }) : t('admin.noLivePermissionsLoaded', { defaultMessage: 'No live permissions loaded' })}</option>
           {permissions.map((permission) => (
             <option key={permission.id} value={permission.id}>{permission.code}</option>
           ))}
@@ -1770,8 +1921,8 @@ function IdentityRoleGrantForm({
       {error ? <IdentityLoadState message={error} tone="danger" /> : null}
       {message ? <p className="field-help" role="status">{message}</p> : null}
       <div className="form-footer">
-        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : 'The Laravel API is not configured'}>
-          {busy ? 'Granting…' : 'Grant permission'}
+        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The Laravel API is not configured' })}>
+          {busy ? t('admin.granting', { defaultMessage: 'Granting…' }) : t('admin.grantPermission', { defaultMessage: 'Grant permission' })}
         </button>
       </div>
     </form>
@@ -1779,6 +1930,7 @@ function IdentityRoleGrantForm({
 }
 
 function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -1851,39 +2003,43 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
     <form className="card settings-card" onSubmit={(event) => void onAssign(event)}>
       <p className="maps-settings-lead">
         {apiReady
-          ? 'Assign a live catalogue role to a live user. Submit calls POST /admin/users/{user}/role-assignments.'
-          : 'The Laravel API is not configured; role assignment submit is blocked.'}
+          ? t('admin.assignRoleCopy', {
+              defaultMessage: 'Assign a live catalogue role to a live user. Submit calls POST /admin/users/{user}/role-assignments.',
+            })
+          : t('admin.assignRoleBlocked', {
+              defaultMessage: 'The Laravel API is not configured; role assignment submit is blocked.',
+            })}
       </p>
       <div className="form-grid">
         <label>
-          <span>User *</span>
+          <span>{t('admin.userRequired', { defaultMessage: 'User *' })}</span>
           <select name="user_id" defaultValue="" required disabled={!apiReady || users.length === 0}>
-            <option value="" disabled>{users.length ? 'Select a live user' : 'No live users loaded'}</option>
+            <option value="" disabled>{users.length ? t('admin.selectLiveUser', { defaultMessage: 'Select a live user' }) : t('admin.noLiveUsersLoaded', { defaultMessage: 'No live users loaded' })}</option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
             ))}
           </select>
         </label>
         <label>
-          <span>Role *</span>
+          <span>{t('admin.roleRequired', { defaultMessage: 'Role *' })}</span>
           <select name="role_id" defaultValue="" required disabled={!apiReady || roles.length === 0}>
-            <option value="" disabled>{roles.length ? 'Select a live role' : 'No live roles loaded'}</option>
+            <option value="" disabled>{roles.length ? t('admin.selectLiveRole', { defaultMessage: 'Select a live role' }) : t('admin.noLiveRolesLoaded', { defaultMessage: 'No live roles loaded' })}</option>
             {roles.map((role) => (
               <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
             ))}
           </select>
         </label>
         <label>
-          <span>Expires at</span>
+          <span>{t('admin.expiresAt', { defaultMessage: 'Expires at' })}</span>
           <input name="expires_at" type="datetime-local" disabled={!apiReady} />
         </label>
       </div>
       {error ? <IdentityLoadState message={error} tone="danger" /> : null}
       {message ? <p className="field-help" role="status">{message}</p> : null}
       <div className="form-footer">
-        <button className="ghost-button" type="button">Cancel</button>
-        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : 'The Laravel API is not configured'}>
-          {busy ? 'Saving…' : screen.action ?? 'Save Assignments'}
+        <button className="ghost-button" type="button">{t('common.cancel', { defaultMessage: 'Cancel' })}</button>
+        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The Laravel API is not configured' })}>
+          {busy ? t('common.saving', { defaultMessage: 'Saving…' }) : screen.action ?? t('admin.saveAssignments', { defaultMessage: 'Save Assignments' })}
         </button>
       </div>
     </form>
@@ -2136,12 +2292,29 @@ function MapView({ screen }: { screen: AdminScreen }) {
   );
 }
 
-function DonutVisual({ value = '726', label = 'Average' }: { value?: string; label?: string }) {
-  return <div className="donut-wrap"><div className="donut-chart"><div><strong>{value}</strong><span>{label}</span></div></div><ul><li><i/>Adults <b>64%</b></li><li><i/>Youth <b>21%</b></li><li><i/>Children <b>15%</b></li></ul></div>;
+function DonutVisual({ value = '726', label = 'Average', breakdown }: { value?: string; label?: string; breakdown?: Array<{ label: string; value: string; percent?: number }> }) {
+  const segments = breakdown?.length
+    ? breakdown.slice(0, 3).map((item) => ({ label: item.label, percent: item.percent ?? 0 }))
+    : [
+      { label: 'Adults', percent: 64 },
+      { label: 'Youth', percent: 21 },
+      { label: 'Children', percent: 15 },
+    ];
+  return <div className="donut-wrap"><div className="donut-chart"><div><strong>{value}</strong><span>{label}</span></div></div><ul>{segments.map((item) => <li key={item.label}><i />{item.label} <b>{item.percent}%</b></li>)}</ul></div>;
 }
 
-function MinistryDashboardView({ screen }: { screen: AdminScreen }) {
-  return <><MetricCards metrics={screen.metrics}/><div className="ministry-dashboard-grid"><ChartCard title={screen.batch === 'D' ? 'Home Churches Growth (6 Months)' : 'Membership Growth'} /><article className="card dashboard-donut"><h2 className="card-title">{screen.batch === 'D' ? 'Application Status' : 'Attendance Overview'}</h2><DonutVisual value={screen.batch === 'D' ? '24' : '726'} label={screen.batch === 'D' ? 'Total' : 'Average'}/></article><article className="card compact-list"><h2 className="card-title">Quick Actions</h2>{(screen.items ?? []).slice(0,4).map((item,index)=><button key={item}><span>{['▣','▦','◇','▤'][index]}</span>{item}</button>)}</article><article className="card compact-list"><h2 className="card-title">Recent Activities</h2>{['New member added','Attendance recorded','Application reviewed','First timer registered'].map((item,index)=><div className="activity-row" key={item}><span>●</span><b>{item}</b><time>{index+1}h ago</time></div>)}</article></div></>;
+function MinistryDashboardView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
+  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
+  const donut = dashboard.data?.donut;
+  const activities = dashboard.live
+    ? (dashboard.data?.recent_activities ?? []).map((activity) => ({
+      title: activity.title,
+      time: formatRelativeTime(activity.occurred_at),
+    }))
+    : ['New member added', 'Attendance recorded', 'Application reviewed', 'First timer registered'].map((item, index) => ({ title: item, time: `${index + 1}h ago` }));
+
+  return <><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="ministry-dashboard-grid"><ChartCard title={screen.batch === 'D' ? 'Home Churches Growth (6 Months)' : 'Membership Growth'} series={dashboard.data?.series} /><article className="card dashboard-donut"><h2 className="card-title">{screen.batch === 'D' ? 'Application Status' : 'Attendance Overview'}</h2><DonutVisual value={donut?.value ?? (screen.batch === 'D' ? '24' : '726')} label={donut?.label ?? (screen.batch === 'D' ? 'Total' : 'Average')} breakdown={dashboard.data?.breakdown} /></article><article className="card compact-list"><h2 className="card-title">Quick Actions</h2>{(screen.items ?? []).slice(0, 4).map((item, index) => <button key={item}><span>{['▣', '▦', '◇', '▤'][index]}</span>{item}</button>)}</article><article className="card compact-list"><h2 className="card-title">Recent Activities</h2>{activities.map((item) => <div className="activity-row" key={item.title}><span>●</span><b>{item.title}</b><time>{item.time}</time></div>)}</article></div></>;
 }
 
 function WorkflowView({ screen }: { screen: AdminScreen }) {
@@ -2329,6 +2502,33 @@ function ApprovalView({ screen }: { screen: AdminScreen }) {
     }
   }
 
+  async function onAssign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!prayer?.id) return;
+    const data = new FormData(event.currentTarget);
+    const assignedTo = String(data.get('assigned_to_person_id') ?? '').trim();
+    if (!assignedTo) {
+      setError('Select an intercessor before assigning this prayer request.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await assignPrayerRequest(
+        prayer.id,
+        { assigned_to_person_id: assignedTo, note: String(data.get('note') ?? '').trim() || undefined },
+        defaultOpsScope(screen.scope),
+      );
+      setPrayer(updated);
+      setMessage(`Prayer request assigned to ${updated.assigned_to_name || 'the selected intercessor'}.`);
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Unable to assign this prayer request.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (live) {
     const empty = loaded && (isPrayer ? prayer === null : need === null);
     return (
@@ -2356,13 +2556,23 @@ function ApprovalView({ screen }: { screen: AdminScreen }) {
             </>
           ) : null}
         </article>
-        <article className="card approval-review">
+        <form className="card approval-review" onSubmit={isPrayer ? onAssign : undefined}>
           <h2>{isPrayer ? 'Assign To' : 'Review'}</h2>
           {isPrayer && prayer ? (
-            <label>
-              <span>Details</span>
-              <textarea readOnly rows={5} value={prayer.body} />
-            </label>
+            <>
+              <label>
+                <span>Details</span>
+                <textarea readOnly rows={5} value={prayer.body} />
+              </label>
+              <label>
+                <span>Assign to intercessor</span>
+                <SearchSelect name="assigned_to_person_id" catalog="person" placeholder="Search intercessor" />
+              </label>
+              <label>
+                <span>Assignment note (optional)</span>
+                <textarea name="note" rows={3} placeholder="Add pastoral context for the intercessor." />
+              </label>
+            </>
           ) : null}
           {!isPrayer && need ? (
             <label>
@@ -2370,7 +2580,9 @@ function ApprovalView({ screen }: { screen: AdminScreen }) {
               <textarea readOnly rows={5} value={need.summary} />
             </label>
           ) : null}
-          <p className="field-help">Reject or assign updates the live status. Intercessor names are not stored on this record yet.</p>
+          <p className="field-help">
+            {isPrayer ? 'Assignment records the intercessor, note, and timestamp in the live prayer workflow.' : 'Review updates the live request status.'}
+          </p>
           {message ? <p className="field-help" role="status">{message}</p> : null}
           <div className="form-footer">
             <button className="danger-button" type="button" data-interaction-native="true" disabled={busy || empty} onClick={() => void onTransition('rejected')}>
@@ -2378,15 +2590,15 @@ function ApprovalView({ screen }: { screen: AdminScreen }) {
             </button>
             <button
               className="primary-button"
-              type="button"
+              type={isPrayer ? 'submit' : 'button'}
               data-interaction-native="true"
               disabled={busy || empty}
-              onClick={() => void onTransition(isPrayer ? 'assigned' : 'approved')}
+              onClick={isPrayer ? undefined : () => void onTransition('approved')}
             >
               {busy ? 'Saving…' : screen.action ?? (isPrayer ? 'Assign Prayer' : 'Approve')}
             </button>
           </div>
-        </article>
+        </form>
       </div>
     );
   }
@@ -2510,10 +2722,43 @@ function Impersonation({ screen }: { screen: AdminScreen }) {
 }
 
 export function ForbiddenView({ scope = 'Global', reason = 'permission-denied' }: { scope?: string; reason?: string }) {
+  const { t } = useLocale();
   if (reason === 'unauthenticated') {
-    return <div className="forbidden-view"><div className="shield-lock">▣</div><h1>Sign in required</h1><p>Sign in with an administrator account to continue.</p><Link href="/admin/login?returnTo=%2Fadmin" className="primary-button link-button">Admin Sign In</Link></div>;
+    return (
+      <div className="forbidden-view">
+        <div className="shield-lock">▣</div>
+        <h1>{t('auth.signInRequired', { defaultMessage: 'Sign in required' })}</h1>
+        <p>{t('auth.adminSignInContinue', { defaultMessage: 'Sign in with an administrator account to continue.' })}</p>
+        <Link href="/admin/login?returnTo=%2Fadmin" className="primary-button link-button">
+          {t('auth.adminSignIn', { defaultMessage: 'Admin Sign In' })}
+        </Link>
+      </div>
+    );
   }
-  return <div className="forbidden-view"><div className="shield-lock">▣</div><h1>Permission Denied</h1><p>You don’t have permission to access this resource<br/>in the current scope.</p><dl><div><dt>Current Scope:</dt><dd>{scope}</dd></div><div><dt>Access Result:</dt><dd>{reason.replace('-', ' ')}</dd></div></dl><Link href="/admin" className="primary-button link-button">Back to Dashboard</Link></div>;
+  return (
+    <div className="forbidden-view">
+      <div className="shield-lock">▣</div>
+      <h1>{t('errors.permissionDenied', { defaultMessage: 'Permission Denied' })}</h1>
+      <p>
+        {t('errors.noPermissionInScope', {
+          defaultMessage: 'You don’t have permission to access this resource in the current scope.',
+        })}
+      </p>
+      <dl>
+        <div>
+          <dt>{t('errors.currentScope', { defaultMessage: 'Current Scope:' })}</dt>
+          <dd>{scope}</dd>
+        </div>
+        <div>
+          <dt>{t('errors.accessResult', { defaultMessage: 'Access Result:' })}</dt>
+          <dd>{reason.replace('-', ' ')}</dd>
+        </div>
+      </dl>
+      <Link href="/admin" className="primary-button link-button">
+        {t('common.backToDashboard', { defaultMessage: 'Back to Dashboard' })}
+      </Link>
+    </div>
+  );
 }
 
 function adminReturnDestination(returnTo?: string): string {
@@ -2523,6 +2768,7 @@ function adminReturnDestination(returnTo?: string): string {
 
 function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string }) {
   const router = useRouter();
+  const { t } = useLocale();
   const apiReady = isAuthApiConfigured();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2531,11 +2777,12 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
   const [remember, setRemember] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const dest = adminReturnDestination(returnTo);
+  const authNotConfigured = t('errors.authNotConfigured', { defaultMessage: 'Authentication is not configured.' });
 
   async function onLogin(event: FormEvent) {
     event.preventDefault();
     if (!apiReady) {
-      setError('Authentication is not configured.');
+      setError(authNotConfigured);
       return;
     }
     setBusy(true);
@@ -2549,7 +2796,9 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
       const capabilities = await fetchUserCapabilities();
       if (!hasAdministratorCapabilities(capabilities)) {
         await logoutBrowserUser().catch(() => undefined);
-        setError('This account is not an administrator. Use member sign-in at /login, or sign in with an admin user.');
+        setError(t('errors.notAdministrator', {
+          defaultMessage: 'This account is not an administrator. Use member sign-in at /login, or sign in with an admin user.',
+        }));
         return;
       }
       router.push(dest);
@@ -2564,7 +2813,7 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
   async function onMfa(event: FormEvent) {
     event.preventDefault();
     if (!apiReady) {
-      setError('Authentication is not configured.');
+      setError(authNotConfigured);
       return;
     }
     setBusy(true);
@@ -2583,16 +2832,16 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
   if (screen.kind === 'mfa') {
     return (
       <main className="auth-page">
-        <header className="auth-header"><Brand dark={false}/><span>Admin Portal</span></header>
+        <header className="auth-header"><Brand dark={false}/><span>{t('auth.adminPortal', { defaultMessage: 'Admin Portal' })}</span></header>
         <form className="card mfa-card" onSubmit={(event) => void onMfa(event)}>
           <div className="mfa-icon">◇</div>
-          <h1>{screen.title}</h1>
-          <p>{screen.subtitle}</p>
+          <h1>{t('auth.mfaTitle', { defaultMessage: screen.title })}</h1>
+          <p>{t('auth.mfaCopy', { defaultMessage: screen.subtitle })}</p>
           {error ? <p className="auth-banner auth-banner-error" role="alert">{error}</p> : null}
           <div className="otp-row">
             {otp.map((digit, index) => (
               <input
-                aria-label={`Digit ${index + 1}`}
+                aria-label={t('auth.otpDigit', { defaultMessage: 'Digit {n}', vars: { n: index + 1 } })}
                 value={digit}
                 maxLength={1}
                 inputMode="numeric"
@@ -2606,10 +2855,10 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
             ))}
           </div>
           <div className="auth-links">
-            <Link href="/admin/login">Back to admin sign in</Link>
+            <Link href="/admin/login">{t('auth.backToAdminSignIn', { defaultMessage: 'Back to admin sign in' })}</Link>
           </div>
           <button className="primary-button" type="submit" disabled={busy || otp.join('').length !== 6}>
-            {busy ? 'Verifying…' : 'Verify & Continue'}
+            {busy ? t('auth.verifying', { defaultMessage: 'Verifying…' }) : t('auth.verifyAndContinue', { defaultMessage: 'Verify & Continue' })}
           </button>
         </form>
       </main>
@@ -2621,25 +2870,30 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
       <aside className="login-visual">
         <Brand/>
         <div className="login-copy">
-          <h1>Admin Portal</h1>
-          <p>Kingdom. Connection. Impact.</p>
-          <blockquote>“Go and make disciples<br/>of all nations.”<small>Matthew 28:19</small></blockquote>
+          <h1>{t('auth.adminPortal', { defaultMessage: 'Admin Portal' })}</h1>
+          <p>{t('auth.adminTagline', { defaultMessage: 'Kingdom. Connection. Impact.' })}</p>
+          <blockquote>
+            {t('auth.greatCommissionLine1', { defaultMessage: '“Go and make disciples' })}
+            <br/>
+            {t('auth.greatCommissionLine2', { defaultMessage: 'of all nations.”' })}
+            <small>{t('auth.matthew2819', { defaultMessage: 'Matthew 28:19' })}</small>
+          </blockquote>
         </div>
         <div className="city-lights"/>
       </aside>
       <form className="login-form" onSubmit={(event) => void onLogin(event)}>
         <div>
-          <h1>{screen.title}</h1>
-          <p>{screen.subtitle}</p>
+          <h1>{t('auth.welcomeBack', { defaultMessage: screen.title })}</h1>
+          <p>{t('auth.adminSignInCopy', { defaultMessage: screen.subtitle })}</p>
           {error ? <p className="auth-banner auth-banner-error" role="alert">{error}</p> : null}
-          <label>Email Address<input type="email" name="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={busy} /></label>
-          <label>Password<input type="password" name="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy} /></label>
+          <label>{t('auth.emailAddress', { defaultMessage: 'Email Address' })}<input type="email" name="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={busy} /></label>
+          <label>{t('auth.password', { defaultMessage: 'Password' })}<input type="password" name="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required disabled={busy} /></label>
           <div className="remember">
-            <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy}/> Remember me</label>
-            <Link href="/forgot-password">Forgot password?</Link>
+            <label><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} disabled={busy}/> {t('auth.rememberMe', { defaultMessage: 'Remember me' })}</label>
+            <Link href="/forgot-password">{t('auth.forgotPassword', { defaultMessage: 'Forgot password?' })}</Link>
           </div>
-          <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy || !apiReady}>{busy ? 'Signing in…' : 'Sign In'}</button>
-          {!apiReady ? <small role="status">Set NEXT_PUBLIC_FHC_API_URL so admin sign-in can reach Laravel.</small> : <small>Need help? <Link href="/contact">Contact Support</Link></small>}
+          <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy || !apiReady}>{busy ? t('auth.signingIn', { defaultMessage: 'Signing in…' }) : t('auth.signIn', { defaultMessage: 'Sign In' })}</button>
+          {!apiReady ? <small role="status">{t('auth.adminApiUrlHint', { defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL so admin sign-in can reach Laravel.' })}</small> : <small>{t('auth.needHelp', { defaultMessage: 'Need help?' })} <Link href="/contact">{t('auth.contactSupport', { defaultMessage: 'Contact Support' })}</Link></small>}
         </div>
       </form>
     </main>
@@ -2647,11 +2901,11 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
 }
 
 function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
-  if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen}/>;
-  if (screen.batch === 'I') return <MissionScreenContent screen={screen}/>;
-  if (['J','K','L','M','N','O'].includes(screen.batch)) return <PlatformScreenContent screen={screen}/>;
+  if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen} requestedScope={requestedScope} />;
+  if (screen.batch === 'I') return <MissionScreenContent screen={screen} requestedScope={requestedScope} />;
+  if (['J','K','L','M','N','O'].includes(screen.batch)) return <PlatformScreenContent screen={screen} requestedScope={requestedScope} />;
   switch(screen.kind){
-    case 'dashboard': return <DashboardView screen={screen}/>;
+    case 'dashboard': return <DashboardView screen={screen} requestedScope={requestedScope} />;
     case 'scope-grid': return <ScopeGrid screen={screen}/>;
     case 'command': return <CommandView screen={screen}/>;
     case 'feed': return <FeedView screen={screen}/>;
@@ -2668,7 +2922,7 @@ function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; reques
     case 'map': return <MapView screen={screen}/>;
     case 'quick-actions': return <QuickActions screen={screen}/>;
     case 'impersonation': return <Impersonation screen={screen}/>;
-    case 'ministry-dashboard': return <MinistryDashboardView screen={screen}/>;
+    case 'ministry-dashboard': return <MinistryDashboardView screen={screen} requestedScope={requestedScope} />;
     case 'workflow': return <WorkflowView screen={screen}/>;
     case 'activation': return <ActivationView screen={screen}/>;
     case 'operations': return <OperationsView screen={screen}/>;

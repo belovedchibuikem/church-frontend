@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocale } from '@/components/locale-provider';
 import { AdminActionSurface, inferActionSurfaceMode, type ActionSurfaceMode } from './admin-action-surface';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
 import {
@@ -48,6 +49,7 @@ function slug(value: string): string {
 }
 
 export function AdminInteractionShell({ children, route, title, permission, scope, screenKind, returnTo, tabs, routes, records = [], details = {}, items = [] }: Props) {
+  const { t } = useLocale();
   const tabItems = tabs ?? emptyTabs;
   const inPageWizard = isInPageWizardKind(screenKind) && tabItems.length > 1;
   const currentModule = getAdminModuleForRoute(route);
@@ -225,8 +227,8 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       label,
       record: selectedRecord,
       entityKey,
-      title: actionMode === 'create' ? entity : label || 'Page actions',
-      description: actionMode === 'confirm' ? 'Review the scope, permission and supporting notes before continuing.' : `Complete the ${entity.toLowerCase()} workflow for ${title}.`,
+      title: actionMode === 'create' ? entity : label || t('admin.pageActions', { defaultMessage: 'Page actions' }),
+      description: actionMode === 'confirm' ? t('admin.confirmDescription', { defaultMessage: 'Review the scope, permission and supporting notes before continuing.' }) : t('admin.workflowDescription', { defaultMessage: 'Complete the {entity} workflow for {title}.', vars: { entity: entity.toLowerCase(), title } }),
     });
   };
 
@@ -287,7 +289,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       const href = anchor.getAttribute('href') ?? '';
       if (href === '#' || href === '') {
         event.preventDefault();
-        setOverlay({ type: 'dialog', mode: 'action', actionMode: 'help', label: anchor.textContent?.trim() || 'Help', title: anchor.textContent?.trim() || 'Help', description: 'Review the available support and recovery information.' });
+        setOverlay({ type: 'dialog', mode: 'action', actionMode: 'help', label: anchor.textContent?.trim() || t('common.help', { defaultMessage: 'Help' }), title: anchor.textContent?.trim() || t('common.help', { defaultMessage: 'Help' }), description: t('admin.helpDescription', { defaultMessage: 'Review the available support and recovery information.' }) });
         return;
       }
       const url = new URL(anchor.href, window.location.origin);
@@ -315,9 +317,9 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       const record = button.dataset.record ?? '';
       const entityKey = button.dataset.entity ?? resolveEntityKey(route);
       const action = button.dataset.adminAction;
-      if (action === 'view') openAction(`View ${record}`, 'preview', { record, entityKey });
-      else if (action === 'edit') openAction(`Edit ${record}`, 'edit', { record, entityKey });
-      else if (action === 'delete') openAction(`Delete ${record}`, 'confirm', { record, entityKey });
+      if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey });
+      else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey });
+      else if (action === 'delete') openAction(t('admin.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record } }), 'confirm', { record, entityKey });
       return;
     }
 
@@ -332,7 +334,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     }
     if (button.dataset.adminIntent === 'module-launcher') {
       event.preventDefault();
-      setOverlay({ type: 'drawer', mode: 'modules', title: 'All modules', description: 'Move between administration modules. Each module reopens at your last safe working page.' });
+      setOverlay({ type: 'drawer', mode: 'modules', title: t('admin.allModules', { defaultMessage: 'All modules' }), description: t('admin.allModulesDescription', { defaultMessage: 'Move between administration modules. Each module reopens at your last safe working page.' }) });
       return;
     }
     if (button.dataset.adminModule) {
@@ -342,7 +344,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     }
     if (button.dataset.adminIntent === 'profile-menu') {
       event.preventDefault();
-      setOverlay({ type: 'drawer', mode: 'profile', title: 'Admin account', description: 'Manage your profile or securely end the current hosted session.' });
+      setOverlay({ type: 'drawer', mode: 'profile', title: t('admin.adminAccount', { defaultMessage: 'Admin account' }), description: t('admin.adminAccountDescription', { defaultMessage: 'Manage your profile or securely end the current hosted session.' }) });
       return;
     }
     if (button.closest('[role="tablist"], .tabs, .kca-entity-tabs, .mission-tabs, .platform-tabs')) {
@@ -357,13 +359,13 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       const page = label.match(/\d+/)?.[0] ?? '1';
       setCurrentPage(Number(page));
       updateUrlState('page', page);
-      setToast(`Page ${page} selected`);
+      setToast(t('admin.pageSelected', { defaultMessage: 'Page {page} selected', vars: { page } }));
       return;
     }
     if (/previous page/i.test(label)) {
       event.preventDefault();
       const current = Number(new URL(window.location.href).searchParams.get('page') ?? '1');
-      if (current <= 1) setToast('Already on the first page');
+      if (current <= 1) setToast(t('admin.firstPage', { defaultMessage: 'Already on the first page' }));
       else { setCurrentPage(current - 1); updateUrlState('page', String(current - 1)); }
       return;
     }
@@ -372,39 +374,39 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       const current = Number(new URL(window.location.href).searchParams.get('page') ?? '1');
       setCurrentPage(current + 1);
       updateUrlState('page', String(current + 1));
-      setToast(`Page ${current + 1} selected`);
+      setToast(t('admin.pageSelected', { defaultMessage: 'Page {page} selected', vars: { page: current + 1 } }));
       return;
     }
-    if (clean === 'reset filters') {
+    if (button.dataset.adminIntent === 'reset-filters' || clean === 'reset filters') {
       event.preventDefault();
       updateUrlStates({ filter: undefined, status: undefined, date: undefined, sort: undefined });
       updateUrlState('page', undefined, false);
       setStatusFilter('all');
       setCurrentPage(1);
       closeOverlay();
-      setToast('Filters reset');
+      setToast(t('admin.filtersReset', { defaultMessage: 'Filters reset' }));
       return;
     }
-    if (clean === 'apply filters') {
+    if (button.dataset.adminIntent === 'apply-filters' || clean === 'apply filters') {
       event.preventDefault();
       const values = Array.from(button.closest('.interaction-filter-form')?.querySelectorAll('select') ?? []).map((select) => select.value);
       updateUrlStates({ filter: 'active', status: values[0], date: values[1], sort: values[2] });
       setStatusFilter(values[0] ?? 'all');
       setCurrentPage(1);
       closeOverlay();
-      setToast('Filters applied');
+      setToast(t('admin.filtersApplied', { defaultMessage: 'Filters applied' }));
       return;
     }
     if (/filter|this month|this year|all status|all statuses|all region|all regions|all church|all churches|all type|all types|all service|all services|all categor|all batch|all venue|all department/i.test(clean) || clean.endsWith('month')) {
       event.preventDefault();
-      setOverlay({ type: 'drawer', mode: 'filters', title: 'Filters', description: 'Refine the current fixture view. Filter state is preserved in the URL.' });
+      setOverlay({ type: 'drawer', mode: 'filters', title: t('admin.filters', { defaultMessage: 'Filters' }), description: t('admin.filtersDescription', { defaultMessage: 'Refine the current fixture view. Filter state is preserved in the URL.' }) });
       return;
     }
     if (clean === 'back' || clean === 'cancel') {
       event.preventDefault();
       if (inPageWizard && clean === 'back' && new URL(window.location.href).searchParams.get('step')) {
         window.dispatchEvent(new CustomEvent(WIZARD_ADVANCE_EVENT, { detail: { direction: 'back' } }));
-        setToast('Previous step opened');
+        setToast(t('admin.previousStepOpened', { defaultMessage: 'Previous step opened' }));
         return;
       }
       const requestedReturn = new URL(window.location.href).searchParams.get('returnTo');
@@ -415,14 +417,14 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     if (clean === 'save draft') {
       event.preventDefault();
       window.localStorage.setItem(`fhc-admin-draft:${route}`, new Date().toISOString());
-      setToast('Draft preserved on this device');
+      setToast(t('admin.draftPreserved', { defaultMessage: 'Draft preserved on this device' }));
       return;
     }
     if ((clean.startsWith('next') || clean === 'save & next') && !resolveRoute(label)) {
       if (inPageWizard) {
         event.preventDefault();
         window.dispatchEvent(new CustomEvent(WIZARD_ADVANCE_EVENT, { detail: { direction: 'next' } }));
-        setToast('Next step opened');
+        setToast(t('admin.nextStepOpened', { defaultMessage: 'Next step opened' }));
         return;
       }
       if (tabItems.length > 1) {
@@ -431,7 +433,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         const nextTab = tabItems[Math.min(currentIndex + 1, tabItems.length - 1)];
         setActiveTab(nextTab);
         updateUrlState('tab', slug(nextTab));
-        setToast(`${nextTab} opened`);
+        setToast(t('admin.tabOpened', { defaultMessage: '{tab} opened', vars: { tab: nextTab } }));
         return;
       }
     }
@@ -439,18 +441,18 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       event.preventDefault();
       rootRef.current?.querySelectorAll<HTMLDetailsElement>('details').forEach((detail) => { detail.open = true; });
       rootRef.current?.querySelectorAll<HTMLElement>('.tree-node,.tree-branch').forEach((node) => node.classList.add('expanded'));
-      setToast('All hierarchy levels expanded');
+      setToast(t('admin.hierarchyExpanded', { defaultMessage: 'All hierarchy levels expanded' }));
       return;
     }
     if (/mark all as read/i.test(clean)) {
       event.preventDefault();
       rootRef.current?.querySelectorAll('.dot, .unread').forEach((node) => node.remove());
-      setToast('Notifications marked read on this device');
+      setToast(t('admin.notificationsMarkedRead', { defaultMessage: 'Notifications marked read on this device' }));
       return;
     }
     if (/more|options|actions for/i.test(clean)) {
       event.preventDefault();
-      openAction('Available actions', 'actions');
+      openAction(t('admin.availableActions', { defaultMessage: 'Available actions' }), 'actions');
       return;
     }
 
@@ -462,12 +464,12 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     }
     if (/view|open|details|cohort|website/i.test(clean)) {
       event.preventDefault();
-      openAction(label || 'Record details', 'preview');
+      openAction(label || t('admin.recordDetails', { defaultMessage: 'Record details' }), 'preview');
       return;
     }
     if (filePattern.test(clean)) {
       event.preventDefault();
-      openAction(label || 'File operation', 'file');
+      openAction(label || t('admin.fileOperation', { defaultMessage: 'File operation' }), 'file');
       return;
     }
 

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { BrandingProvider } from '../components/branding-provider';
+import { LocaleProvider } from '../components/locale-provider';
 import { loadPublicBranding } from '../lib/branding';
+import { localeDirection } from '../lib/i18n.ts';
+import { readRequestLocale } from '../lib/i18n/server.ts';
 import './globals.css';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,11 +29,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const branding = await loadPublicBranding();
+  const [branding, locale] = await Promise.all([loadPublicBranding(), readRequestLocale()]);
   return (
-    <html lang="en">
+    <html lang={locale} dir={localeDirection(locale)}>
       <body>
-        <BrandingProvider initial={branding}>{children}</BrandingProvider>
+        <BrandingProvider initial={branding}>
+          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+        </BrandingProvider>
       </body>
     </html>
   );

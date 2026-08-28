@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useLocale } from '@/components/locale-provider';
 import {
   DEFAULT_COUNTRY_CODE,
   countryDisplayName,
@@ -8,6 +9,7 @@ import {
   fetchCities,
   fetchCountries,
   fetchStates,
+  isNigeria,
   localityLabelFor,
   namesToOptions,
   FALLBACK_COUNTRIES,
@@ -38,6 +40,7 @@ export function GeographySelect({
   required = true,
   className,
 }: Props) {
+  const { t } = useLocale();
   const initialCountry = (defaultCountry || DEFAULT_COUNTRY_CODE).trim().toUpperCase();
   const [countries, setCountries] = useState<GeoCountry[]>(FALLBACK_COUNTRIES);
   const [loadingCountries, setLoadingCountries] = useState(true);
@@ -85,13 +88,17 @@ export function GeographySelect({
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setStates([]);
-        setStatesError(error instanceof Error ? error.message : 'Unable to load states.');
+        setStatesError(
+          error instanceof Error
+            ? error.message
+            : t('errors.unableToLoadStates', { defaultMessage: 'Unable to load states.' }),
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadingStates(false);
       });
     return () => controller.abort();
-  }, [countryName]);
+  }, [countryName, t]);
 
   useEffect(() => {
     if (!countryName || !region) {
@@ -108,23 +115,45 @@ export function GeographySelect({
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setCities([]);
-        setCitiesError(error instanceof Error ? error.message : 'Unable to load cities.');
+        setCitiesError(
+          error instanceof Error
+            ? error.message
+            : t('errors.unableToLoadCities', { defaultMessage: 'Unable to load cities.' }),
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadingCities(false);
       });
     return () => controller.abort();
-  }, [countryName, region]);
+  }, [countryName, region, t]);
 
   const stateOptions = useMemo(() => namesToOptions(states), [states]);
   const cityOptions = useMemo(() => namesToOptions(cities), [cities]);
   const regionRequired = required && states.length > 0;
   const localityRequired = required && cities.length > 0;
+  const localityLabel = isNigeria(country)
+    ? t('common.lgaCity', { defaultMessage: 'LGA / City' })
+    : t('common.cityArea', { defaultMessage: 'City / Area' });
+  const regionPlaceholder = loadingStates
+    ? t('common.loadingStates', { defaultMessage: 'Loading states…' })
+    : statesError
+      ? t('common.searchOrTryAgain', { defaultMessage: 'Search or try again…' })
+      : t('common.searchStateOrRegion', { defaultMessage: 'Search state or region…' });
+  const localityPlaceholder = !region
+    ? t('common.selectStateFirst', { defaultMessage: 'Select a state first…' })
+    : loadingCities
+      ? t('common.loadingCities', { defaultMessage: 'Loading cities…' })
+      : citiesError
+        ? t('common.searchOrTryAgain', { defaultMessage: 'Search or try again…' })
+        : t('common.searchNamed', {
+            defaultMessage: 'Search {name}…',
+            vars: { name: localityLabelFor(country).toLowerCase() },
+          });
 
   return (
     <div className={`geography-select ${className ?? ''}`.trim()}>
       <label>
-        Country
+        {t('common.country', { defaultMessage: 'Country' })}
         <SearchSelect
           name={countryField}
           labelFieldName={countryLabelField}
@@ -132,7 +161,7 @@ export function GeographySelect({
           value={country}
           loading={loadingCountries}
           required={required}
-          placeholder="Search country…"
+          placeholder={t('common.searchCountry', { defaultMessage: 'Search country…' })}
           onValueChange={(next) => {
             setCountry(next.trim().toUpperCase());
             setRegion('');
@@ -142,7 +171,7 @@ export function GeographySelect({
         />
       </label>
       <label>
-        State / Region
+        {t('common.stateRegion', { defaultMessage: 'State / Region' })}
         <SearchSelect
           key={`region-${country}`}
           name={regionField}
@@ -151,13 +180,7 @@ export function GeographySelect({
           loading={loadingStates}
           disabled={!country || (loadingStates && states.length === 0)}
           required={regionRequired}
-          placeholder={
-            loadingStates
-              ? 'Loading states…'
-              : statesError
-                ? 'Search or try again…'
-                : 'Search state or region…'
-          }
+          placeholder={regionPlaceholder}
           onValueChange={(next) => {
             setRegion(next);
             setLocality('');
@@ -166,7 +189,7 @@ export function GeographySelect({
         />
       </label>
       <label className="geography-locality">
-        {localityLabelFor(country)}
+        {localityLabel}
         <SearchSelect
           key={`locality-${country}-${region}`}
           name={localityField}
@@ -175,15 +198,7 @@ export function GeographySelect({
           loading={loadingCities}
           disabled={!region || (loadingCities && cities.length === 0)}
           required={localityRequired}
-          placeholder={
-            !region
-              ? 'Select a state first…'
-              : loadingCities
-                ? 'Loading cities…'
-                : citiesError
-                  ? 'Search or try again…'
-                  : `Search ${localityLabelFor(country).toLowerCase()}…`
-          }
+          placeholder={localityPlaceholder}
           onValueChange={setLocality}
         />
       </label>

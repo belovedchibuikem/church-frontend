@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useLocale } from '@/components/locale-provider';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 
 type StepperProps = {
@@ -20,8 +21,9 @@ export function AdminWizardStepper({
   activeClassName = 'active',
   completeClassName = 'complete',
 }: StepperProps) {
+  const { t } = useLocale();
   return (
-    <div className={className} role="list" aria-label="Form progress">
+    <div className={className} role="list" aria-label={t('admin.formProgress', { defaultMessage: 'Form progress' })}>
       {steps.map((step, index) => (
         <div
           role="listitem"
@@ -30,7 +32,7 @@ export function AdminWizardStepper({
           key={step}
         >
           <span aria-hidden="true">{index < currentStep ? '✓' : index + 1}</span>
-          <strong>{step}</strong>
+          <strong>{t(`admin.wizardStep.${step}`, { defaultMessage: step })}</strong>
         </div>
       ))}
     </div>
@@ -75,26 +77,30 @@ type FooterProps = {
 export function AdminWizardFooter({
   wizard,
   nextLabel,
-  finishLabel = 'Finish',
-  cancelLabel = 'Cancel',
+  finishLabel,
+  cancelLabel,
   className = 'form-footer',
   primaryClassName = 'primary-button',
   secondaryClassName = 'ghost-button',
   onFinish,
 }: FooterProps) {
+  const { t } = useLocale();
+  const resolvedFinish = finishLabel ?? t('admin.finish', { defaultMessage: 'Finish' });
+  const resolvedCancel = cancelLabel ?? t('common.cancel', { defaultMessage: 'Cancel' });
+  const nextStepName = wizard.steps[wizard.currentStep + 1];
   const nextStepLabel = !wizard.isLast
-    ? (nextLabel && wizard.isFirst ? nextLabel : wizard.steps[wizard.currentStep + 1] ? `Next: ${wizard.steps[wizard.currentStep + 1]}` : 'Next')
-    : finishLabel;
+    ? (nextLabel && wizard.isFirst ? nextLabel : nextStepName ? t('admin.nextNamedStep', { defaultMessage: 'Next: {step}', vars: { step: nextStepName } }) : t('common.next', { defaultMessage: 'Next' }))
+    : resolvedFinish;
 
   return (
     <footer className={className}>
       {!wizard.isFirst ? (
         <button type="button" className={secondaryClassName} data-interaction-native="true" onClick={() => wizard.goToStep(wizard.currentStep - 1)}>
-          Back
+          {t('common.back', { defaultMessage: 'Back' })}
         </button>
       ) : (
         <button type="button" className={secondaryClassName} data-interaction-native="true">
-          {cancelLabel}
+          {resolvedCancel}
         </button>
       )}
       <button
@@ -106,7 +112,7 @@ export function AdminWizardFooter({
           else wizard.goToStep(wizard.currentStep + 1);
         }}
       >
-        {wizard.isLast ? finishLabel : nextStepLabel}
+        {wizard.isLast ? resolvedFinish : nextStepLabel}
       </button>
     </footer>
   );

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
+import { useLocale } from '@/components/locale-provider';
+import type { TranslateOptions } from '@/lib/i18n/types.ts';
 import type { SiteRoute } from '@/lib/site-routes';
 import {
   clearGivingDraft,
@@ -36,13 +38,50 @@ import {
   type UserPaymentReceipt,
 } from '@/lib/user-api';
 
-function formatWhen(value?: string | null): string {
+type TranslateFn = (key: string, options?: TranslateOptions) => string;
+
+const GIVING_METHODS = ['Card', 'Bank Transfer', 'USSD', 'Wallet'] as const;
+
+function formatWhen(value?: string | null, locale?: string): string {
   if (!value) return '—';
   try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
   } catch {
     return value;
   }
+}
+
+function givingFundLabel(t: TranslateFn, fund: string): string {
+  const keys: Record<string, string> = {
+    'General Offering': 'account.givingFundGeneralOffering',
+    Tithe: 'account.givingFundTithe',
+    'Mission Care Fund': 'account.givingFundMissionCare',
+    'Building Hope Church': 'account.givingFundBuildingHope',
+    'KCA Scholarship': 'account.givingFundKcaScholarship',
+  };
+  return t(keys[fund] ?? 'account.givingFund', { defaultMessage: fund });
+}
+
+function givingMethodLabel(t: TranslateFn, method: string): string {
+  const keys: Record<string, string> = {
+    Card: 'account.givingMethodCard',
+    'Bank Transfer': 'account.givingMethodBankTransfer',
+    USSD: 'account.givingMethodUssd',
+    Wallet: 'account.givingMethodWallet',
+  };
+  return t(keys[method] ?? 'account.givingMethod', { defaultMessage: method });
+}
+
+function givingStatusLabel(t: TranslateFn, status: string): string {
+  const keys: Record<string, string> = {
+    completed: 'account.givingStatusCompleted',
+    succeeded: 'account.givingStatusSucceeded',
+    pending: 'account.givingStatusPending',
+    pending_provider: 'account.givingStatusPendingProvider',
+    Recorded: 'account.givingStatusRecorded',
+    Pending: 'account.givingStatusPendingFallback',
+  };
+  return t(keys[status] ?? 'account.givingStatus', { defaultMessage: status });
 }
 
 function useSignedInUser() {
@@ -70,22 +109,32 @@ function useSignedInUser() {
 }
 
 function GiveSignInGate({ returnTo }: { returnTo: string }) {
+  const { t } = useLocale();
   return (
     <div className="give-shell">
       <section className="give-hero">
-        <span className="eyebrow">GIVING</span>
-        <h1>Give generously. Change lives.</h1>
-        <p>Sign in to record a gift against your Family House account. Receipts and history stay with you.</p>
+        <span className="eyebrow">{t('account.givingEyebrow', { defaultMessage: 'GIVING' })}</span>
+        <h1>{t('account.giveHeadline', { defaultMessage: 'Give generously. Change lives.' })}</h1>
+        <p>
+          {t('account.giveSignInCopy', {
+            defaultMessage: 'Sign in to record a gift against your Family House account. Receipts and history stay with you.',
+          })}
+        </p>
       </section>
       <div className="panel give-signin">
-        <h3>Sign in to continue</h3>
-        <p>Giving intents require a verified member session. After you sign in you will return to this page.</p>
+        <h3>{t('account.signInToContinue', { defaultMessage: 'Sign in to continue' })}</h3>
+        <p>
+          {t('account.givingRequiresSession', {
+            defaultMessage:
+              'Giving intents require a verified member session. After you sign in you will return to this page.',
+          })}
+        </p>
         <div className="hero-actions">
           <Link className="site-button" href={`/login?returnTo=${encodeURIComponent(returnTo)}`}>
-            Sign In
+            {t('common.signIn', { defaultMessage: 'Sign In' })}
           </Link>
           <Link className="site-button secondary" href={`/register?returnTo=${encodeURIComponent(returnTo)}`}>
-            Create Account
+            {t('account.createAccount', { defaultMessage: 'Create Account' })}
           </Link>
         </div>
       </div>
@@ -100,9 +149,10 @@ function AmountChips({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const { t, locale } = useLocale();
   const current = Number(value);
   return (
-    <div className="give-presets" role="group" aria-label="Suggested amounts">
+    <div className="give-presets" role="group" aria-label={t('account.suggestedAmounts', { defaultMessage: 'Suggested amounts' })}>
       {GIVING_PRESETS.map((amount) => (
         <button
           className={current === amount ? 'active' : ''}
@@ -110,7 +160,7 @@ function AmountChips({
           onClick={() => onChange(String(amount))}
           type="button"
         >
-          ₦{amount.toLocaleString()}
+          ₦{amount.toLocaleString(locale)}
         </button>
       ))}
     </div>
@@ -118,31 +168,46 @@ function AmountChips({
 }
 
 function GiveSummary({ draft, amountMinor }: { draft: GivingDraft; amountMinor: number | null }) {
+  const { t } = useLocale();
   return (
     <aside className="give-aside panel">
-      <span className="eyebrow">YOUR GIFT</span>
+      <span className="eyebrow">{t('account.yourGiftEyebrow', { defaultMessage: 'YOUR GIFT' })}</span>
       <strong className="give-aside-amount">
-        {amountMinor != null ? formatMoneyMinor(amountMinor, draft.currency) : 'Enter an amount'}
+        {amountMinor != null
+          ? formatMoneyMinor(amountMinor, draft.currency)
+          : t('account.enterAnAmount', { defaultMessage: 'Enter an amount' })}
       </strong>
       <dl className="give-dl">
         <div>
-          <dt>Fund</dt>
-          <dd>{draft.fund}</dd>
+          <dt>{t('account.fund', { defaultMessage: 'Fund' })}</dt>
+          <dd>{givingFundLabel(t, draft.fund)}</dd>
         </div>
         <div>
-          <dt>Method</dt>
-          <dd>{draft.method}</dd>
+          <dt>{t('account.method', { defaultMessage: 'Method' })}</dt>
+          <dd>{givingMethodLabel(t, draft.method)}</dd>
         </div>
         <div>
-          <dt>Currency</dt>
+          <dt>{t('account.currency', { defaultMessage: 'Currency' })}</dt>
           <dd>{draft.currency}</dd>
         </div>
       </dl>
-      {draft.note ? <p className="give-note">“{draft.note}”</p> : <p>Add a dedication if this gift is in honour of someone.</p>}
+      {draft.note ? (
+        <p className="give-note">“{draft.note}”</p>
+      ) : (
+        <p>
+          {t('account.addDedication', {
+            defaultMessage: 'Add a dedication if this gift is in honour of someone.',
+          })}
+        </p>
+      )}
       <ul className="check-list">
-        <li>Secure intent recorded to your account</li>
-        <li>Receipt stored in My Giving</li>
-        <li>Paystack, Flutterwave, or Stripe hosted checkout when activated</li>
+        <li>{t('account.secureIntentRecorded', { defaultMessage: 'Secure intent recorded to your account' })}</li>
+        <li>{t('account.receiptStored', { defaultMessage: 'Receipt stored in My Giving' })}</li>
+        <li>
+          {t('account.hostedCheckoutWhenActivated', {
+            defaultMessage: 'Paystack, Flutterwave, or Stripe hosted checkout when activated',
+          })}
+        </li>
       </ul>
     </aside>
   );
@@ -158,6 +223,7 @@ function GiveAmountStep({
   missionPreset: boolean;
 }) {
   const router = useRouter();
+  const { t } = useLocale();
   const [draft, setDraft] = useState<GivingDraft>(() => {
     const base = emptyGivingDraft();
     return missionPreset ? { ...base, fund: 'Mission Care Fund' } : base;
@@ -176,7 +242,7 @@ function GiveAmountStep({
     event.preventDefault();
     setError(null);
     if (amountMinor == null || amountMinor < 100) {
-      setError('Enter an amount of at least ₦1.00.');
+      setError(t('errors.enterMinimumGivingAmount', { defaultMessage: 'Enter an amount of at least ₦1.00.' }));
       return;
     }
     writeGivingDraft(draft);
@@ -186,21 +252,34 @@ function GiveAmountStep({
   return (
     <div className="give-shell">
       <section className="give-hero">
-        <span className="eyebrow">GIVING</span>
-        <h1>{route.path === '/mission/support' ? 'Support a mission' : 'Give generously, change lives'}</h1>
+        <span className="eyebrow">{t('account.givingEyebrow', { defaultMessage: 'GIVING' })}</span>
+        <h1>
+          {route.path === '/mission/support'
+            ? t('account.supportAMission', { defaultMessage: 'Support a mission' })
+            : t('account.giveGenerouslyChangeLives', { defaultMessage: 'Give generously, change lives' })}
+        </h1>
         <p>
-          {name !== 'Member' ? `Thank you, ${name}. ` : ''}
-          Every seed advances the Kingdom. Choose a fund, enter an amount, then confirm on the secure payment step.
+          {name !== 'Member'
+            ? t('account.thankYouName', { defaultMessage: 'Thank you, {name}. ', vars: { name } })
+            : ''}
+          {t('account.giveAmountCopy', {
+            defaultMessage:
+              'Every seed advances the Kingdom. Choose a fund, enter an amount, then confirm on the secure payment step.',
+          })}
         </p>
       </section>
       <div className="give-layout">
         <form className="site-form give-form" onSubmit={onSubmit}>
           <div className="form-intro">
-            <h3>How would you like to give?</h3>
-            <p>Your gift is saved on this device until you confirm payment. Nothing is charged on this step.</p>
+            <h3>{t('account.howWouldYouLikeToGive', { defaultMessage: 'How would you like to give?' })}</h3>
+            <p>
+              {t('account.giftSavedOnDevice', {
+                defaultMessage: 'Your gift is saved on this device until you confirm payment. Nothing is charged on this step.',
+              })}
+            </p>
           </div>
           <label className="wide">
-            Give to
+            {t('account.giveTo', { defaultMessage: 'Give to' })}
             <select
               name="fund"
               onChange={(event) => setDraft((prev) => ({ ...prev, fund: event.target.value }))}
@@ -208,13 +287,13 @@ function GiveAmountStep({
             >
               {GIVING_FUNDS.map((fund) => (
                 <option key={fund} value={fund}>
-                  {fund}
+                  {givingFundLabel(t, fund)}
                 </option>
               ))}
             </select>
           </label>
           <label className="wide">
-            Amount (₦)
+            {t('account.amountNaira', { defaultMessage: 'Amount (₦)' })}
             <input
               inputMode="decimal"
               min="1"
@@ -231,29 +310,29 @@ function GiveAmountStep({
             onChange={(next) => setDraft((prev) => ({ ...prev, amount: next }))}
           />
           <label>
-            Payment method
+            {t('account.paymentMethod', { defaultMessage: 'Payment method' })}
             <select
               name="method"
               onChange={(event) => setDraft((prev) => ({ ...prev, method: event.target.value }))}
               value={draft.method}
             >
-              {['Card', 'Bank Transfer', 'USSD', 'Wallet'].map((method) => (
+              {GIVING_METHODS.map((method) => (
                 <option key={method} value={method}>
-                  {method}
+                  {givingMethodLabel(t, method)}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Currency
+            {t('account.currency', { defaultMessage: 'Currency' })}
             <input name="currency" readOnly value="NGN" />
           </label>
           <label className="wide">
-            Dedication / note
+            {t('account.dedicationNote', { defaultMessage: 'Dedication / note' })}
             <textarea
               name="note"
               onChange={(event) => setDraft((prev) => ({ ...prev, note: event.target.value }))}
-              placeholder="For Kingdom advancement…"
+              placeholder={t('account.dedicationPlaceholder', { defaultMessage: 'For Kingdom advancement…' })}
               rows={4}
               value={draft.note}
             />
@@ -265,10 +344,10 @@ function GiveAmountStep({
           ) : null}
           <div className="form-actions">
             <Link className="site-button secondary" href="/account/giving">
-              Giving history
+              {t('account.givingHistory', { defaultMessage: 'Giving history' })}
             </Link>
             <button className="site-button" type="submit">
-              Continue to payment
+              {t('account.continueToPayment', { defaultMessage: 'Continue to payment' })}
             </button>
           </div>
         </form>
@@ -280,6 +359,7 @@ function GiveAmountStep({
 
 function GivePaymentStep({ user }: { user: CurrentUser | null }) {
   const router = useRouter();
+  const { t } = useLocale();
   const [draft, setDraft] = useState<GivingDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -296,7 +376,11 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
 
   const onPay = async () => {
     if (!draft || amountMinor == null) {
-      setError('Start from the Give page so we know the amount to record.');
+      setError(
+        t('errors.startFromGivePage', {
+          defaultMessage: 'Start from the Give page so we know the amount to record.',
+        }),
+      );
       return;
     }
     setBusy(true);
@@ -378,17 +462,28 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
         intent.client_payload && typeof intent.client_payload.instructions === 'string'
           ? intent.client_payload.instructions
           : null;
-      setError(payloadInstructions || GIVING_CHECKOUT_UNAVAILABLE_MESSAGE);
+      setError(
+        payloadInstructions ||
+          t('errors.givingCheckoutUnavailable', { defaultMessage: GIVING_CHECKOUT_UNAVAILABLE_MESSAGE }),
+      );
     } catch (err) {
       if (isRecentMfaRequiredError(err)) {
         setMfaRequired(true);
         setError(
-          `${formatUserApiError(err, 'Recent verification is required to give.')} Complete MFA at /mfa/setup, then retry.`,
+          `${formatUserApiError(
+            err,
+            t('errors.recentMfaRequiredToGive', { defaultMessage: 'Recent verification is required to give.' }),
+          )} ${t('errors.completeMfaThenRetry', { defaultMessage: 'Complete MFA at /mfa/setup, then retry.' })}`,
         );
       } else if (isPaymentGovernanceDenied(err)) {
-        setError(formatUserApiError(err, PAYMENT_GOVERNANCE_DENIED_MESSAGE));
+        setError(
+          formatUserApiError(
+            err,
+            t('errors.paymentGovernanceDenied', { defaultMessage: PAYMENT_GOVERNANCE_DENIED_MESSAGE }),
+          ),
+        );
       } else {
-        setError(formatUserApiError(err, 'Unable to start giving.'));
+        setError(formatUserApiError(err, t('errors.unableToStartGiving', { defaultMessage: 'Unable to start giving.' })));
       }
     } finally {
       setBusy(false);
@@ -399,63 +494,98 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
     return (
       <div className="give-shell">
         <section className="give-hero">
-          <span className="eyebrow">SECURE PAYMENT</span>
-          <h1>Confirm your gift</h1>
-          <p>We could not find an amount for this session. Start from the Give page.</p>
+          <span className="eyebrow">{t('account.securePaymentEyebrow', { defaultMessage: 'SECURE PAYMENT' })}</span>
+          <h1>{t('account.confirmYourGift', { defaultMessage: 'Confirm your gift' })}</h1>
+          <p>
+            {t('account.couldNotFindAmount', {
+              defaultMessage: 'We could not find an amount for this session. Start from the Give page.',
+            })}
+          </p>
         </section>
         <Link className="site-button" href="/give">
-          Start giving
+          {t('account.startGiving', { defaultMessage: 'Start giving' })}
         </Link>
       </div>
     );
   }
 
+  const formattedAmount = formatMoneyMinor(amountMinor, draft.currency);
+
   return (
     <div className="give-shell">
       <section className="give-hero">
-        <span className="eyebrow">SECURE PAYMENT</span>
-        <h1>Confirm {formatMoneyMinor(amountMinor, draft.currency)}</h1>
+        <span className="eyebrow">{t('account.securePaymentEyebrow', { defaultMessage: 'SECURE PAYMENT' })}</span>
+        <h1>
+          {t('account.confirmAmount', {
+            defaultMessage: 'Confirm {amount}',
+            vars: { amount: formattedAmount },
+          })}
+        </h1>
         <p>
-          {name !== 'Member' ? `${name}, ` : ''}review the details, then confirm. If a payment provider is active, you will continue to secure hosted checkout.
+          {name !== 'Member' ? t('account.reviewNamePrefix', { defaultMessage: '{name}, ', vars: { name } }) : ''}
+          {t('account.reviewThenConfirm', {
+            defaultMessage:
+              'review the details, then confirm. If a payment provider is active, you will continue to secure hosted checkout.',
+          })}
         </p>
       </section>
       <div className="give-layout">
         <section className="site-form give-form">
           <div className="form-intro">
-            <h3>Payment confirmation</h3>
-            <p>This creates a giving intent on your account, then opens Paystack, Flutterwave, or Stripe checkout when those keys are active.</p>
+            <h3>{t('account.paymentConfirmation', { defaultMessage: 'Payment confirmation' })}</h3>
+            <p>
+              {t('account.paymentConfirmationCopy', {
+                defaultMessage:
+                  'This creates a giving intent on your account, then opens Paystack, Flutterwave, or Stripe checkout when those keys are active.',
+              })}
+            </p>
           </div>
           <dl className="give-dl give-dl-wide">
             <div>
-              <dt>Amount</dt>
-              <dd>{formatMoneyMinor(amountMinor, draft.currency)}</dd>
+              <dt>{t('account.amount', { defaultMessage: 'Amount' })}</dt>
+              <dd>{formattedAmount}</dd>
             </div>
             <div>
-              <dt>Fund</dt>
-              <dd>{draft.fund}</dd>
+              <dt>{t('account.fund', { defaultMessage: 'Fund' })}</dt>
+              <dd>{givingFundLabel(t, draft.fund)}</dd>
             </div>
             <div>
-              <dt>Method</dt>
-              <dd>{draft.method}</dd>
+              <dt>{t('account.method', { defaultMessage: 'Method' })}</dt>
+              <dd>{givingMethodLabel(t, draft.method)}</dd>
             </div>
             <div>
-              <dt>Account</dt>
-              <dd>{user?.email ?? 'Signed in'}</dd>
+              <dt>{t('account.account', { defaultMessage: 'Account' })}</dt>
+              <dd>{user?.email ?? t('account.signedIn', { defaultMessage: 'Signed in' })}</dd>
             </div>
           </dl>
-          {draft.note ? <p className="give-note">Dedication: {draft.note}</p> : null}
+          {draft.note ? (
+            <p className="give-note">
+              {t('account.dedicationWithNote', {
+                defaultMessage: 'Dedication: {note}',
+                vars: { note: draft.note },
+              })}
+            </p>
+          ) : null}
           {error ? (
             <div className="panel" data-giving-error="true" role="alert">
               <p>{error}</p>
-              {mfaRequired ? <Link className="site-button secondary" href="/mfa/setup">Set up MFA</Link> : null}
+              {mfaRequired ? (
+                <Link className="site-button secondary" href="/mfa/setup">
+                  {t('account.setupMfa', { defaultMessage: 'Set up MFA' })}
+                </Link>
+              ) : null}
             </div>
           ) : null}
           <div className="form-actions">
             <Link className="site-button secondary" href="/give">
-              Edit gift
+              {t('account.editGift', { defaultMessage: 'Edit gift' })}
             </Link>
             <button className="site-button" disabled={busy} onClick={() => void onPay()} type="button">
-              {busy ? 'Processing…' : done ? 'Paid ✓' : `Pay ${formatMoneyMinor(amountMinor, draft.currency)}`}
+              {busy
+                ? t('common.processing', { defaultMessage: 'Processing…' })
+                : done
+                  ? t('account.paid', { defaultMessage: 'Paid ✓' })
+                  : t('account.payAmount', { defaultMessage: 'Pay {amount}', vars: { amount: formattedAmount } })}
             </button>
           </div>
         </section>
@@ -467,15 +597,17 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
 
 export function GiveScreen({ route }: { route: SiteRoute }) {
   const { user, ready } = useSignedInUser();
+  const { t } = useLocale();
   const missionPreset = route.path === '/mission/support';
 
-  if (!ready) return <p className="panel">Preparing giving…</p>;
+  if (!ready) return <p className="panel">{t('account.preparingGiving', { defaultMessage: 'Preparing giving…' })}</p>;
   if (!user) return <GiveSignInGate returnTo={route.path} />;
   if (route.path === '/give/payment') return <GivePaymentStep user={user} />;
   return <GiveAmountStep missionPreset={missionPreset} route={route} user={user} />;
 }
 
 export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
+  const { t, locale } = useLocale();
   const [loading, setLoading] = useState(true);
   const [receipt, setReceipt] = useState<UserPaymentReceipt | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -532,7 +664,16 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(formatUserApiError(err, 'Receipt could not be loaded from the server.'));
+        if (!cancelled) {
+          setError(
+            formatUserApiError(
+              err,
+              t('errors.receiptCouldNotBeLoaded', {
+                defaultMessage: 'Receipt could not be loaded from the server.',
+              }),
+            ),
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -540,53 +681,70 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
     return () => {
       cancelled = true;
     };
-  }, [receiptId]);
+  }, [receiptId, t]);
 
-  const number = receipt?.receipt_number ?? snapshot?.receiptNumber ?? receiptId ?? 'Pending';
+  const pendingLabel = t('account.pending', { defaultMessage: 'Pending' });
+  const number = receipt?.receipt_number ?? snapshot?.receiptNumber ?? receiptId ?? pendingLabel;
   const issued = receipt?.issued_at ?? receipt?.created_at ?? snapshot?.issuedAt ?? null;
   const amount = snapshot ? formatMoneyMinor(snapshot.amountMinor, snapshot.currency) : null;
+  const fundLabel = snapshot?.fund ? givingFundLabel(t, snapshot.fund) : '';
 
   return (
     <div className="give-shell">
       <div className="success-card give-receipt">
         <span>✓</span>
-        <h1>{route.title}</h1>
+        <h1>{t('account.givingReceiptTitle', { defaultMessage: route.title })}</h1>
         <p>
-          {amount ? `Your gift of ${amount}` : 'Your gift'}
-          {snapshot?.fund ? ` to ${snapshot.fund}` : ''} has been recorded
-          {issued ? ` on ${formatWhen(issued)}` : ''}.
+          {amount
+            ? t('account.yourGiftOfAmount', { defaultMessage: 'Your gift of {amount}', vars: { amount } })
+            : t('account.yourGiftPlain', { defaultMessage: 'Your gift' })}
+          {snapshot?.fund
+            ? t('account.toFundPart', { defaultMessage: ' to {fund}', vars: { fund: fundLabel } })
+            : ''}{' '}
+          {t('account.hasBeenRecorded', { defaultMessage: 'has been recorded' })}
+          {issued
+            ? t('account.recordedOnPart', {
+                defaultMessage: ' on {when}',
+                vars: { when: formatWhen(issued, locale) },
+              })
+            : ''}
+          .
         </p>
-        {loading ? <p>Loading receipt from your account…</p> : null}
+        {loading ? <p>{t('account.loadingReceipt', { defaultMessage: 'Loading receipt from your account…' })}</p> : null}
         {error ? <p role="alert">{error}</p> : null}
         <dl className="give-dl give-dl-wide">
           <div>
-            <dt>Receipt</dt>
+            <dt>{t('account.receipt', { defaultMessage: 'Receipt' })}</dt>
             <dd>{number}</dd>
           </div>
           {amount ? (
             <div>
-              <dt>Amount</dt>
+              <dt>{t('account.amount', { defaultMessage: 'Amount' })}</dt>
               <dd>{amount}</dd>
             </div>
           ) : null}
           {snapshot?.fund ? (
             <div>
-              <dt>Fund</dt>
-              <dd>{snapshot.fund}</dd>
+              <dt>{t('account.fund', { defaultMessage: 'Fund' })}</dt>
+              <dd>{fundLabel}</dd>
             </div>
           ) : null}
           <div>
-            <dt>Status</dt>
-            <dd>{snapshot?.status ?? 'Recorded'}</dd>
+            <dt>{t('account.status', { defaultMessage: 'Status' })}</dt>
+            <dd>
+              {snapshot?.status
+                ? givingStatusLabel(t, snapshot.status)
+                : t('account.recorded', { defaultMessage: 'Recorded' })}
+            </dd>
           </div>
         </dl>
         {snapshot?.note ? <p className="give-note">“{snapshot.note}”</p> : null}
         <div className="hero-actions" style={{ justifyContent: 'center' }}>
           <Link className="site-button" href="/account/giving">
-            {route.action ?? 'View giving history'}
+            {t('account.viewGivingHistory', { defaultMessage: route.action ?? 'View giving history' })}
           </Link>
           <Link className="site-button secondary" href="/give">
-            Give again
+            {t('account.giveAgain', { defaultMessage: 'Give again' })}
           </Link>
         </div>
       </div>
@@ -595,25 +753,33 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
 }
 
 export function GiveRecurringScreen({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   return (
     <div className="give-shell">
       <section className="give-hero">
-        <span className="eyebrow">RECURRING GIVING</span>
-        <h1>{route.title}</h1>
+        <span className="eyebrow">{t('account.recurringGivingEyebrow', { defaultMessage: 'RECURRING GIVING' })}</span>
+        <h1>{t('account.recurringGivingTitle', { defaultMessage: route.title })}</h1>
         <p>
-          Scheduled subscriptions are not on the live payment API yet. You can still sow a one-time gift now — it is
-          recorded against your account and appears in My Giving.
+          {t('account.recurringNotLive', {
+            defaultMessage:
+              'Scheduled subscriptions are not on the live payment API yet. You can still sow a one-time gift now — it is recorded against your account and appears in My Giving.',
+          })}
         </p>
       </section>
       <div className="panel">
-        <h3>Give a one-time gift</h3>
-        <p>Use the same secure intent flow. Recurring mandates will appear here when the provider is approved.</p>
+        <h3>{t('account.giveAOneTimeGift', { defaultMessage: 'Give a one-time gift' })}</h3>
+        <p>
+          {t('account.recurringOneTimeCopy', {
+            defaultMessage:
+              'Use the same secure intent flow. Recurring mandates will appear here when the provider is approved.',
+          })}
+        </p>
         <div className="hero-actions">
           <Link className="site-button" href="/give">
-            Give now
+            {t('account.giveNow', { defaultMessage: 'Give now' })}
           </Link>
           <Link className="site-button secondary" href="/account/giving">
-            View history
+            {t('account.viewHistory', { defaultMessage: 'View history' })}
           </Link>
         </div>
       </div>

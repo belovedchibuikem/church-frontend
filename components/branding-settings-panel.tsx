@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useLocale } from '@/components/locale-provider';
 import { useBranding } from './branding-provider';
 import {
   designFixturesEnabled,
@@ -24,11 +25,14 @@ const emptyBranding: AdminBrandingStatus = {
 };
 
 export function BrandingSettingsPanel() {
+  const { t } = useLocale();
   const { refresh } = useBranding();
   const [status, setStatus] = useState<AdminBrandingStatus>(emptyBranding);
   const [appName, setAppName] = useState(emptyBranding.app_name);
   const [message, setMessage] = useState(
-    'Upload a logo and favicon once. Admin, member, and public sites all use the same branding.',
+    t('settings.branding.loadHint', {
+      defaultMessage: 'Upload a logo and favicon once. Admin, member, and public sites all use the same branding.',
+    }),
   );
   const [busy, setBusy] = useState(false);
   const fixtures = designFixturesEnabled();
@@ -37,11 +41,19 @@ export function BrandingSettingsPanel() {
     if (fixtures) {
       setStatus(emptyBranding);
       setAppName(emptyBranding.app_name);
-      setMessage('Design fixtures enabled — branding uploads are not calling the live API.');
+      setMessage(
+        t('settings.branding.fixturesDisabled', {
+          defaultMessage: 'Design fixtures enabled — branding uploads are not calling the live API.',
+        }),
+      );
       return;
     }
     if (!platformApiConfigured()) {
-      setMessage('Set NEXT_PUBLIC_FHC_API_URL so branding can be loaded and saved.');
+      setMessage(
+        t('settings.branding.apiUrlRequired', {
+          defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL so branding can be loaded and saved.',
+        }),
+      );
       return;
     }
     setBusy(true);
@@ -51,15 +63,26 @@ export function BrandingSettingsPanel() {
       setAppName(data.app_name);
       setMessage(
         data.logo_url || data.favicon_url
-          ? 'Live branding is published to admin, member, and public sites.'
-          : 'No logo or favicon yet. PNG, JPG, WEBP, SVG, or ICO up to 5 MB.',
+          ? t('settings.branding.published', {
+              defaultMessage: 'Live branding is published to admin, member, and public sites.',
+            })
+          : t('settings.branding.empty', {
+              defaultMessage: 'No logo or favicon yet. PNG, JPG, WEBP, SVG, or ICO up to 5 MB.',
+            }),
       );
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Could not load branding. Sign in as a platform admin with recent MFA.'));
+      setMessage(
+        platformErrorMessage(
+          error,
+          t('errors.brandingLoad', {
+            defaultMessage: 'Could not load branding. Sign in as a platform admin with recent MFA.',
+          }),
+        ),
+      );
     } finally {
       setBusy(false);
     }
-  }, [fixtures]);
+  }, [fixtures, t]);
 
   useEffect(() => {
     void refreshStatus();
@@ -74,9 +97,19 @@ export function BrandingSettingsPanel() {
       setStatus(data);
       setAppName(data.app_name);
       await refresh();
-      setMessage(`Display name saved as ${data.app_name}.`);
+      setMessage(
+        t('settings.branding.nameSaved', {
+          defaultMessage: 'Display name saved as {name}.',
+          vars: { name: data.app_name },
+        }),
+      );
     } catch (error) {
-      setMessage(platformErrorMessage(error, 'Could not save the display name.'));
+      setMessage(
+        platformErrorMessage(
+          error,
+          t('errors.brandingSaveName', { defaultMessage: 'Could not save the display name.' }),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -89,9 +122,25 @@ export function BrandingSettingsPanel() {
       const data = await uploadPlatformBrandAsset(kind, file);
       setStatus(data);
       await refresh();
-      setMessage(`${kind === 'logo' ? 'Logo' : 'Favicon'} published across admin, member, and public sites.`);
+      setMessage(
+        kind === 'logo'
+          ? t('settings.branding.logoPublished', {
+              defaultMessage: 'Logo published across admin, member, and public sites.',
+            })
+          : t('settings.branding.faviconPublished', {
+              defaultMessage: 'Favicon published across admin, member, and public sites.',
+            }),
+      );
     } catch (error) {
-      setMessage(platformErrorMessage(error, `Could not upload the ${kind}. Use PNG, JPG, WEBP, SVG, or ICO.`));
+      setMessage(
+        platformErrorMessage(
+          error,
+          t('errors.brandingUpload', {
+            defaultMessage: 'Could not upload the {kind}. Use PNG, JPG, WEBP, SVG, or ICO.',
+            vars: { kind },
+          }),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -104,9 +153,25 @@ export function BrandingSettingsPanel() {
       const data = await removePlatformBrandAsset(kind);
       setStatus(data);
       await refresh();
-      setMessage(`${kind === 'logo' ? 'Logo' : 'Favicon'} removed. Sites will use the default mark until you upload another.`);
+      setMessage(
+        kind === 'logo'
+          ? t('settings.branding.logoRemoved', {
+              defaultMessage: 'Logo removed. Sites will use the default mark until you upload another.',
+            })
+          : t('settings.branding.faviconRemoved', {
+              defaultMessage: 'Favicon removed. Sites will use the default mark until you upload another.',
+            }),
+      );
     } catch (error) {
-      setMessage(platformErrorMessage(error, `Could not remove the ${kind}.`));
+      setMessage(
+        platformErrorMessage(
+          error,
+          t('errors.brandingRemove', {
+            defaultMessage: 'Could not remove the {kind}.',
+            vars: { kind },
+          }),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -119,25 +184,35 @@ export function BrandingSettingsPanel() {
       </p>
       <form className="form-grid" onSubmit={onSaveName}>
         <label className="full">
-          <span>Application name</span>
+          <span>{t('settings.branding.applicationName', { defaultMessage: 'Application name' })}</span>
           <input value={appName} onChange={(event) => setAppName(event.target.value)} required maxLength={120} disabled={busy || fixtures} />
         </label>
         <div className="form-footer full">
           <button className="ghost-button" type="button" data-interaction-native="true" onClick={() => void refreshStatus()} disabled={busy}>
-            Refresh
+            {t('common.refresh', { defaultMessage: 'Refresh' })}
           </button>
           <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy || fixtures}>
-            Save name
+            {t('settings.branding.saveName', { defaultMessage: 'Save name' })}
           </button>
         </div>
       </form>
       <div className="branding-asset-grid">
         <article className="branding-asset-card">
-          <h3>App logo</h3>
-          <p>Shown in the admin sidebar, public header, member portal, and sign-in screens.</p>
-          <div className="branding-preview">{status.logo_url ? <img src={status.logo_url} alt="Current application logo" /> : <span>No logo</span>}</div>
+          <h3>{t('settings.branding.appLogo', { defaultMessage: 'App logo' })}</h3>
+          <p>
+            {t('settings.branding.appLogoCopy', {
+              defaultMessage: 'Shown in the admin sidebar, public header, member portal, and sign-in screens.',
+            })}
+          </p>
+          <div className="branding-preview">
+            {status.logo_url ? (
+              <img src={status.logo_url} alt={t('settings.branding.logoAlt', { defaultMessage: 'Current application logo' })} />
+            ) : (
+              <span>{t('settings.branding.noLogo', { defaultMessage: 'No logo' })}</span>
+            )}
+          </div>
           <label className="branding-file">
-            <span>Upload logo</span>
+            <span>{t('settings.branding.uploadLogo', { defaultMessage: 'Upload logo' })}</span>
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico"
@@ -150,15 +225,25 @@ export function BrandingSettingsPanel() {
             />
           </label>
           <button className="ghost-button" type="button" data-interaction-native="true" disabled={busy || fixtures || !status.logo_url} onClick={() => void onRemove('logo')}>
-            Remove logo
+            {t('settings.branding.removeLogo', { defaultMessage: 'Remove logo' })}
           </button>
         </article>
         <article className="branding-asset-card">
-          <h3>Favicon</h3>
-          <p>Browser tab icon for admin, member, and public pages. Square PNG works best.</p>
-          <div className="branding-preview favicon">{status.favicon_url ? <img src={status.favicon_url} alt="Current favicon" /> : <span>No favicon</span>}</div>
+          <h3>{t('settings.branding.favicon', { defaultMessage: 'Favicon' })}</h3>
+          <p>
+            {t('settings.branding.faviconCopy', {
+              defaultMessage: 'Browser tab icon for admin, member, and public pages. Square PNG works best.',
+            })}
+          </p>
+          <div className="branding-preview favicon">
+            {status.favicon_url ? (
+              <img src={status.favicon_url} alt={t('settings.branding.faviconAlt', { defaultMessage: 'Current favicon' })} />
+            ) : (
+              <span>{t('settings.branding.noFavicon', { defaultMessage: 'No favicon' })}</span>
+            )}
+          </div>
           <label className="branding-file">
-            <span>Upload favicon</span>
+            <span>{t('settings.branding.uploadFavicon', { defaultMessage: 'Upload favicon' })}</span>
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico"
@@ -171,7 +256,7 @@ export function BrandingSettingsPanel() {
             />
           </label>
           <button className="ghost-button" type="button" data-interaction-native="true" disabled={busy || fixtures || !status.favicon_url} onClick={() => void onRemove('favicon')}>
-            Remove favicon
+            {t('settings.branding.removeFavicon', { defaultMessage: 'Remove favicon' })}
           </button>
         </article>
       </div>

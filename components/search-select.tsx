@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useLocale } from '@/components/locale-provider';
 import { designFixturesEnabled } from '../lib/admin-operations-api';
 import { catalogOptions, loadFormCatalogOptions, type LiveCatalogKey } from '../lib/form-catalogs';
 
@@ -33,7 +34,7 @@ export function SearchSelect({
   catalog,
   defaultValue = '',
   value: controlledValue,
-  placeholder = 'Search and select…',
+  placeholder,
   required = false,
   disabled = false,
   loading: loadingProp = false,
@@ -41,7 +42,10 @@ export function SearchSelect({
   className,
   onValueChange,
 }: Props) {
+  const { t } = useLocale();
   const listId = useId();
+  const resolvedPlaceholder =
+    placeholder ?? t('common.searchAndSelect', { defaultMessage: 'Search and select…' });
   const rootRef = useRef<HTMLDivElement>(null);
   const fixtureOptions =
     staticOptions ??
@@ -90,7 +94,11 @@ export function SearchSelect({
           } else {
             setRemoteOptions([]);
           }
-          setError(err instanceof Error ? err.message : 'Unable to load catalog options.');
+          setError(
+            err instanceof Error
+              ? err.message
+              : t('errors.unableToLoadCatalogOptions', { defaultMessage: 'Unable to load catalog options.' }),
+          );
         })
         .finally(() => {
           if (!controller.signal.aborted) setLoading(false);
@@ -102,7 +110,7 @@ export function SearchSelect({
       window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fixtureOptions is derived each render
-  }, [catalog, query]);
+  }, [catalog, query, t]);
 
   const options = remoteOptions ?? fixtureOptions;
   const selected = options.find((option) => option.value === value);
@@ -151,7 +159,7 @@ export function SearchSelect({
         autoComplete="off"
         disabled={disabled}
         required={required && !value}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         value={query}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
@@ -166,10 +174,12 @@ export function SearchSelect({
       </span>
       {open ? (
         <ul id={listId} role="listbox" className="search-select-menu">
-          {loading ? <li className="search-select-empty">Loading…</li> : null}
+          {loading ? (
+            <li className="search-select-empty">{t('common.loading', { defaultMessage: 'Loading…' })}</li>
+          ) : null}
           {!loading && error ? <li className="search-select-empty">{error}</li> : null}
           {!loading && !error && filtered.length === 0 ? (
-            <li className="search-select-empty">No matches</li>
+            <li className="search-select-empty">{t('common.noMatches', { defaultMessage: 'No matches' })}</li>
           ) : null}
           {!loading &&
             filtered.map((option) => (

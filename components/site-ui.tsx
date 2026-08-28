@@ -23,6 +23,10 @@ import {
   MemberHomePage,
 } from '@/components/member-pages';
 import { AuthScreen, MemberLogoutButton } from '@/components/auth-ui';
+import { LocaleSwitcher } from '@/components/locale-switcher';
+import { useLocale } from '@/components/locale-provider';
+import { localeMeta, supportedLocales, type TranslateOptions } from '@/lib/i18n/types.ts';
+import { translateRouteCopy } from '@/lib/i18n.ts';
 import {
   formFieldsFor,
   globalMetrics,
@@ -157,7 +161,8 @@ type AsyncListState<T> =
   | { status: 'error'; message: string };
 
 function DataStatus({ state, emptyLabel = 'Nothing to show yet.' }: { state: AsyncListState<unknown>; emptyLabel?: string }) {
-  if (state.status === 'loading') return <p className="panel">Loading…</p>;
+  const { t } = useLocale();
+  if (state.status === 'loading') return <p className="panel">{t('common.loading', { defaultMessage: 'Loading…' })}</p>;
   if (state.status === 'error') return <p className="panel">{state.message}</p>;
   if (state.status === 'empty') return <p className="panel">{state.message || emptyLabel}</p>;
   return null;
@@ -271,15 +276,41 @@ function emptyListingMessage(path: string): string {
 }
 
 const nav = [
-  ['Home', '/'],
-  ['Church', '/church'],
-  ['Mission', '/mission'],
-  ['KCA', '/kca'],
-  ['Press', '/press'],
-  ['Online', '/online-church'],
-  ['Events', '/events'],
-  ['Give', '/give'],
+  ['nav.home', 'Home', '/'],
+  ['nav.church', 'Church', '/church'],
+  ['nav.mission', 'Mission', '/mission'],
+  ['nav.kca', 'KCA', '/kca'],
+  ['nav.press', 'Press', '/press'],
+  ['nav.online', 'Online', '/online-church'],
+  ['nav.events', 'Events', '/events'],
+  ['nav.give', 'Give', '/give'],
 ] as const;
+
+const memberGroupKeys: Record<string, string> = {
+  Overview: 'member.overview',
+  Belong: 'member.belong',
+  Gather: 'member.gather',
+  Care: 'member.care',
+  Steward: 'member.steward',
+  Account: 'member.account',
+};
+
+const memberItemKeys: Record<string, string> = {
+  '/account': 'member.dashboard',
+  '/account/journey': 'member.myJourney',
+  '/account/church': 'member.myChurch',
+  '/account/home-church': 'member.homeChurch',
+  '/account/kca': 'member.kca',
+  '/account/events': 'member.events',
+  '/account/calendar': 'member.calendar',
+  '/account/prayer-requests': 'member.prayer',
+  '/account/need-requests': 'member.needs',
+  '/account/giving': 'member.giving',
+  '/account/messages': 'member.messages',
+  '/account/notifications': 'member.notifications',
+  '/account/downloads': 'member.downloads',
+  '/account/settings': 'member.settings',
+};
 
 function Logo() {
   return <AppBrand variant="site" href="/" />;
@@ -293,6 +324,7 @@ function BrandName() {
 function Header() {
   const pathname = usePathname();
   const fixtures = useFixtures();
+  const { t } = useLocale();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -324,7 +356,7 @@ function Header() {
       <button
         className="nav-toggle"
         type="button"
-        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+        aria-label={menuOpen ? t('common.closeMenu', { defaultMessage: 'Close menu' }) : t('common.openMenu', { defaultMessage: 'Open menu' })}
         aria-expanded={menuOpen}
         aria-controls="site-primary-nav"
         onClick={() => setMenuOpen((open) => !open)}
@@ -332,27 +364,28 @@ function Header() {
         {menuOpen ? '✕' : '☰'}
       </button>
       <nav id="site-primary-nav">
-        {nav.map(([label, href]) => (
+        {nav.map(([key, fallback, href]) => (
           <Link className={pathname === href || (href !== '/' && pathname.startsWith(href)) ? 'active' : ''} href={href} key={href}>
-            {label}
+            {t(key, { defaultMessage: fallback })}
           </Link>
         ))}
       </nav>
       <div className="header-actions">
-        <Link href="/search" aria-label="Search">
+        <Link href="/search" aria-label={t('nav.search', { defaultMessage: 'Search' })}>
           ⌕
         </Link>
+        <LocaleSwitcher />
         {signedIn ? (
-          <Link className="avatar" href="/account" aria-label={`${user ? displayNameFromUser(user) : 'Account'}`}>
+          <Link className="avatar" href="/account" aria-label={`${user ? displayNameFromUser(user) : t('nav.account', { defaultMessage: 'Account' })}`}>
             {initials}
           </Link>
         ) : (
           <>
             <Link className="site-button secondary small" href="/register">
-              Register
+              {t('common.register', { defaultMessage: 'Register' })}
             </Link>
             <Link className="site-button small" href="/login">
-              Sign In
+              {t('common.signIn', { defaultMessage: 'Sign In' })}
             </Link>
           </>
         )}
@@ -364,6 +397,7 @@ function Header() {
 function Sidebar() {
   const pathname = usePathname();
   const fixtures = useFixtures();
+  const { t } = useLocale();
   const [user, setUser] = useState<CurrentUser | null>(null);
 
   useEffect(() => {
@@ -393,13 +427,13 @@ function Sidebar() {
         <div>
           <b>{name}</b>
           {email ? <small>{email}</small> : null}
-          <Link href="/account/profile">View profile</Link>
+          <Link href="/account/profile">{t('member.viewProfile', { defaultMessage: 'View profile' })}</Link>
         </div>
       </div>
-      <nav aria-label="Member">
+      <nav aria-label={t('member.navAria', { defaultMessage: 'Member' })}>
         {memberNavGroups.map((group) => (
           <div className="member-nav-group" key={group.label}>
-            <p className="member-nav-label">{group.label}</p>
+            <p className="member-nav-label">{t(memberGroupKeys[group.label] ?? group.label, { defaultMessage: group.label })}</p>
             {group.items.map((item) => (
               <Link
                 className={`member-nav-link${isMemberNavActive(pathname, item.href) ? ' active' : ''}`}
@@ -407,7 +441,7 @@ function Sidebar() {
                 key={item.href}
               >
                 <span aria-hidden="true">{item.icon}</span>
-                {item.label}
+                {t(memberItemKeys[item.href] ?? item.label, { defaultMessage: item.label })}
               </Link>
             ))}
           </div>
@@ -418,7 +452,24 @@ function Sidebar() {
   );
 }
 
+function homeChurchStepLabel(t: (key: string, options?: TranslateOptions) => string, label: string) {
+  const keys: Record<string, string> = {
+    Eligibility: 'homeChurch.eligibility',
+    Overview: 'homeChurch.overview',
+    Location: 'common.location',
+    Personal: 'homeChurch.personal',
+    Meeting: 'homeChurch.meeting',
+    Participants: 'homeChurch.participants',
+    Motivation: 'homeChurch.motivation',
+    Contact: 'homeChurch.contact',
+    Commitment: 'homeChurch.commitment',
+    Review: 'homeChurch.review',
+  };
+  return t(keys[label] ?? `homeChurch.${label}`, { defaultMessage: label });
+}
+
 function HomeChurchApplicationSidebar({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const applicationSteps: ReadonlyArray<readonly [string, string]> = [
     ['/start-home-church/eligibility', 'Eligibility'],
     ...homeChurchSteps,
@@ -426,31 +477,32 @@ function HomeChurchApplicationSidebar({ route }: { route: SiteRoute }) {
   const currentIndex = applicationSteps.findIndex(([path]) => path === route.path);
 
   return (
-    <aside className="workflow-sidebar" aria-label="Home Church application">
+    <aside className="workflow-sidebar" aria-label={t('homeChurch.application', { defaultMessage: 'Home Church application' })}>
       <AppBrand variant="member" />
       <div className="workflow-sidebar-intro">
-        <span className="eyebrow">HOME CHURCH</span>
-        <b>Application progress</b>
-        <small>Complete each step to submit your request for pastoral review.</small>
+        <span className="eyebrow">{t('homeChurch.application', { defaultMessage: 'Home Church application' })}</span>
+        <b>{t('homeChurch.applicationProgress', { defaultMessage: 'Application progress' })}</b>
+        <small>{t('homeChurch.completeSteps', { defaultMessage: 'Complete each step to submit your request for pastoral review.' })}</small>
       </div>
       <nav>
         <Link className={route.path === '/start-home-church' ? 'active' : ''} href="/start-home-church">
-          <span>⌂</span> Overview
+          <span>⌂</span> {t('homeChurch.overview', { defaultMessage: 'Overview' })}
         </Link>
         {applicationSteps.map(([path, label], index) => (
           <Link className={path === route.path ? 'active' : ''} href={path} key={path}>
-            <span>{index < currentIndex ? '✓' : index + 1}</span> {label}
+            <span>{index < currentIndex ? '✓' : index + 1}</span> {homeChurchStepLabel(t, label)}
           </Link>
         ))}
       </nav>
       <Link className="workflow-sidebar-help" href="/contact">
-        Need help? Contact us
+        {t('homeChurch.needHelp', { defaultMessage: 'Need help? Contact us' })}
       </Link>
     </aside>
   );
 }
 
 function Progress({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   if (route.surface === 'auth' || route.surface !== 'workflow') return null;
 
   const homeChurch = route.path.includes('/start-home-church/apply');
@@ -468,7 +520,7 @@ function Progress({ route }: { route: SiteRoute }) {
       {steps.map(([path, label], i) => (
         <div className={i <= resolvedIndex ? 'done' : ''} key={path}>
           <span>{i < resolvedIndex ? '✓' : i + 1}</span>
-          <small>{label}</small>
+          <small>{homeChurch ? homeChurchStepLabel(t, label) : label}</small>
         </div>
       ))}
     </div>
@@ -546,6 +598,7 @@ function DetailArt({ image, icon }: { image?: string; icon?: string }) {
 }
 
 function CardGrid({ cards, columns = 4 }: { cards: ContentCard[]; columns?: number }) {
+  const { t } = useLocale();
   return (
     <section className={`site-cards cols-${columns}`}>
       {cards.map((card) => (
@@ -560,7 +613,7 @@ function CardGrid({ cards, columns = 4 }: { cards: ContentCard[]; columns?: numb
           <h3>{card.title}</h3>
           <p>{card.body}</p>
           {card.meta && !card.meta.trim().startsWith('{') ? <small className="card-meta">{card.meta}</small> : null}
-          <Link href={card.href}>{card.action ? `${card.action} →` : 'Explore →'}</Link>
+          <Link href={card.href}>{card.action ? `${card.action} →` : t('common.explore', { defaultMessage: 'Explore →' })}</Link>
         </article>
       ))}
     </section>
@@ -582,31 +635,44 @@ function BannerCta({ title, body, action, href }: { title: string; body: string;
 }
 
 function Hero({ route, imageUrl }: { route: SiteRoute; imageUrl?: string | null }) {
-  const secondary =
+  const { t } = useLocale();
+  const secondaryHref =
     route.section === 'KCA'
-      ? ['/kca/why', 'Why Join KCA?']
+      ? '/kca/why'
       : route.section === 'Mission'
-        ? ['/mission/impact', 'Explore Missions']
+        ? '/mission/impact'
         : route.section === 'Church'
-          ? ['/start-home-church', 'Start a Home Church']
+          ? '/start-home-church'
           : route.section === 'Press'
-            ? ['/online-church/sermons', 'Browse Sermons']
+            ? '/online-church/sermons'
             : route.section === 'Events'
-              ? ['/account/calendar', 'Open Calendar']
-              : ['/about', 'Learn More'];
+              ? '/account/calendar'
+              : '/about';
+  const secondaryLabel =
+    route.section === 'KCA'
+      ? t('landing.whyJoinKca', { defaultMessage: 'Why Join KCA?' })
+      : route.section === 'Mission'
+        ? t('landing.exploreMissions', { defaultMessage: 'Explore Missions' })
+        : route.section === 'Church'
+          ? t('landing.startHomeChurch', { defaultMessage: 'Start a Home Church' })
+          : route.section === 'Press'
+            ? t('landing.browseSermons', { defaultMessage: 'Browse Sermons' })
+            : route.section === 'Events'
+              ? t('landing.openCalendar', { defaultMessage: 'Open Calendar' })
+              : t('common.learnMore', { defaultMessage: 'Learn More' });
   const primaryHref = heroPrimaryHref(route.path, route.section, route.action);
   return (
     <section className={`site-hero hero-${route.section.toLowerCase()}`}>
       <div>
         <span className="eyebrow"><BrandName /></span>
-        <h1>{route.title}</h1>
-        <p>{route.subtitle}</p>
+        <h1>{t(`routes.${route.path}`, { defaultMessage: route.title })}</h1>
+        <p>{t(`sections.${route.section}`, { defaultMessage: route.subtitle })}</p>
         <div className="hero-actions">
           <Link className="site-button" href={primaryHref}>
-            {route.action ?? 'Explore Family House'}
+            {route.action ? t(`routes.action.${route.path}`, { defaultMessage: route.action }) : t('landing.exploreFamilyHouse', { defaultMessage: 'Explore Family House' })}
           </Link>
-          <Link className="site-button secondary" href={secondary[0]}>
-            {secondary[1]}
+          <Link className="site-button secondary" href={secondaryHref}>
+            {secondaryLabel}
           </Link>
         </div>
       </div>
@@ -616,8 +682,8 @@ function Hero({ route, imageUrl }: { route: SiteRoute; imageUrl?: string | null 
           style={imageUrl ? { backgroundImage: `linear-gradient(160deg,#1a1040aa,#1a104066), url('${imageUrl}')` } : undefined}
         >
           <span>✦</span>
-          <b>{route.section === 'Home' ? 'Faith · Family · Purpose' : route.section}</b>
-          <small>One Family. One Mission.</small>
+          <b>{route.section === 'Home' ? t('landing.faithFamilyPurpose', { defaultMessage: 'Faith · Family · Purpose' }) : t(`sectionLabel.${route.section}`, { defaultMessage: route.section })}</b>
+          <small>{t('landing.oneFamilyOneMission', { defaultMessage: 'One Family. One Mission.' })}</small>
         </div>
       </div>
     </section>
@@ -625,6 +691,7 @@ function Hero({ route, imageUrl }: { route: SiteRoute; imageUrl?: string | null 
 }
 
 function HomeLanding({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const fixtures = useFixtures();
   const [state, setState] = useState<AsyncListState<ContentCard>>({ status: 'loading' });
   const [metrics, setMetrics] = useState<Metric[]>(fixtures ? globalMetrics : []);
@@ -666,33 +733,39 @@ function HomeLanding({ route }: { route: SiteRoute }) {
     <>
       <Hero route={route} imageUrl={heroImage} />
       {state.status === 'loading' || state.status === 'error' || state.status === 'empty' ? (
-        <DataStatus state={state} emptyLabel="Home content is not published yet." />
+        <DataStatus state={state} emptyLabel={t('landing.homeNotPublished', { defaultMessage: 'Home content is not published yet.' })} />
       ) : null}
       {state.status === 'ready' || fixtures ? (
         <>
           <Metrics items={metrics} />
           <div className="section-block">
             <div className="section-heading">
-              <span className="eyebrow">Our Four Pillars</span>
-              <h2>Everything you need to belong, grow, and multiply</h2>
+              <span className="eyebrow">{t('landing.fourPillars', { defaultMessage: 'Our Four Pillars' })}</span>
+              <h2>{t('landing.pillarsHeading', { defaultMessage: 'Everything you need to belong, grow, and multiply' })}</h2>
             </div>
-            {pillarsCards.length ? <CardGrid cards={pillarsCards} /> : <p className="panel">No pillar cards published yet.</p>}
+            {pillarsCards.length ? <CardGrid cards={pillarsCards} /> : <p className="panel">{t('landing.noPillarCards', { defaultMessage: 'No pillar cards published yet.' })}</p>}
           </div>
           <div className="section-block">
             <div className="section-heading">
-              <span className="eyebrow">Get Started</span>
-              <h2>Take your next Kingdom step</h2>
+              <span className="eyebrow">{t('landing.getStarted', { defaultMessage: 'Get Started' })}</span>
+              <h2>{t('landing.nextKingdomStep', { defaultMessage: 'Take your next Kingdom step' })}</h2>
             </div>
-            {actionCards.length ? <CardGrid cards={actionCards} /> : <p className="panel">No get-started cards published yet.</p>}
+            {actionCards.length ? <CardGrid cards={actionCards} /> : <p className="panel">{t('landing.noGetStartedCards', { defaultMessage: 'No get-started cards published yet.' })}</p>}
           </div>
         </>
       ) : null}
-      <BannerCta title="Ready to find your place in the family?" body="Search churches near you or join Online Church today." action="Find a Church" href="/find-church" />
+      <BannerCta
+        title={t('landing.findYourPlace', { defaultMessage: 'Ready to find your place in the family?' })}
+        body={t('landing.findChurchCta', { defaultMessage: 'Search churches near you or join Online Church today.' })}
+        action={t('landing.findAChurch', { defaultMessage: 'Find a Church' })}
+        href="/find-church"
+      />
     </>
   );
 }
 
 function AboutLanding({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const fixtures = useFixtures();
   const [heroImage, setHeroImage] = useState<string | null>(null);
   const [state, setState] = useState<AsyncListState<ContentCard>>(
@@ -740,29 +813,34 @@ function AboutLanding({ route }: { route: SiteRoute }) {
   return (
     <>
       <Hero route={route} imageUrl={heroImage} />
-      <DataStatus state={state.status === 'ready' ? { status: 'ready', items: cards } : state} emptyLabel="About content is not published yet." />
+      <DataStatus state={state.status === 'ready' ? { status: 'ready', items: cards } : state} emptyLabel={t('landing.aboutNotPublished', { defaultMessage: 'About content is not published yet.' })} />
       {state.status === 'ready' || fixtures ? (
         <>
           <div className="split-panel">
             <section className="panel prose-panel">
-              <span className="eyebrow">Who We Are</span>
-              <h2>{route.title || 'A global family advancing the Kingdom together'}</h2>
-              <p>{summary || 'About content will appear here when published.'}</p>
+              <span className="eyebrow">{t('landing.whoWeAre', { defaultMessage: 'Who We Are' })}</span>
+              <h2>{route.title || t('landing.aboutHeading', { defaultMessage: 'A global family advancing the Kingdom together' })}</h2>
+              <p>{summary || t('landing.aboutPlaceholder', { defaultMessage: 'About content will appear here when published.' })}</p>
               {fixtures ? (
                 <ul className="check-list">
-                  <li>Biblical community across nations</li>
-                  <li>Discipleship pathways for every season</li>
-                  <li>Mission and compassion that transform lives</li>
-                  <li>Training that equips Kingdom change agents</li>
+                  <li>{t('landing.aboutBulletCommunity', { defaultMessage: 'Biblical community across nations' })}</li>
+                  <li>{t('landing.aboutBulletDiscipleship', { defaultMessage: 'Discipleship pathways for every season' })}</li>
+                  <li>{t('landing.aboutBulletMission', { defaultMessage: 'Mission and compassion that transform lives' })}</li>
+                  <li>{t('landing.aboutBulletTraining', { defaultMessage: 'Training that equips Kingdom change agents' })}</li>
                 </ul>
               ) : null}
             </section>
             <aside className="panel identity-card">
-              <h3>Our Identity</h3>
-              {['One Family', 'One Faith', 'One Mission', 'Every Nation'].map((item) => (
+              <h3>{t('landing.ourIdentity', { defaultMessage: 'Our Identity' })}</h3>
+              {[
+                t('landing.oneFamily', { defaultMessage: 'One Family' }),
+                t('landing.oneFaith', { defaultMessage: 'One Faith' }),
+                t('landing.oneMission', { defaultMessage: 'One Mission' }),
+                t('landing.everyNation', { defaultMessage: 'Every Nation' }),
+              ].map((item) => (
                 <div key={item}>
                   <b>{item}</b>
-                  <small>Rooted in Christ and expressed through local and global ministry.</small>
+                  <small>{t('landing.identityCopy', { defaultMessage: 'Rooted in Christ and expressed through local and global ministry.' })}</small>
                 </div>
               ))}
             </aside>
@@ -874,6 +952,7 @@ function ContactLanding() {
 }
 
 function FaqLanding() {
+  const { t } = useLocale();
   const [open, setOpen] = useState(0);
   const [query, setQuery] = useState('');
   const faqState = useAsyncList(() => loadFaqs(), []);
@@ -888,13 +967,13 @@ function FaqLanding() {
     <div className="faq-layout">
       <div className="toolbar">
         <input
-          aria-label="Search FAQ"
+          aria-label={t('common.search', { defaultMessage: 'Search' })}
           placeholder="Search frequently asked questions..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
         <button className="site-button" type="button" onClick={() => setOpen(0)}>
-          Search
+          {t('common.search', { defaultMessage: 'Search' })}
         </button>
       </div>
       <DataStatus state={faqState} emptyLabel="No FAQs published yet." />
@@ -915,6 +994,7 @@ function FaqLanding() {
 }
 
 function SearchLanding() {
+  const { t } = useLocale();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [applied, setApplied] = useState('');
@@ -985,13 +1065,13 @@ function SearchLanding() {
         <p>Find churches, events, sermons, missions, and resources.</p>
         <div className="toolbar">
           <input
-            aria-label="Global search"
+            aria-label={t('nav.search', { defaultMessage: 'Search' })}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search churches, events, sermons..."
           />
           <button className="site-button" type="button" onClick={() => setApplied(query)}>
-            Search
+            {t('common.search', { defaultMessage: 'Search' })}
           </button>
         </div>
         <div className="chip-row">
@@ -1022,7 +1102,7 @@ function SearchLanding() {
         </section>
         <section className="panel">
           <h3>Results</h3>
-          {catalogueLoading ? <p>Loading…</p> : null}
+          {catalogueLoading ? <p>{t('common.loading', { defaultMessage: 'Loading…' })}</p> : null}
           {catalogueError ? <p>{catalogueError}</p> : null}
           {results.length === 0 && catalogueReady ? <p>No matches for “{applied}”.</p> : null}
           {results.map((item) => (
@@ -1042,6 +1122,7 @@ function SearchLanding() {
 }
 
 function FindChurchLanding({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const heroImage = useCmsHeroImage('church');
   const [chip, setChip] = useState('All');
   const [search, setSearch] = useState('');
@@ -1089,7 +1170,7 @@ function FindChurchLanding({ route }: { route: SiteRoute }) {
         </div>
         <div className="toolbar">
           <input
-            aria-label="Search churches"
+            aria-label={t('common.search', { defaultMessage: 'Search' })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search by city, region, country..."
@@ -1098,7 +1179,7 @@ function FindChurchLanding({ route }: { route: SiteRoute }) {
             {locating ? 'Locating…' : 'Use my location'}
           </button>
           <Link className="site-button" href="/find-church/results">
-            Search
+            {t('common.search', { defaultMessage: 'Search' })}
           </Link>
         </div>
       </div>
@@ -1477,6 +1558,7 @@ function listingLoaderFor(route: SiteRoute): (() => Promise<{ data: ContentCard[
 }
 
 function Listing({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const [filter, setFilter] = useState('all');
   const [applied, setApplied] = useState('all');
   const apiLoader = listingLoaderFor(route);
@@ -1524,14 +1606,14 @@ function Listing({ route }: { route: SiteRoute }) {
   return (
     <>
       <div className="toolbar">
-        <input aria-label="Search" placeholder={`Search ${route.section.toLowerCase()}...`} />
-        <select aria-label="Filter" value={filter} onChange={(event) => setFilter(event.target.value)}>
+        <input aria-label={t('common.search', { defaultMessage: 'Search' })} placeholder={`Search ${route.section.toLowerCase()}...`} />
+        <select aria-label={t('common.filters', { defaultMessage: 'Filters' })} value={filter} onChange={(event) => setFilter(event.target.value)}>
           <option value="all">All Categories</option>
           <option value="active">Active</option>
           <option value="upcoming">Upcoming</option>
         </select>
         <button className="site-button" type="button" onClick={() => setApplied(filter)}>
-          Filter
+          {t('common.filters', { defaultMessage: 'Filters' })}
         </button>
       </div>
       <div className={`content-grid ${isMap ? 'map-grid' : ''}`}>
@@ -1779,6 +1861,7 @@ function Detail({ route }: { route: SiteRoute }) {
 }
 
 function FormScreen({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
   const router = useRouter();
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1809,26 +1892,28 @@ function FormScreen({ route }: { route: SiteRoute }) {
     return (
       <div className="home-church-start">
         <section className="panel home-church-start-hero">
-          <span className="eyebrow">HOME CHURCH APPLICATION</span>
-          <h2>Start a Church in Your Home</h2>
+          <span className="eyebrow">{t('homeChurch.applicationEyebrow', { defaultMessage: 'HOME CHURCH APPLICATION' })}</span>
+          <h2>{t('homeChurch.startTitle', { defaultMessage: 'Start a Church in Your Home' })}</h2>
           <p>
-            Build a Christ-centred community for worship, discipleship, prayer, and care. Your application is submitted
-            securely to the Family House Connect API after the review step.
+            {t('homeChurch.startCopy', {
+              defaultMessage:
+                'Build a Christ-centred community for worship, discipleship, prayer, and care. Your application is submitted securely to the Family House Connect API after the review step.',
+            })}
           </p>
           <div className="home-church-start-points">
-            <span>✓ Tell us about yourself</span>
-            <span>✓ Choose your meeting location</span>
-            <span>✓ Submit for pastoral review</span>
+            <span>✓ {t('homeChurch.pointAboutYou', { defaultMessage: 'Tell us about yourself' })}</span>
+            <span>✓ {t('homeChurch.pointLocation', { defaultMessage: 'Choose your meeting location' })}</span>
+            <span>✓ {t('homeChurch.pointReview', { defaultMessage: 'Submit for pastoral review' })}</span>
           </div>
           <Link className="site-button" href="/start-home-church/eligibility">
-            Start your application
+            {t('homeChurch.startApplication', { defaultMessage: 'Start your application' })}
           </Link>
         </section>
         <aside className="panel home-church-start-side">
           <span className="home-church-start-icon">⌂</span>
-          <h3>Before you begin</h3>
-          <p>Have your contact details, sponsoring church, proposed meeting location, and expected participant count ready.</p>
-          <small>Application progress is saved in this browser until it is submitted.</small>
+          <h3>{t('homeChurch.beforeYouBegin', { defaultMessage: 'Before you begin' })}</h3>
+          <p>{t('homeChurch.beforeYouBeginCopy', { defaultMessage: 'Have your contact details, sponsoring church, proposed meeting location, and expected participant count ready.' })}</p>
+          <small>{t('homeChurch.draftSavedLocally', { defaultMessage: 'Application progress is saved in this browser until it is submitted.' })}</small>
         </aside>
       </div>
     );
@@ -3288,6 +3373,7 @@ function formatTimestamp(value?: string | null): string {
 }
 
 function LiveProfilePanel({ user }: { user: CurrentUser }) {
+  const { t } = useLocale();
   const name = displayNameFromUser(user);
   return (
     <aside className="panel profile-card">
@@ -3297,15 +3383,15 @@ function LiveProfilePanel({ user }: { user: CurrentUser }) {
       <span className="status">{user.email_verified_at ? 'Verified' : 'Unverified'}</span>
       <dl style={{ marginTop: '1rem', textAlign: 'left' }}>
         <div>
-          <dt>Given name</dt>
+          <dt>{t('account.givenName')}</dt>
           <dd>{user.profile.given_name ?? '—'}</dd>
         </div>
         <div>
-          <dt>Family name</dt>
+          <dt>{t('account.familyName')}</dt>
           <dd>{user.profile.family_name ?? '—'}</dd>
         </div>
         <div>
-          <dt>Preferred name</dt>
+          <dt>{t('account.preferredName')}</dt>
           <dd>{user.profile.preferred_name ?? '—'}</dd>
         </div>
         <div>
@@ -3318,6 +3404,7 @@ function LiveProfilePanel({ user }: { user: CurrentUser }) {
 }
 
 function LiveProfileForm({ user }: { user: CurrentUser }) {
+  const { t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -3353,26 +3440,26 @@ function LiveProfileForm({ user }: { user: CurrentUser }) {
       <p>Profile changes require recent multi-factor authentication.</p>
       <div className="form-grid">
         <label>
-          Given name
+          {t('account.givenName')}
           <input defaultValue={user.profile.given_name ?? ''} name="given_name" required />
         </label>
         <label>
-          Middle name
+          {t('account.middleName')}
           <input defaultValue={user.profile.middle_name ?? ''} name="middle_name" />
         </label>
         <label>
-          Family name
+          {t('account.familyName')}
           <input defaultValue={user.profile.family_name ?? ''} name="family_name" required />
         </label>
         <label>
-          Preferred name
+          {t('account.preferredName')}
           <input defaultValue={user.profile.preferred_name ?? ''} name="preferred_name" />
         </label>
       </div>
       {error ? <p role="alert">{error}</p> : null}
       {message ? <p>{message}</p> : null}
       <button className="site-button" disabled={busy} type="submit">
-        {busy ? 'Saving…' : 'Save profile'}
+        {busy ? 'Saving…' : t('account.saveProfile')}
       </button>
     </form>
   );
@@ -3385,7 +3472,8 @@ function LivePreferencesForm({
   initial: UserPreferences | null;
   actionLabel: string;
 }) {
-  const [locale, setLocale] = useState(initial?.locale ?? 'en');
+  const { locale: activeLocale, setLocale: applyLocale, t } = useLocale();
+  const [locale, setLocale] = useState(initial?.locale ?? activeLocale);
   const [timezone, setTimezone] = useState(initial?.timezone ?? 'UTC');
   const [channels, setChannels] = useState<string[]>(initial?.notification_channels ?? ['email', 'in_app']);
   const [saving, setSaving] = useState(false);
@@ -3393,10 +3481,10 @@ function LivePreferencesForm({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLocale(initial?.locale ?? 'en');
+    setLocale(initial?.locale ?? activeLocale);
     setTimezone(initial?.timezone ?? 'UTC');
     setChannels(initial?.notification_channels ?? ['email', 'in_app']);
-  }, [initial]);
+  }, [initial, activeLocale]);
 
   function toggleChannel(id: string) {
     setChannels((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
@@ -3413,11 +3501,12 @@ function LivePreferencesForm({
         notification_channels: channels,
       });
       setLocale(updated.locale);
+      applyLocale(updated.locale);
       setTimezone(updated.timezone);
       setChannels(updated.notification_channels);
-      setMessage('Preferences saved.');
+      setMessage(t('account.preferencesSaved'));
     } catch (err) {
-      setError(formatUserApiError(err, 'Unable to save preferences.'));
+      setError(formatUserApiError(err, t('account.unableToSavePreferences')));
     } finally {
       setSaving(false);
     }
@@ -3425,19 +3514,31 @@ function LivePreferencesForm({
 
   return (
     <section className="panel">
-      <h3>Preferences</h3>
-      <p>Locale, timezone, and notification channels from PUT /user/preferences.</p>
+      <h3>{t('account.preferences')}</h3>
+      <p>{t('account.preferencesCopy')}</p>
       <label className="setting-row">
         <span>
-          <b>Locale</b>
-          <small>BCP 47 tag (e.g. en-NG)</small>
+          <b>{t('account.locale')}</b>
+          <small>{t('account.localeHelp')}</small>
         </span>
-        <input value={locale} onChange={(e) => setLocale(e.target.value)} type="text" />
+        <select
+          value={supportedLocales.includes(locale as (typeof supportedLocales)[number]) ? locale : activeLocale}
+          onChange={(e) => {
+            setLocale(e.target.value);
+            applyLocale(e.target.value);
+          }}
+        >
+          {supportedLocales.map((code) => (
+            <option key={code} value={code}>
+              {localeMeta[code].endonym}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="setting-row">
         <span>
-          <b>Timezone</b>
-          <small>IANA timezone (e.g. Africa/Lagos)</small>
+          <b>{t('account.timezone')}</b>
+          <small>{t('account.timezoneHelp')}</small>
         </span>
         <input value={timezone} onChange={(e) => setTimezone(e.target.value)} type="text" />
       </label>
@@ -3457,7 +3558,7 @@ function LivePreferencesForm({
       {error ? <p>{error}</p> : null}
       {message ? <p>{message}</p> : null}
       <button className="site-button" disabled={saving || channels.length === 0} onClick={() => void onSave()} type="button">
-        {saving ? 'Saving…' : actionLabel}
+        {saving ? t('common.saving') : actionLabel}
       </button>
     </section>
   );
@@ -4655,6 +4756,8 @@ function SectionHeroLanding({ route }: { route: SiteRoute }) {
 }
 
 export function SiteScreen({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
+  const heading = translateRouteCopy(t, route);
   const isMember = route.surface === 'member';
   const hasHomeChurchWorkflowSidebar = route.path === '/start-home-church' || route.path.startsWith('/start-home-church/apply/');
   const hasSidebar = isMember || hasHomeChurchWorkflowSidebar;
@@ -4705,8 +4808,8 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
           {!hideHeading ? (
             <div className="page-heading">
               <span className="eyebrow">{route.section}</span>
-              <h1>{route.title}</h1>
-              <p>{route.subtitle}</p>
+              <h1>{heading.title}</h1>
+              <p>{heading.subtitle}</p>
             </div>
           ) : null}
           {content}
@@ -4714,8 +4817,13 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
       </div>
       <footer>
         <Logo />
-        <p>One Family. One Mission. Transforming nations for Christ.</p>
-        <span>© 2026 Family House Connect</span>
+        <p>{t('footer.tagline', { defaultMessage: 'One Family. One Mission. Transforming nations for Christ.' })}</p>
+        <span>
+          {t('footer.copyright', {
+            vars: { year: new Date().getFullYear() },
+            defaultMessage: '© {year} Family House Connect',
+          })}
+        </span>
       </footer>
     </div>
   );

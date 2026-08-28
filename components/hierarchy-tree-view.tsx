@@ -23,6 +23,7 @@ import {
   type HierarchyNode,
 } from '../lib/hierarchy-trees';
 import { SearchSelect, type SearchSelectOption } from './search-select';
+import { useLocale } from '@/components/locale-provider';
 
 type Props = {
   route: string;
@@ -46,9 +47,12 @@ function TreeBranch({
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useLocale();
   const hasChildren = Boolean(node.children?.length);
   const isOpen = expanded.has(node.id);
   const isSelected = selectedId === node.id;
+  const collapseLabel = t('admin.hierarchy.collapseNode', { vars: { label: node.label }, defaultMessage: `Collapse ${node.label}` });
+  const expandLabel = t('admin.hierarchy.expandNode', { vars: { label: node.label }, defaultMessage: `Expand ${node.label}` });
 
   return (
     <div className={`tree-branch ${isOpen ? 'expanded' : ''}`}>
@@ -63,7 +67,7 @@ function TreeBranch({
             className="tree-toggle"
             role="button"
             tabIndex={0}
-            aria-label={isOpen ? `Collapse ${node.label}` : `Expand ${node.label}`}
+            aria-label={isOpen ? collapseLabel : expandLabel}
             aria-expanded={isOpen}
             onClick={(event) => {
               event.stopPropagation();
@@ -111,12 +115,13 @@ function HierarchyStatus({
   message: string;
   onRetry?: () => void;
 }) {
+  const { t } = useLocale();
   return (
     <div className="card tree-card hierarchy-status">
       <p className="maps-settings-lead">{message}</p>
       {state === 'error' && onRetry ? (
         <button type="button" className="ghost-button" onClick={onRetry}>
-          Retry
+          {t('common.retry', { defaultMessage: 'Retry' })}
         </button>
       ) : null}
     </div>
@@ -132,7 +137,12 @@ function OrganizationCreateForms({
   busy: boolean;
   onCreated: () => void;
 }) {
-  const [message, setMessage] = useState('Create countries, levels, units, and locations against live Laravel APIs.');
+  const { t } = useLocale();
+  const [message, setMessage] = useState(
+    t('admin.hierarchy.createLead', {
+      defaultMessage: 'Create countries, levels, units, and locations against live Laravel APIs.',
+    }),
+  );
   const [countryId, setCountryId] = useState(snapshot.countries[0]?.id ?? '');
   const levels = snapshot.levelsByCountry[countryId] ?? [];
 
@@ -167,7 +177,7 @@ function OrganizationCreateForms({
         name: String(form.get('name') ?? '').trim(),
       });
       event.currentTarget.reset();
-      setMessage('Country created.');
+      setMessage(t('admin.hierarchy.countryCreated', { defaultMessage: 'Country created.' }));
       onCreated();
     } catch (error) {
       setMessage(organizationErrorMessage(error));
@@ -177,7 +187,7 @@ function OrganizationCreateForms({
   async function submitLevel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!countryId) {
-      setMessage('Select a country before adding a level.');
+      setMessage(t('admin.hierarchy.selectCountryFirst', { defaultMessage: 'Select a country before adding a level.' }));
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -188,7 +198,7 @@ function OrganizationCreateForms({
         sort_order: Number(form.get('sort_order') ?? 1),
       });
       event.currentTarget.reset();
-      setMessage('Administrative level created.');
+      setMessage(t('admin.hierarchy.levelCreated', { defaultMessage: 'Administrative level created.' }));
       onCreated();
     } catch (error) {
       setMessage(organizationErrorMessage(error));
@@ -210,7 +220,7 @@ function OrganizationCreateForms({
         reference_code: String(form.get('reference_code') ?? '').trim() || null,
       });
       event.currentTarget.reset();
-      setMessage('Administrative unit created.');
+      setMessage(t('admin.hierarchy.unitCreated', { defaultMessage: 'Administrative unit created.' }));
       onCreated();
     } catch (error) {
       setMessage(organizationErrorMessage(error));
@@ -235,7 +245,7 @@ function OrganizationCreateForms({
         longitude: lng ? Number(lng) : null,
       });
       event.currentTarget.reset();
-      setMessage('Location created.');
+      setMessage(t('admin.hierarchy.locationCreated', { defaultMessage: 'Location created.' }));
       onCreated();
     } catch (error) {
       setMessage(organizationErrorMessage(error));
@@ -379,8 +389,11 @@ function OrganizationCreateForms({
 }
 
 function LiveOrganizationHierarchy({ title }: { title: string }) {
+  const { t } = useLocale();
   const [state, setState] = useState<LoadState>('loading');
-  const [message, setMessage] = useState('Loading organization hierarchy…');
+  const [message, setMessage] = useState(
+    t('admin.hierarchy.loading', { defaultMessage: 'Loading organization hierarchy…' }),
+  );
   const [snapshot, setSnapshot] = useState<OrganizationHierarchySnapshot | null>(null);
   const [root, setRoot] = useState<HierarchyNode | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -391,7 +404,7 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
 
   const refresh = useCallback(async () => {
     setState('loading');
-    setMessage('Loading organization hierarchy…');
+    setMessage(t('admin.hierarchy.loading', { defaultMessage: 'Loading organization hierarchy…' }));
     try {
       const next = await loadOrganizationHierarchy();
       const tree = buildOrganizationHierarchyTree(next);
@@ -399,7 +412,7 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
       setRoot(tree);
       if (!tree) {
         setState('empty');
-        setMessage('No countries or units yet. Create the first country below.');
+        setMessage(t('admin.hierarchy.empty', { defaultMessage: 'No countries or units yet. Create the first country below.' }));
         setSelectedId('');
         setExpanded(new Set());
         return;
@@ -445,7 +458,7 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
     setActionMessage('');
     try {
       await moveUnit(selected.id, { parent_id: parentId.trim() ? parentId.trim() : null });
-      setActionMessage('Parent updated.');
+      setActionMessage(t('admin.hierarchy.parentUpdated', { defaultMessage: 'Parent updated.' }));
       await refresh();
     } catch (error) {
       setActionMessage(organizationErrorMessage(error));
@@ -474,16 +487,16 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
         <div className="tree-layout">
           <div className="card tree-card">
             <div className="tree-toolbar">
-              <strong>Structure</strong>
+              <strong>{t('admin.hierarchy.structure', { defaultMessage: 'Structure' })}</strong>
               <div>
                 <button type="button" className="ghost-button" onClick={() => void refresh()} disabled={busy}>
-                  Refresh
+                  {t('common.refresh', { defaultMessage: 'Refresh' })}
                 </button>
                 <button type="button" className="ghost-button" onClick={() => setExpanded(new Set(expandableIds))}>
-                  Expand All
+                  {t('admin.hierarchy.expandAll', { defaultMessage: 'Expand All' })}
                 </button>
                 <button type="button" className="ghost-button" onClick={() => setExpanded(new Set())}>
-                  Collapse All
+                  {t('admin.hierarchy.collapseAll', { defaultMessage: 'Collapse All' })}
                 </button>
               </div>
             </div>
@@ -497,26 +510,26 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
             />
           </div>
           <div className="card tree-detail">
-            <h2 className="card-title">Selected Node</h2>
+            <h2 className="card-title">{t('admin.hierarchy.selectedNode', { defaultMessage: 'Selected Node' })}</h2>
             <h3>{selected.label}</h3>
             <dl>
               <div>
-                <dt>Level</dt>
+                <dt>{t('admin.hierarchy.level', { defaultMessage: 'Level' })}</dt>
                 <dd>{selected.level}</dd>
               </div>
               <div>
-                <dt>Code</dt>
+                <dt>{t('admin.hierarchy.code', { defaultMessage: 'Code' })}</dt>
                 <dd>{selected.code}</dd>
               </div>
               {selected.parent ? (
                 <div>
-                  <dt>Parent</dt>
+                  <dt>{t('admin.hierarchy.parent', { defaultMessage: 'Parent' })}</dt>
                   <dd>{selected.parent}</dd>
                 </div>
               ) : null}
               {selected.kind ? (
                 <div>
-                  <dt>Kind</dt>
+                  <dt>{t('admin.hierarchy.kind', { defaultMessage: 'Kind' })}</dt>
                   <dd>{selected.kind}</dd>
                 </div>
               ) : null}
@@ -525,9 +538,9 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
             {selected.kind === 'unit' ? (
               <form className="hierarchy-move-form" onSubmit={onMoveParent}>
                 <label>
-                  <span>Move under parent</span>
+                  <span>{t('admin.hierarchy.moveUnderParent', { defaultMessage: 'Move under parent' })}</span>
                   <select value={parentId} onChange={(event) => setParentId(event.target.value)} disabled={busy}>
-                    <option value="">Country root (no parent)</option>
+                    <option value="">{t('admin.hierarchy.countryRoot', { defaultMessage: 'Country root (no parent)' })}</option>
                     {moveOptions.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.label} · {option.level}
@@ -536,7 +549,7 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
                   </select>
                 </label>
                 <button className="primary-button" type="submit" disabled={busy}>
-                  Save parent
+                  {t('admin.hierarchy.saveParent', { defaultMessage: 'Save parent' })}
                 </button>
               </form>
             ) : null}
@@ -551,6 +564,7 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
 }
 
 function FixtureHierarchyTree({ route, title }: Props) {
+  const { t } = useLocale();
   const root = useMemo(() => fixtureHierarchyTreeForRoute(route), [route]);
   const expandableIds = useMemo(() => (root ? collectExpandableIds(root) : []), [root]);
   const defaultSelected = useMemo(() => {
@@ -580,7 +594,10 @@ function FixtureHierarchyTree({ route, title }: Props) {
     return (
       <HierarchyStatus
         state="empty"
-        message="Design fixtures are disabled. Enable NEXT_PUBLIC_FHC_ENABLE_DESIGN_FIXTURES=true for prototype trees, or open Administrative Hierarchy for live organization data."
+        message={t('admin.hierarchy.fixturesDisabled', {
+          defaultMessage:
+            'Design fixtures are disabled. Enable NEXT_PUBLIC_FHC_ENABLE_DESIGN_FIXTURES=true for prototype trees, or open Administrative Hierarchy for live organization data.',
+        })}
       />
     );
   }
@@ -600,13 +617,13 @@ function FixtureHierarchyTree({ route, title }: Props) {
     <div className="tree-layout" data-hierarchy-title={title}>
       <div className="card tree-card">
         <div className="tree-toolbar">
-          <strong>Structure</strong>
+          <strong>{t('admin.hierarchy.structure', { defaultMessage: 'Structure' })}</strong>
           <div>
             <button type="button" className="ghost-button" onClick={() => setExpanded(new Set(expandableIds))}>
-              Expand All
+              {t('admin.hierarchy.expandAll', { defaultMessage: 'Expand All' })}
             </button>
             <button type="button" className="ghost-button" onClick={() => setExpanded(new Set())}>
-              Collapse All
+              {t('admin.hierarchy.collapseAll', { defaultMessage: 'Collapse All' })}
             </button>
           </div>
         </div>
@@ -620,20 +637,20 @@ function FixtureHierarchyTree({ route, title }: Props) {
         />
       </div>
       <div className="card tree-detail">
-        <h2 className="card-title">Selected Node</h2>
+        <h2 className="card-title">{t('admin.hierarchy.selectedNode', { defaultMessage: 'Selected Node' })}</h2>
         <h3>{selected.label}</h3>
         <dl>
           <div>
-            <dt>Level</dt>
+            <dt>{t('admin.hierarchy.level', { defaultMessage: 'Level' })}</dt>
             <dd>{selected.level}</dd>
           </div>
           <div>
-            <dt>Code</dt>
+            <dt>{t('admin.hierarchy.code', { defaultMessage: 'Code' })}</dt>
             <dd>{selected.code}</dd>
           </div>
           {selected.parent ? (
             <div>
-              <dt>Parent</dt>
+              <dt>{t('admin.hierarchy.parent', { defaultMessage: 'Parent' })}</dt>
               <dd>{selected.parent}</dd>
             </div>
           ) : null}
@@ -651,19 +668,19 @@ function FixtureHierarchyTree({ route, title }: Props) {
           ) : null}
           {typeof selected.members === 'number' ? (
             <div>
-              <dt>Members</dt>
+              <dt>{t('admin.hierarchy.members', { defaultMessage: 'Members' })}</dt>
               <dd>{selected.members.toLocaleString()}</dd>
             </div>
           ) : null}
           {selected.status ? (
             <div>
-              <dt>Status</dt>
+              <dt>{t('admin.hierarchy.status', { defaultMessage: 'Status' })}</dt>
               <dd>{selected.status}</dd>
             </div>
           ) : null}
         </dl>
         <button type="button" className="ghost-button">
-          View Details
+          {t('common.viewDetails', { defaultMessage: 'View Details' })}
         </button>
       </div>
     </div>

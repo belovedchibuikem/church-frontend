@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { useLocale } from '@/components/locale-provider';
 import { designFixturesEnabled, loadMapsBootstrap, publicErrorMessage } from '@/lib/site-api';
 
 export type MapProvider = 'google' | 'mapbox' | 'leaflet';
@@ -94,24 +95,28 @@ export function InteractiveMap({
   className = '',
   onMarkerSelect,
 }: InteractiveMapProps) {
+  const { t } = useLocale();
   const hostId = useId().replace(/:/g, '');
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const providerRef = useRef<MapProvider | null>(null);
   const destRef = useRef<MapMarker | null>(null);
   const configRef = useRef<MapsBootstrap>(LEAFLET_FALLBACK);
-  const [status, setStatus] = useState('Loading map…');
+  const mapsUnavailable = t('maps.unavailable', {
+    defaultMessage: 'Maps are unavailable. An administrator must activate a maps provider in Platform Settings.',
+  });
+  const [status, setStatus] = useState(() => t('maps.loading', { defaultMessage: 'Loading map…' }));
   const [unavailable, setUnavailable] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [routeInfo, setRouteInfo] = useState<string | null>(null);
-  const [providerLabel, setProviderLabel] = useState('Maps');
+  const [providerLabel, setProviderLabel] = useState(() => t('maps.providerFallback', { defaultMessage: 'Maps' }));
   const [emptyPlaces, setEmptyPlaces] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function boot() {
-      setStatus('Loading map…');
+      setStatus(t('common.loadingMap', { defaultMessage: 'Loading map…' }));
       setUnavailable(false);
       setEmptyPlaces(false);
       setRouteInfo(null);
@@ -132,7 +137,7 @@ export function InteractiveMap({
         if (cancelled) return;
         if (!designFixturesEnabled()) {
           setUnavailable(true);
-          setStatus(publicErrorMessage(error, MAPS_UNAVAILABLE));
+          setStatus(publicErrorMessage(error, mapsUnavailable));
           return;
         }
         config = { ...LEAFLET_FALLBACK, active: true };
@@ -144,8 +149,8 @@ export function InteractiveMap({
       // Production: inactive provider → clear unavailable (never invent pins or vendor keys).
       if (!config.active && !fixtures) {
         setUnavailable(true);
-        setStatus(MAPS_UNAVAILABLE);
-        setProviderLabel('Inactive');
+        setStatus(mapsUnavailable);
+        setProviderLabel(t('common.inactive', { defaultMessage: 'Inactive' }));
         return;
       }
 
@@ -165,16 +170,23 @@ export function InteractiveMap({
         setUnavailable(true);
         setStatus(
           config.provider === 'google' || config.provider === 'mapbox'
-            ? `The ${config.provider} provider is active but no client key was returned by the API.`
-            : MAPS_UNAVAILABLE,
+            ? t('errors.mapsProviderMissingClientKey', {
+                defaultMessage: 'The {provider} provider is active but no client key was returned by the API.',
+                vars: { provider: config.provider },
+              })
+            : mapsUnavailable,
         );
-        setProviderLabel('Unavailable');
+        setProviderLabel(t('common.unavailable', { defaultMessage: 'Unavailable' }));
         return;
       }
 
       providerRef.current = resolvedProvider;
       setProviderLabel(
-        resolvedProvider === 'google' ? 'Google Maps' : resolvedProvider === 'mapbox' ? 'Mapbox' : 'Leaflet / OpenStreetMap',
+        resolvedProvider === 'google'
+          ? t('common.googleMaps', { defaultMessage: 'Google Maps' })
+          : resolvedProvider === 'mapbox'
+            ? t('common.mapbox', { defaultMessage: 'Mapbox' })
+            : t('common.leafletOsm', { defaultMessage: 'Leaflet / OpenStreetMap' }),
       );
 
       try {

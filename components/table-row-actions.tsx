@@ -1,3 +1,7 @@
+'use client';
+
+import { useLocale } from '@/components/locale-provider';
+
 type Props = {
   record: string;
   entityKey?: string;
@@ -15,26 +19,57 @@ export function TableRowActions({
   canEdit = true,
   canDelete = true,
 }: Props) {
+  const { t } = useLocale();
+  const viewLabel = t('common.view', { defaultMessage: 'View' });
+  const editLabel = t('common.edit', { defaultMessage: 'Edit' });
+  const deleteLabel = t('common.delete', { defaultMessage: 'Delete' });
   const shared = { 'data-record': record, ...(entityKey ? { 'data-entity': entityKey } : {}) };
   return (
     <div className={className}>
       {reviewLabel ? (
-        <button type="button" className="table-action" data-admin-action="view" {...shared} aria-label={`${reviewLabel} ${record}`}>
+        <button
+          type="button"
+          className="table-action"
+          data-admin-action="view"
+          {...shared}
+          aria-label={t('common.actionNamed', {
+            defaultMessage: '{action} {record}',
+            vars: { action: reviewLabel, record },
+          })}
+        >
           {reviewLabel}
         </button>
       ) : (
-        <button type="button" className="table-action" data-admin-action="view" {...shared} aria-label={`View ${record}`}>
-          View
+        <button
+          type="button"
+          className="table-action"
+          data-admin-action="view"
+          {...shared}
+          aria-label={t('common.viewRecord', { defaultMessage: 'View {record}', vars: { record } })}
+        >
+          {viewLabel}
         </button>
       )}
       {canEdit ? (
-        <button type="button" className="table-action" data-admin-action="edit" {...shared} aria-label={`Edit ${record}`}>
-          Edit
+        <button
+          type="button"
+          className="table-action"
+          data-admin-action="edit"
+          {...shared}
+          aria-label={t('common.editRecord', { defaultMessage: 'Edit {record}', vars: { record } })}
+        >
+          {editLabel}
         </button>
       ) : null}
       {canDelete ? (
-        <button type="button" className="table-action is-danger" data-admin-action="delete" {...shared} aria-label={`Delete ${record}`}>
-          Delete
+        <button
+          type="button"
+          className="table-action is-danger"
+          data-admin-action="delete"
+          {...shared}
+          aria-label={t('common.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record } })}
+        >
+          {deleteLabel}
         </button>
       ) : null}
     </div>

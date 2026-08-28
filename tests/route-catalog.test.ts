@@ -46,7 +46,7 @@ test('only the approved login, MFA and explicit forbidden reference are public',
   assert.deepEqual(publicRoutes, ['/admin/login', '/admin/mfa', '/admin/forbidden']);
 });
 
-test('localization architecture includes all required locales and Arabic RTL', () => {
+test('localization architecture includes all required locales, Arabic RTL, and live catalogs', () => {
   assert.deepEqual(supportedLocales, ['en', 'yo', 'ig', 'ha', 'fr', 'ar', 'zh', 'sw']);
   assert.equal(localeDirection('ar'), 'rtl');
   assert.equal(localeDirection('en'), 'ltr');
