@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sites } from '@openai/sites-vite-plugin';
-import tailwindcss from '@tailwindcss/postcss';
+import tailwindcss from '@tailwindcss/vite';
 import vinext from 'vinext';
 import { defineConfig, loadEnv, searchForWorkspaceRoot } from 'vite';
 import hostingConfig from './.openai/hosting.json';
@@ -63,12 +63,15 @@ export default defineConfig(async ({ mode }) => {
   const isVercel =
     process.env.VERCEL === '1' || process.env.NITRO_PRESET === 'vercel';
 
-  const plugins = [vinext(), sites()];
+  // Handle `@import "tailwindcss"` before Vite's PostCSS importer. Nitro's
+  // RSC/SSR CSS pass otherwise treats it as a project-root file and fails.
+  const plugins = [tailwindcss(), vinext()];
 
   if (isVercel) {
     const { nitro } = await import('nitro/vite');
     plugins.push(nitro());
   } else {
+    plugins.push(sites());
     // Wrangler snapshots its log path while the Cloudflare plugin is imported.
     const { cloudflare } = await import('@cloudflare/vite-plugin');
     plugins.push(
@@ -80,7 +83,6 @@ export default defineConfig(async ({ mode }) => {
   }
 
   return {
-    css: { postcss: { plugins: [tailwindcss()] } },
     server: {
       ...(isCodexSeatbeltSandbox
         ? { watch: { useFsEvents: false, usePolling: true } }
