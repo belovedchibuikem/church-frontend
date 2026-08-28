@@ -21,6 +21,8 @@ export type PaginationMeta = {
 export const CATALOG_PATHS = {
   'kca.applications': 'kca/applications',
   'kca.enrollments': 'kca/enrollments',
+  'kca.years': 'kca/years',
+  'kca.cohorts': 'kca/cohorts',
   'kca.evidence': 'kca/evidence-submissions',
   'kca.assessments': 'kca/assessment-results',
   'kca.certificates': 'kca/certificates',
@@ -216,6 +218,8 @@ export const FORM_TO_DOMAIN_CATALOG: Partial<Record<string, CatalogDomainKey>> =
   communicationAudience: 'communications.audiences',
   alertRule: 'reporting.alert_rules',
   kcaApplication: 'kca.applications',
+  kcaYear: 'kca.years',
+  kcaCohort: 'kca.cohorts',
   kcaCertificate: 'kca.certificates',
   platformFile: 'platform.files',
 };
@@ -279,6 +283,8 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/evidence-reviews') return 'kca.evidence';
   if (route === '/admin/kca/assessments/final') return 'kca.assessments';
   if (route === '/admin/kca/certificates') return 'kca.certificates';
+  if (route === '/admin/kca/cohorts') return 'kca.cohorts';
+  if (route === '/admin/kca/years') return 'kca.years';
   return null;
 }
 
@@ -363,9 +369,9 @@ export function catalogRecordsToRows(
       } else if (key.includes('translator')) {
         mapped[column] = get('translator_name', 'person_name');
       } else if (key.includes('cohort')) {
-        mapped[column] = get('cohort_id', 'cohort');
+        mapped[column] = get('name', 'cohort_id', 'cohort');
       } else if (key.includes('year')) {
-        mapped[column] = get('year_id', 'year', 'starts_on');
+        mapped[column] = get('year_name', 'name', 'code', 'year_id', 'starts_on');
       } else if (key.includes('detail') || key.includes('severity')) {
         mapped[column] = get('severity', 'status', 'condition_type', 'scope_type');
       } else {

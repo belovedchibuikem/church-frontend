@@ -45,10 +45,10 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     entity: 'KCA cohort',
     fields: [
       { label: 'Cohort name', name: 'name', type: 'text', required: true, placeholder: 'e.g. 2024 Cohort A' },
-      { label: 'Year', name: 'year', type: 'number', required: true, placeholder: '2024' },
-      { label: 'Region', name: 'region_id', type: 'search-select', catalog: 'region', placeholder: 'Search region' },
-      { label: 'Start date', name: 'starts_at', type: 'date', required: true },
-      { label: 'Status', name: 'status', type: 'select', options: ['Active', 'Completed', 'Archived'] },
+      { label: 'Code', name: 'code', type: 'text', required: true, placeholder: 'e.g. 2024-A' },
+      { label: 'KCA year', name: 'year_id', type: 'search-select', catalog: 'kcaYear', required: true, placeholder: 'Search academic year' },
+      { label: 'Starts on', name: 'starts_on', type: 'date', required: true },
+      { label: 'Ends on', name: 'ends_on', type: 'date', required: true },
     ],
   },
   home_church: {

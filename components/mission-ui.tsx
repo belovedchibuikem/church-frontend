@@ -489,8 +489,6 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                         record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
                         entityKey={entityKey}
                         className="row-actions mission-row-actions"
-                        canEdit={false}
-                        canDelete={false}
                       />
                       {live && dataset === 'souls' ? (
                         <>

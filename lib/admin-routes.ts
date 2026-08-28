@@ -198,5 +198,49 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     return { ...review, route };
   }
 
+  const kcaApplicationDecision = route.match(/^\/admin\/kca\/applications\/([^/]+)\/decision$/);
+  if (kcaApplicationDecision) {
+    const template = adminScreens.find((screen) => screen.id === 'G-12');
+    if (!template) return undefined;
+    return {
+      ...template,
+      route,
+      title: 'Admission Decision',
+      subtitle: 'Review the live application and submit an admission decision.',
+    };
+  }
+
+  const kcaApplicationDetail = route.match(/^\/admin\/kca\/applications\/([^/]+)$/);
+  if (kcaApplicationDetail && kcaApplicationDetail[1] !== 'samuel-david') {
+    const template = adminScreens.find((screen) => screen.id === 'G-03');
+    if (!template) return undefined;
+    return {
+      ...template,
+      route,
+      title: 'Application Review',
+      subtitle: 'Live KCA applicant profile and section progress.',
+    };
+  }
+
+  const homeChurchDecision = route.match(/^\/admin\/home-churches\/applications\/([^/]+)\/decision$/);
+  if (homeChurchDecision) {
+    const template = adminScreens.find((screen) => screen.id === 'D-05');
+    if (!template) return undefined;
+    return {
+      ...template,
+      route,
+      title: 'Application Decision',
+      subtitle: 'Submit a live home church application transition.',
+      kind: 'workflow',
+    };
+  }
+
+  const homeChurchReview = route.match(/^\/admin\/home-churches\/applications\/([^/]+)\/review$/);
+  if (homeChurchReview) {
+    const template = adminScreens.find((screen) => screen.id === 'D-04');
+    if (!template) return undefined;
+    return { ...template, route, kind: 'workflow' };
+  }
+
   return undefined;
 }

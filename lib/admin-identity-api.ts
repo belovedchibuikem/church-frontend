@@ -50,6 +50,25 @@ export type AdminProfile = {
   } | null;
 };
 
+export function displayNameFromAdminProfile(profile: AdminProfile | null | undefined): string {
+  if (!profile) return 'Admin';
+  const preferred = profile.profile.preferred_name?.trim();
+  if (preferred) return preferred;
+  const legal = [profile.profile.given_name, profile.profile.middle_name, profile.profile.family_name]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(' ');
+  return legal || profile.email || 'Admin';
+}
+
+export function initialsFromAdminProfile(profile: AdminProfile | null | undefined): string {
+  const name = displayNameFromAdminProfile(profile);
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
+  }
+  return (parts[0]?.slice(0, 2) ?? 'AD').toUpperCase();
+}
+
 export type AdminRole = {
   id: string;
   code: string;

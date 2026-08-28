@@ -56,6 +56,8 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
     { label: 'Email address', name: 'email', type: 'email', placeholder: 'name@example.org' },
     { label: 'Phone number', name: 'phone', placeholder: '+234' },
     { label: 'Person record', name: 'person_id', type: 'search-select', catalog: 'person', placeholder: 'Search people' },
+    { label: 'Church', name: 'church_id', type: 'search-select', catalog: 'church', placeholder: 'Search church' },
+    { label: 'Home church', name: 'home_church_id', type: 'search-select', catalog: 'homeChurch', placeholder: 'Search home church' },
     { label: 'Assignment', name: 'assignment', type: 'select', options: ['Unassigned', 'Primary team', 'Support team'] },
   ];
   if (/home church/.test(entity)) return [
@@ -65,6 +67,18 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
     { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
     { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
     { label: 'Status', name: 'status', type: 'select', options: ['Active', 'Suspended', 'Closed'] },
+  ];
+  if (/small group/.test(entity)) return [
+    { label: 'Proposed name', name: 'name', placeholder: 'Enter small group name' },
+    { label: 'Leader', name: 'owner_id', type: 'search-select', catalog: 'person', placeholder: 'Search group leader' },
+    { label: 'Parent church', name: 'church_id', type: 'search-select', catalog: 'church', placeholder: 'Search church' },
+    { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
+    { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
+    { label: 'Contact email', name: 'email', type: 'email', placeholder: 'leader@example.org' },
+    { label: 'Contact phone', name: 'phone', placeholder: '+234' },
+    { label: 'Expected participants', name: 'expected_participants', type: 'number', placeholder: '8' },
+    { label: 'Meeting day', name: 'meeting_day', type: 'select', options: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] },
+    { label: 'Meeting time', name: 'meeting_time', placeholder: '18:00' },
   ];
   if (/church|cohort|group|department|team|ministry|crusade|orientation/.test(entity)) return [
     { label: 'Name', name: 'name', placeholder: `Enter ${entityName(label, pageTitle).toLowerCase()} name` },

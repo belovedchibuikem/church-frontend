@@ -315,8 +315,19 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     if (button.dataset.adminAction) {
       event.preventDefault();
       const record = button.dataset.record ?? '';
+      const recordId = extractUlid(record);
       const entityKey = button.dataset.entity ?? resolveEntityKey(route);
       const action = button.dataset.adminAction;
+      if (action === 'view' && recordId) {
+        if (route.includes('/kca/applications') || route === '/admin/kca/review-queue') {
+          navigate(`/admin/kca/applications/${recordId}/decision`);
+          return;
+        }
+        if (route.includes('/home-churches/applications')) {
+          navigate(`/admin/home-churches/applications/${recordId}/decision`);
+          return;
+        }
+      }
       if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey });
       else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey });
       else if (action === 'delete') openAction(t('admin.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record } }), 'confirm', { record, entityKey });

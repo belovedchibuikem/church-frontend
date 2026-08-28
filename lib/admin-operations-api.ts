@@ -71,6 +71,19 @@ export type FirstTimerRecord = {
   contacted_at?: string | null;
 };
 
+export type MembershipRecord = {
+  id: string;
+  person_id?: string | null;
+  person_name?: string | null;
+  church_id?: string | null;
+  church_name?: string | null;
+  home_church_id?: string | null;
+  home_church_name?: string | null;
+  status: string;
+  joined_at?: string | null;
+  ended_at?: string | null;
+};
+
 export type FollowUpTaskRecord = {
   id: string;
   first_timer_id?: string | null;
@@ -377,6 +390,10 @@ export function listFirstTimers(params: ListQuery = {}): Promise<OpsListResult<F
   return opsGetList<FirstTimerRecord>('admin/church/first-timers', params);
 }
 
+export function listMemberships(params: ListQuery = {}): Promise<OpsListResult<MembershipRecord>> {
+  return opsGetList<MembershipRecord>('admin/church/memberships', params);
+}
+
 export function registerFirstTimer(
   input: RegisterFirstTimerInput,
   scope?: AdminScope,
@@ -536,6 +553,7 @@ export type OpsDatasetKey =
   | 'churches'
   | 'home-churches'
   | 'home-church-applications'
+  | 'memberships'
   | 'first-timers'
   | 'follow-up-tasks'
   | 'crusades'
@@ -554,6 +572,9 @@ export function resolveOpsDataset(screen: {
   const { id, route, nav } = screen;
   if (id === 'E-02' || route === '/admin/churches') return 'churches';
   if (id === 'D-07' || route === '/admin/home-churches') return 'home-churches';
+  if (route.includes('/small-groups')) return 'home-churches';
+  if (route.includes('/members') && !route.includes('/membership')) return 'memberships';
+  if (route.includes('/disciples')) return 'follow-up-tasks';
   if (id === 'D-02' || route.startsWith('/admin/home-churches/applications')) {
     if (route === '/admin/home-churches/applications' || id === 'D-02') return 'home-church-applications';
   }
@@ -587,6 +608,8 @@ export async function loadOpsDataset(
       return listHomeChurches(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'home-church-applications':
       return listHomeChurchApplications(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'memberships':
+      return listMemberships(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'first-timers':
       return listFirstTimers(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'follow-up-tasks':
@@ -708,19 +731,39 @@ export function opsRecordsToRows(
                           : 'New'
                         : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
+        case 'memberships':
+          mapped[column] =
+            column === 'Name'
+              ? humanValue(item, 'person_name')
+              : column === 'Member ID'
+                ? humanValue(item, 'id')
+                : column === 'Department' || column === 'Group'
+                  ? humanValue(item, 'home_church_name')
+                  : column === 'Joined Date' || column === 'Joined On'
+                    ? shortDate(get('joined_at') === '—' ? null : get('joined_at'))
+                    : column === 'Phone'
+                      ? '—'
+                      : column === 'Status'
+                        ? get('status')
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
         case 'follow-up-tasks':
           mapped[column] =
             column === 'Name'
               ? humanValue(item, 'person_name')
-              : column === 'Last Contact'
-                ? '—'
-                : column === 'Next Follow-up'
-                  ? shortDate(get('due_at') === '—' ? null : get('due_at'))
-                  : column === 'Owner'
-                    ? humanValue(item, 'assigned_to_name')
-                    : column === 'Status'
-                      ? get('status')
-                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+              : column === 'Discipleship Group' || column === 'Church'
+                ? humanValue(item, 'church_name')
+                : column === 'Mentor' || column === 'Owner'
+                  ? humanValue(item, 'assigned_to_name')
+                  : column === 'Stage'
+                    ? humanValue(item, 'type')
+                    : column === 'Last Contact'
+                      ? '—'
+                      : column === 'Next Follow-up'
+                        ? shortDate(get('due_at') === '—' ? null : get('due_at'))
+                        : column === 'Status'
+                          ? get('status')
+                          : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'crusades':
           mapped[column] =

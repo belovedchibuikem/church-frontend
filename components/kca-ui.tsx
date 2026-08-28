@@ -8,11 +8,13 @@ import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
 import {
   catalogErrorMessage,
   catalogRecordsToRows,
+  CATALOG_GLOBAL_SCOPE,
   listCatalogDomain,
   resolveCatalogDataset,
   shouldUseCatalogLiveData,
 } from '../lib/admin-catalog-api';
 import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
+import { executeAdminAction, extractUlid } from '../lib/admin-mutation-dispatcher';
 import { AdminFormFields } from './admin-form-fields';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
@@ -97,7 +99,7 @@ function KcaFilters({ search, compact = false, labels }: { search?: string; comp
   </div>;
 }
 
-function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [], showAction = true, filterLabels, toolbarAction }: { screen: AdminScreen; rows?: Row[]; columns?: string[]; showAction?: boolean; filterLabels?: string[]; toolbarAction?: string }) {
+function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [], showAction = true, filterLabels, toolbarAction, reviewLabel, total }: { screen: AdminScreen; rows?: Row[]; columns?: string[]; showAction?: boolean; filterLabels?: string[]; toolbarAction?: string; reviewLabel?: string; total?: number }) {
   const { t } = useLocale();
   const entityKey = resolveEntityKey(screen.route, screen.id);
   return <article className={`card kca-table-card ${toolbarAction ? 'kca-prerequisites' : ''}`}>
@@ -112,11 +114,11 @@ function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?
             const isStatus = /status|priority|progress|issued/i.test(column);
             return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
           })}
-          {showAction && <td><TableRowActions record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()} entityKey={entityKey} className="row-actions kca-row-actions" canEdit={false} canDelete={false} /></td>}
+          {showAction && <td><TableRowActions record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} /></td>}
         </tr>)}</tbody>
       </table>
     </div>
-    <footer className="kca-table-footer"><span>{t('member.kca.showingRecords', { defaultMessage: 'Showing 1 to {visible} of {total} records', vars: { visible: rows.length, total: rows.length > 6 ? 246 : rows.length } })}</span><div role="navigation" aria-label={t('member.kca.paginationAria', { defaultMessage: '{title} pagination', vars: { title: screen.title } })}><button type="button" aria-label={t('member.kca.previousPage', { defaultMessage: 'Previous page' })}>‹</button><button className="active" type="button" aria-label={t('member.kca.page', { defaultMessage: 'Page {number}', vars: { number: 1 } })} aria-current="page">1</button><button type="button" aria-label={t('member.kca.page', { defaultMessage: 'Page {number}', vars: { number: 2 } })}>2</button><button type="button" aria-label={t('member.kca.page', { defaultMessage: 'Page {number}', vars: { number: 3 } })}>3</button><button type="button" aria-label={t('member.kca.nextPage', { defaultMessage: 'Next page' })}>›</button></div></footer>
+    <footer className="kca-table-footer"><span>{t('member.kca.showingRecords', { defaultMessage: 'Showing 1 to {visible} of {total} records', vars: { visible: rows.length, total: total ?? rows.length } })}</span><div role="navigation" aria-label={t('member.kca.paginationAria', { defaultMessage: '{title} pagination', vars: { title: screen.title } })}><button type="button" aria-label={t('member.kca.previousPage', { defaultMessage: 'Previous page' })}>‹</button><button className="active" type="button" aria-label={t('member.kca.page', { defaultMessage: 'Page {number}', vars: { number: 1 } })} aria-current="page">1</button></div></footer>
   </article>;
 }
 
@@ -213,8 +215,102 @@ function KcaApplicationForm({ screen }: { screen: AdminScreen }) {
   </div>;
 }
 
+function applicationIdFromRoute(route: string): string | null {
+  const match = route.match(/^\/admin\/kca\/applications\/([^/]+)(?:\/|$)/);
+  if (!match) return null;
+  const segment = match[1];
+  if (segment === 'samuel-david') return null;
+  return extractUlid(segment) ?? segment;
+}
+
 function KcaDecision({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const applicationId = applicationIdFromRoute(screen.route);
+  const [application, setApplication] = useState<Record<string, unknown> | null>(null);
+  const [notes, setNotes] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!live || !applicationId) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
+        const match = result.items.find((item) => String(item.id) === applicationId) ?? null;
+        if (!cancelled) setApplication(match as Record<string, unknown> | null);
+      } catch (err) {
+        if (!cancelled) setError(catalogErrorMessage(err, 'Unable to load application.'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId, live]);
+
+  async function submitDecision(status: string, label: string) {
+    if (!applicationId) return;
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await executeAdminAction({
+        route: screen.route,
+        label,
+        payload: { status, reason_code: notes.trim() || `${status}_by_admin`, notes },
+        recordId: applicationId,
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      setMessage(`Decision recorded: ${status.replaceAll('_', ' ')}.`);
+      const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
+      setApplication((result.items.find((item) => String(item.id) === applicationId) as Record<string, unknown>) ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Decision submission failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (live && applicationId) {
+    const personName = String(application?.person_name ?? 'Applicant');
+    const initials = personName.split(' ').map((part) => part[0]).slice(0, 2).join('') || '?';
+    const status = String(application?.status ?? 'received');
+    return (
+      <div className="kca-decision-layout">
+        <aside className="card kca-review-summary">
+          <div className="kca-avatar">{initials}</div>
+          <h2>{personName}</h2>
+          <small>{applicationId}</small>
+          <p><KcaBadge value={status} /></p>
+          <p>{application?.received_at ? `Received ${String(application.received_at)}` : null}</p>
+        </aside>
+        <article className="card kca-decision-card">
+          <span className="kca-overline">{t('member.kca.finalReview', { defaultMessage: 'Final review' })}</span>
+          <h2>{t('member.kca.selectAdmissionDecision', { defaultMessage: 'Select an admission decision' })}</h2>
+          <p>{t('member.kca.decisionCopy', { defaultMessage: 'Choose the appropriate outcome for {name} after reviewing all application sections.', vars: { name: personName } })}</p>
+          {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+          {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+          <div className="kca-decision-options">
+            <button className="accept" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('provisionally_accepted', 'Provisionally Accept')}>
+              <span>✓</span><strong>{t('member.kca.provisionallyAccept', { defaultMessage: 'Provisionally Accept' })}</strong>
+            </button>
+            <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('deferred', 'Defer')}>
+              <span>◷</span><strong>{t('member.kca.defer', { defaultMessage: 'Defer' })}</strong>
+            </button>
+            <button className="reject" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('not_accepted', 'Not Accepted')}>
+              <span>×</span><strong>{t('member.kca.notAccepted', { defaultMessage: 'Not Accepted' })}</strong>
+            </button>
+          </div>
+          <label><span>{t('member.kca.admissionNotesOptional', { defaultMessage: 'Admission Notes (Optional)' })}</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t('member.kca.privateNotesPlaceholder', { defaultMessage: 'Write your private notes here...' })} /></label>
+          <footer><Link className="ghost-button" href="/admin/kca/applications">{t('common.back', { defaultMessage: 'Back' })}</Link></footer>
+        </article>
+      </div>
+    );
+  }
+
   return <div className="kca-decision-layout">
     <aside className="card kca-review-summary"><div className="kca-avatar">SD</div><h2>Samuel David</h2><small>KCA-2024-000124</small><div>{(screen.items ?? []).slice(0, 8).map((item, index) => <p key={item}><span className={index < 7 ? 'done' : ''}>{index < 7 ? '✓' : '•'}</span>{item.split(' — ')[0]}<KcaBadge value={item.split(' — ')[1]}/></p>)}</div></aside>
     <article className="card kca-decision-card"><span className="kca-overline">{t('member.kca.finalReview', { defaultMessage: 'Final review' })}</span><h2>{t('member.kca.selectAdmissionDecision', { defaultMessage: 'Select an admission decision' })}</h2><p>{t('member.kca.decisionCopy', { defaultMessage: 'Choose the appropriate outcome for {name} after reviewing all application sections.', vars: { name: 'Samuel David' } })}</p><div className="kca-decision-options"><button className="accept" type="button"><span>✓</span><strong>{t('member.kca.provisionallyAccept', { defaultMessage: 'Provisionally Accept' })}</strong><small>{t('member.kca.meetsRequirements', { defaultMessage: 'Applicant meets the requirements.' })}</small></button><button className="defer" type="button"><span>◷</span><strong>{t('member.kca.defer', { defaultMessage: 'Defer' })}</strong><small>{t('member.kca.moreInformationRequired', { defaultMessage: 'More information is required.' })}</small></button><button className="reject" type="button"><span>×</span><strong>{t('member.kca.notAccepted', { defaultMessage: 'Not Accepted' })}</strong><small>{t('member.kca.doesNotMeetRequirements', { defaultMessage: 'Applicant does not meet requirements.' })}</small></button></div><label><span>{t('member.kca.admissionNotesOptional', { defaultMessage: 'Admission Notes (Optional)' })}</span><textarea placeholder={t('member.kca.privateNotesPlaceholder', { defaultMessage: 'Write your private notes here...' })}/></label><footer><button className="ghost-button" type="button">{t('common.back', { defaultMessage: 'Back' })}</button><button className="primary-button" type="button">{translateAction(t, screen.action)}</button></footer></article>
@@ -365,8 +461,10 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const dataset = resolveCatalogDataset(screen);
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData() && dataset !== null;
   const [rows, setRows] = useState<Row[]>(live ? [] : (screen.rows ?? []));
+  const [total, setTotal] = useState(0);
   const [message, setMessage] = useState(live ? t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }) : '');
   const [error, setError] = useState<string | null>(null);
+  const reviewLabel = dataset === 'kca.applications' ? 'Review' : undefined;
 
   useEffect(() => {
     if (!live || !dataset) return;
@@ -379,6 +477,7 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
         const result = await listCatalogDomain(dataset, { perPage: 25 });
         if (cancelled) return;
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[]);
+        setTotal(result.pagination.total);
         setMessage(
           result.pagination.total === 0
             ? t('errors.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
@@ -414,7 +513,7 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
       {screen.metrics && <KcaMetrics metrics={screen.metrics} />}
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
-      <KcaTable screen={screen} rows={rows} />
+      <KcaTable screen={screen} rows={rows} reviewLabel={reviewLabel} total={total || rows.length} />
     </div>
   );
 }
@@ -429,8 +528,9 @@ export function KcaScreenContent({ screen, requestedScope }: { screen: AdminScre
     case 'G-16': return <KcaLetter screen={screen}/>;
     case 'G-17': return <KcaOrientation screen={screen}/>;
     case 'H-02': case 'H-06': case 'H-08': return <KcaEntityDetail screen={screen}/>;
-    case 'H-03': return <KcaCohorts screen={screen}/>;
-    case 'H-04': return <KcaYears screen={screen}/>;
+    case 'H-03':
+    case 'H-04':
+      return <KcaManagedTable screen={screen} />;
     case 'H-10': return <KcaModuleBuilder screen={screen}/>;
     case 'H-11': return <KcaPrerequisites screen={screen}/>;
     case 'H-13': return <KcaAttendance screen={screen}/>;

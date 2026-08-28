@@ -30,6 +30,7 @@ import {
   formatTimestamp,
   grantAdminRolePermission,
   identityApiConfigured,
+  initialsFromAdminProfile,
   listAdminAccessDecisions,
   listAdminAuditEvents,
   listAdminPermissions,
@@ -38,6 +39,7 @@ import {
   listAdminUsers,
   reactivateAdminUser,
   shouldUseDesignFixtures,
+  shouldUseIdentityLiveData,
   suspendAdminUser,
 } from '../lib/admin-identity-api';
 import { KcaScreenContent } from './kca-ui';
@@ -397,7 +399,28 @@ function Topbar({ screen }: { screen: AdminScreen }) {
   const allModules = t('admin.allModules', { defaultMessage: 'All modules' });
   const previewDirectory = t('admin.previewDirectory', { defaultMessage: 'Preview directory' });
   const previewDirectoryAria = t('admin.previewDirectoryAria', { defaultMessage: 'Preview-only screen directory' });
-  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label={t('admin.toggleNavigation', { defaultMessage: 'Toggle navigation' })} aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label={allModules} data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>{allModules}</b></button><span className="current-module-label"><small>{t('admin.currentModule', { defaultMessage: 'Current module' })}</small><strong>{adminChrome(t, adminModule.label)}</strong></span><span className="topbar-spacer"/><Link href="/admin/screens" className="screen-index-link" aria-label={previewDirectoryAria} title={previewDirectoryAria}>{previewDirectory}</Link><LocaleSwitcher /><button className="top-icon" type="button" aria-label={t('common.notifications', { defaultMessage: 'Notifications' })}>♧</button><button className="top-icon" type="button" aria-label={t('admin.unreadAlerts', { defaultMessage: 'Unread alerts' })}>♧<span className="dot" /></button><button className="avatar" type="button" aria-label={t('admin.profileMenu', { defaultMessage: 'Admin profile menu' })} data-admin-intent="profile-menu">JD</button></header>;
+  const liveProfile = shouldUseIdentityLiveData();
+  const [avatarInitials, setAvatarInitials] = useState(() => (liveProfile ? '…' : 'JD'));
+
+  useEffect(() => {
+    if (!liveProfile) {
+      setAvatarInitials('JD');
+      return;
+    }
+    let cancelled = false;
+    void fetchAdminProfile()
+      .then((profile) => {
+        if (!cancelled) setAvatarInitials(initialsFromAdminProfile(profile));
+      })
+      .catch(() => {
+        if (!cancelled) setAvatarInitials('AD');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveProfile]);
+
+  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label={t('admin.toggleNavigation', { defaultMessage: 'Toggle navigation' })} aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label={allModules} data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>{allModules}</b></button><span className="current-module-label"><small>{t('admin.currentModule', { defaultMessage: 'Current module' })}</small><strong>{adminChrome(t, adminModule.label)}</strong></span><span className="topbar-spacer"/><Link href="/admin/screens" className="screen-index-link" aria-label={previewDirectoryAria} title={previewDirectoryAria}>{previewDirectory}</Link><LocaleSwitcher /><button className="top-icon" type="button" aria-label={t('common.notifications', { defaultMessage: 'Notifications' })}>♧</button><button className="top-icon" type="button" aria-label={t('admin.unreadAlerts', { defaultMessage: 'Unread alerts' })}>♧<span className="dot" /></button><button className="avatar" type="button" aria-label={t('admin.profileMenu', { defaultMessage: 'Admin profile menu' })} data-admin-intent="profile-menu">{avatarInitials}</button></header>;
 }
 
 function Breadcrumbs({ items }: { items: AdminBreadcrumb[] }) {
@@ -417,11 +440,11 @@ function PageHeader({ screen, hideAction = false }: { screen: AdminScreen; hideA
   const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
   const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
   const showHeaderAction = !hideAction && !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button type="button" className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button type="button" className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
-  return <div className="tabs" role="tablist">{tabs.map((tab, index) => <button className={`tab ${index === 0 ? 'active' : ''}`} role="tab" aria-selected={index === 0} key={tab}>{tab}</button>)}</div>;
+  return <div className="tabs" role="tablist">{tabs.map((tab, index) => <button type="button" className={`tab ${index === 0 ? 'active' : ''}`} role="tab" aria-selected={index === 0} key={tab}>{tab}</button>)}</div>;
 }
 
 function MetricCards({ metrics = [] }: { metrics?: Metric[] }) {
@@ -440,6 +463,16 @@ function ChartCard({ title, value, green = false, bars = false, series }: { titl
 function DashboardLiveNotice({ loading, error }: { loading?: boolean; error?: string | null }) {
   if (!loading && !error) return null;
   return <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>{loading ? 'Loading live dashboard data…' : error}</p>;
+}
+
+function pendingLiveApiMessage(route: string): string | null {
+  if (route.includes('/converts')) {
+    return 'Convert and baptism records are not registered in the protected API yet. Use First Timers and Follow-Up for live pastoral intake.';
+  }
+  if (route.includes('/evangelism')) {
+    return 'Church evangelism activities are not registered in the protected API yet. Mission soul capture is available under Mission Operations.';
+  }
+  return null;
 }
 
 function DashboardView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
@@ -1186,8 +1219,6 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
                         record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
                         entityKey={entityKey}
                         reviewLabel={reviewLabel}
-                        canEdit={false}
-                        canDelete={false}
                       />
                       {dataset === 'prayer-requests' && row.__id && row.__id !== '—' ? (
                         <Link href={`/admin/people/prayer-requests/${row.__id}/assign`} className="table-action">
@@ -1455,10 +1486,11 @@ function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedS
       return <CatalogLiveTable screen={screen} />;
     }
     const columns = screen.columns ?? [];
+    const pendingApi = pendingLiveApiMessage(screen.route);
     return (
       <>
         <p className="maps-settings-lead" role="status">
-          No live list API is wired for this screen. Design fixtures are disabled.
+          {pendingApi ?? 'No live list API is wired for this screen. Design fixtures are disabled.'}
         </p>
         <div className="card table-card">
           <table>
@@ -2321,7 +2353,8 @@ function WorkflowView({ screen }: { screen: AdminScreen }) {
   const decision = screen.details?.Decision;
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
-  const [applicationId, setApplicationId] = useState('');
+  const routeApplicationId = screen.route.match(/^\/admin\/home-churches\/applications\/([^/]+)\//)?.[1] ?? '';
+  const [applicationId, setApplicationId] = useState(extractUlid(routeApplicationId) ?? routeApplicationId);
   const [transitionStatus, setTransitionStatus] = useState('submitted');
   const [reasonCode, setReasonCode] = useState('application_received');
   const [workflowMessage, setWorkflowMessage] = useState<string | null>(null);
@@ -2431,7 +2464,19 @@ function ActivationView({ screen }: { screen: AdminScreen }) {
   return <div className="card activation-card"><div className="approval-hero"><span>✓</span><h2>Application Approved!</h2><p>The home church has been approved. Activate their ID and grant access.</p></div><dl>{Object.entries(screen.details ?? {}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key === 'Access Status' ? <StatusBadge value={value}/> : value}</dd></div>)}</dl><button className="primary-button">{screen.action}</button></div>;
 }
 
-function OperationsView({ screen }: { screen: AdminScreen }) {
+function OperationsView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const opsDataset = resolveOpsDataset(screen);
+  if (opsDataset && shouldUseOperationsLiveData() && screen.route.includes('small-groups')) {
+    return (
+      <OperationsLiveTable
+        screen={{
+          ...screen,
+          columns: ['Home Church', 'Leader', 'Location', 'Members', 'Status'],
+        }}
+        dataset={opsDataset}
+      />
+    );
+  }
   const activityMode = screen.id === 'D-11';
   return <><MetricCards metrics={screen.metrics}/>{activityMode ? <div className="card activity-stack">{(screen.items ?? []).map((item,index)=>{const parts=item.split(' — ');return <article key={item}><time><b>{['May 25','May 19','May 12','May 5','Apr 28'][index]}</b></time><div><strong>{parts[0]}</strong><span>{parts[1]}</span></div><b>♙ {parts[2]}</b><StatusBadge value="Completed"/></article>})}<button className="ghost-button">View all activities</button></div> : <div className="operations-grid"><ChartCard title="Attendance Trend"/><article className="card dashboard-donut"><h2 className="card-title">Attendance by Service</h2><DonutVisual value={screen.id === 'D-10' ? '22' : '726'} label="Total"/></article><article className="card list-card operation-ranking"><h2 className="card-title">Top Services by Attendance</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</article></div>}</>;
 }
@@ -2925,7 +2970,7 @@ function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; reques
     case 'ministry-dashboard': return <MinistryDashboardView screen={screen} requestedScope={requestedScope} />;
     case 'workflow': return <WorkflowView screen={screen}/>;
     case 'activation': return <ActivationView screen={screen}/>;
-    case 'operations': return <OperationsView screen={screen}/>;
+    case 'operations': return <OperationsView screen={screen} requestedScope={requestedScope}/>;
     case 'journey': return <JourneyView screen={screen}/>;
     case 'approval': return <ApprovalView screen={screen}/>;
     case 'settings': return <SettingsView screen={screen}/>;
@@ -2945,7 +2990,7 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo }: 
   const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id);
   const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
   const rendererOwnsAction = new Set(['G-01','G-17','H-11','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20']).has(screen.id);
-  return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
+  return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
 }
 
 const batchNames = {

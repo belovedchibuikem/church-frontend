@@ -548,8 +548,27 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         administrative_unit_id: requireId(firstUlid(payload.administrative_unit_id), 'administrative unit'),
         proposed_name: field(payload, 'proposed_name', 'name') ?? '',
         expected_participants: asInt(field(payload, 'expected_participants')) ?? 1,
-        meeting_day: field(payload, 'meeting_day') ?? '',
-        meeting_time: field(payload, 'meeting_time') ?? '',
+        meeting_day: field(payload, 'meeting_day') ?? 'sunday',
+        meeting_time: field(payload, 'meeting_time') ?? '10:00',
+        contact_email: field(payload, 'contact_email', 'email') ?? '',
+        contact_phone: field(payload, 'contact_phone', 'phone') ?? '',
+        guidelines_agreed_at: field(payload, 'guidelines_agreed_at') ?? new Date().toISOString(),
+      },
+      opts,
+    );
+  }
+  if (route.includes('/small-groups') && labelIs(label, /add small group|create small group|add group|register group/)) {
+    return mutate(
+      'admin/church/home-church-applications',
+      {
+        applicant_person_id: requireId(firstUlid(payload.applicant_person_id, payload.person_id, payload.owner_id), 'leader'),
+        church_id: requireId(firstUlid(payload.church_id), 'church'),
+        location_id: requireId(firstUlid(payload.location_id), 'location'),
+        administrative_unit_id: requireId(firstUlid(payload.administrative_unit_id), 'administrative unit'),
+        proposed_name: field(payload, 'proposed_name', 'name') ?? '',
+        expected_participants: asInt(field(payload, 'expected_participants')) ?? 8,
+        meeting_day: field(payload, 'meeting_day') ?? 'sunday',
+        meeting_time: field(payload, 'meeting_time') ?? '18:00',
         contact_email: field(payload, 'contact_email', 'email') ?? '',
         contact_phone: field(payload, 'contact_phone', 'phone') ?? '',
         guidelines_agreed_at: field(payload, 'guidelines_agreed_at') ?? new Date().toISOString(),
