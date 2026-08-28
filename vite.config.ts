@@ -60,8 +60,24 @@ export default defineConfig(async ({ mode }) => {
   process.env.WRANGLER_LOG_PATH ??= '.wrangler/logs';
   process.env.MINIFLARE_REGISTRY_PATH ??= '.wrangler/registry';
 
-  // Wrangler snapshots its log path while the Cloudflare plugin is imported.
-  const { cloudflare } = await import('@cloudflare/vite-plugin');
+  const isVercel =
+    process.env.VERCEL === '1' || process.env.NITRO_PRESET === 'vercel';
+
+  const plugins = [vinext(), sites()];
+
+  if (isVercel) {
+    const { nitro } = await import('nitro/vite');
+    plugins.push(nitro());
+  } else {
+    // Wrangler snapshots its log path while the Cloudflare plugin is imported.
+    const { cloudflare } = await import('@cloudflare/vite-plugin');
+    plugins.push(
+      cloudflare({
+        viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
+        config: localBindingConfig,
+      }),
+    );
+  }
 
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
@@ -75,13 +91,6 @@ export default defineConfig(async ({ mode }) => {
       proxy: apiProxy,
     },
     preview: { proxy: apiProxy },
-    plugins: [
-      vinext(),
-      sites(),
-      cloudflare({
-        viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
-        config: localBindingConfig,
-      }),
-    ],
+    plugins,
   };
 });
