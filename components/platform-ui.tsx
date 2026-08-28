@@ -173,9 +173,11 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                   })}
                   <td>
                     <TableRowActions
-                      record={String(row[columns[0]] ?? row.__id)}
+                      record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
                       entityKey={entityKey}
                       className="row-actions platform-row-actions"
+                      canEdit={false}
+                      canDelete={false}
                     />
                   </td>
                 </tr>
@@ -303,9 +305,11 @@ function IdentitySecurityLiveTable({
                   })}
                   <td>
                     <TableRowActions
-                      record={String(row[columns[0]] ?? row.__id)}
+                      record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
                       entityKey={entityKey}
                       className="row-actions platform-row-actions"
+                      canEdit={false}
+                      canDelete={false}
                     />
                   </td>
                 </tr>

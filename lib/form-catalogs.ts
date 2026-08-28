@@ -17,6 +17,7 @@ import {
   listLocations,
   listUnits,
 } from './admin-organization-api';
+import { identityApiConfigured, listAdminUsers } from './admin-identity-api';
 
 export const countryOptions: SearchSelectOption[] = [
   { value: 'ng', label: 'Nigeria', meta: 'NG' },
@@ -172,6 +173,17 @@ export async function loadFormCatalogOptions(
         meta: item.administrative_unit?.name ?? item.country?.name,
       }));
     }
+  }
+
+  if (!designFixturesEnabled() && catalog === 'person' && identityApiConfigured()) {
+    const result = await listAdminUsers({ search: query || undefined, perPage: 25 });
+    return result.data
+      .filter((user) => Boolean(user.person_id))
+      .map((user) => ({
+        value: String(user.person_id),
+        label: user.name,
+        meta: user.email,
+      }));
   }
 
   if (!designFixturesEnabled()) {

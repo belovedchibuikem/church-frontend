@@ -174,5 +174,29 @@ export function normalizeAdminRoute(slug?: string[]): string {
 }
 
 export function getAdminScreen(route: string): AdminScreen | undefined {
-  return adminScreens.find((screen) => screen.route === route);
+  const exact = adminScreens.find((screen) => screen.route === route);
+  if (exact) return exact;
+
+  const prayerAssign = route.match(/^\/admin\/people\/prayer-requests\/([^/]+)\/assign$/);
+  if (prayerAssign) {
+    const list = adminScreens.find((screen) => screen.id === 'F-10');
+    if (!list) return undefined;
+    return {
+      ...list,
+      route,
+      kind: 'approval',
+      title: 'Prayer Assignment',
+      subtitle: 'Assign prayer requests to intercessors.',
+      action: 'Assign Prayer',
+    };
+  }
+
+  const needReview = route.match(/^\/admin\/people\/needs\/([^/]+)\/review$/);
+  if (needReview) {
+    const review = adminScreens.find((screen) => screen.id === 'F-12');
+    if (!review) return undefined;
+    return { ...review, route };
+  }
+
+  return undefined;
 }

@@ -303,22 +303,23 @@ export function catalogRecordsToRows(
           'title',
           'translated_title',
           'name',
+          'person_name',
+          'subject',
           'message',
           'code',
           'purpose',
-          'person_id',
-          'id',
         );
       } else if (key.includes('status')) {
         mapped[column] = get('status');
       } else if (key.includes('author') || key.includes('donor') || key.includes('user') || key === 'by') {
         mapped[column] = get(
+          'person_name',
+          'payer_name',
+          'submitted_by_name',
+          'reviewer_name',
+          'owner_name',
           'author_name',
           'donor_name',
-          'payer_person_id',
-          'actor_user_id',
-          'person_id',
-          'user_id',
         );
       } else if (key.includes('category') || key.includes('channel') || key.includes('type') || key.includes('reason')) {
         mapped[column] = get(
@@ -360,7 +361,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('progress')) {
         mapped[column] = get('progress', 'status');
       } else if (key.includes('translator')) {
-        mapped[column] = get('translator_person_id', 'person_id');
+        mapped[column] = get('translator_name', 'person_name');
       } else if (key.includes('cohort')) {
         mapped[column] = get('cohort_id', 'cohort');
       } else if (key.includes('year')) {
@@ -368,7 +369,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('detail') || key.includes('severity')) {
         mapped[column] = get('severity', 'status', 'condition_type', 'scope_type');
       } else {
-        mapped[column] = get(column.toLowerCase().replaceAll(' ', '_'), 'id');
+        mapped[column] = get(column.toLowerCase().replaceAll(' ', '_'));
       }
     }
     mapped.__id = get('id');

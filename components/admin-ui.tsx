@@ -64,6 +64,8 @@ import {
   completeFollowUpTask,
   createChurch,
   defaultOpsScope,
+  listPastoralNeeds,
+  listPrayerRequests,
   loadOpsDataset,
   operationsErrorMessage,
   opsRecordsToRows,
@@ -71,7 +73,11 @@ import {
   resolveOpsDataset,
   shouldUseOperationsLiveData,
   transitionHomeChurchApplication,
+  transitionPastoralNeed,
+  transitionPrayerRequest,
   type OpsDatasetKey,
+  type PastoralNeedRecord,
+  type PrayerRequestRecord,
 } from '../lib/admin-operations-api';
 import {
   countriesToSelectOptions,
@@ -137,7 +143,7 @@ const navByBatch = {
     ['follow-up', '↻', 'Follow-Up', '/admin/people/follow-up'], ['converts', '✓', 'Converts', '/admin/people/converts/mary-okafor'],
     ['discipleship', '◎', 'Discipleship', '/admin/people/journeys/membership/john-emmanuel'], ['membership', '▦', 'Membership', '/admin/people/journeys/membership/john-emmanuel'],
     ['workers', '♙', 'Workers', '/admin/people/journeys/worker/blessing-friday'], ['leaders', '♛', 'Leaders', '/admin/people/journeys/leadership/peter-okafor'],
-    ['ministry-history', '▤', 'Ministry History', '/admin/people/ministry-history'], ['prayer', '◇', 'Prayer', '/admin/people/prayer-requests/healing-for-my-mother/assign'],
+    ['ministry-history', '▤', 'Ministry History', '/admin/people/ministry-history'], ['prayer', '◇', 'Prayer', '/admin/people/prayer-requests'],
     ['needs', '□', 'Needs', '/admin/people/needs'], ['counselling', '◌', 'Counselling', '/admin/people/counselling'],
     ['testimonies', '✦', 'Testimonies', '/admin/people/testimonies'], ['safeguarding', '!', 'Safeguarding', '/admin/people/safeguarding/escalation'],
     ['reports', '▣', 'Reports', '/admin/reports/country-performance'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
@@ -511,9 +517,9 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
                   <td className="actions-cell">
                     <div className="row-actions">
                       {user.account_status === 'suspended' ? (
-                        <button type="button" className="table-action" disabled={busyId === user.id} onClick={() => void onReactivate(user)}>Reactivate</button>
+                        <button type="button" className="table-action" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onReactivate(user)}>Reactivate</button>
                       ) : (
-                        <button type="button" className="table-action is-danger" disabled={busyId === user.id} onClick={() => void onSuspend(user)}>Suspend</button>
+                        <button type="button" className="table-action is-danger" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onSuspend(user)}>Suspend</button>
                       )}
                     </div>
                   </td>
@@ -883,11 +889,11 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
     const followUpPersonId = String(form.get('assigned_follow_up_person_id') ?? '').trim();
     const registeredAtRaw = String(form.get('registered_at') ?? '').trim();
     if (!personId || !churchId) {
-      setRegisterMessage('Person id and church id are required live public ids.');
+      setRegisterMessage('Person and church are required.');
       return;
     }
     if (!isOpsPublicId(personId) || !isOpsPublicId(churchId)) {
-      setRegisterMessage('Person id and church id must be live public ids (ULID).');
+      setRegisterMessage('Select a live person and church from the search lists.');
       return;
     }
     if (homeChurchId && !isOpsPublicId(homeChurchId)) {
@@ -895,7 +901,7 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
       return;
     }
     if (followUpPersonId && !isOpsPublicId(followUpPersonId)) {
-      setRegisterMessage('Follow-up person id must be a live public id (ULID).');
+      setRegisterMessage('Select a live follow-up person from the search list.');
       return;
     }
     let registeredAt: string | null = null;
@@ -980,11 +986,11 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
       {dataset === 'first-timers' ? (
         <form className="card form-card" onSubmit={(event) => void onRegisterFirstTimer(event)}>
           <h2 className="section-title">Register first timer</h2>
-          <p className="page-subtitle">Uses live person and church public ids. Empty catalogs are not treated as success.</p>
+          <p className="page-subtitle">Choose a person and church from live records. Empty catalogs are not treated as success.</p>
           <div className="form-grid">
             <label>
-              <span>Person id *</span>
-              <input name="person_id" autoComplete="off" placeholder="Person public id (ULID)" />
+              <span>Person *</span>
+              <SearchSelect name="person_id" catalog="person" options={catalogOptions.person} placeholder="Search person" />
             </label>
             <label>
               <span>Church *</span>
@@ -995,8 +1001,8 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
               <SearchSelect name="home_church_id" catalog="homeChurch" options={catalogOptions.homeChurch} placeholder="Search home church" />
             </label>
             <label>
-              <span>Follow-up person id</span>
-              <input name="assigned_follow_up_person_id" autoComplete="off" placeholder="Optional person public id" />
+              <span>Follow-up person</span>
+              <SearchSelect name="assigned_follow_up_person_id" catalog="person" options={catalogOptions.person} placeholder="Optional follow-up person" />
             </label>
             <label>
               <span>Registered at</span>
@@ -1040,11 +1046,28 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
                   ))}
                   <td className="actions-cell">
                     <div className="row-actions">
-                      <TableRowActions record={String(row[columns[0]] ?? row.__id)} entityKey={entityKey} reviewLabel={reviewLabel} />
+                      <TableRowActions
+                        record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                        entityKey={entityKey}
+                        reviewLabel={reviewLabel}
+                        canEdit={false}
+                        canDelete={false}
+                      />
+                      {dataset === 'prayer-requests' && row.__id && row.__id !== '—' ? (
+                        <Link href={`/admin/people/prayer-requests/${row.__id}/assign`} className="table-action">
+                          Assign
+                        </Link>
+                      ) : null}
+                      {dataset === 'pastoral-needs' && row.__id && row.__id !== '—' ? (
+                        <Link href={`/admin/people/needs/${row.__id}/review`} className="table-action">
+                          Review
+                        </Link>
+                      ) : null}
                       {dataset === 'home-church-applications' ? (
                         <button
                           type="button"
                           className="table-action"
+                          data-interaction-native="true"
                           disabled={busyId === row.__id}
                           onClick={() => void onTransitionApplication(row)}
                         >
@@ -1055,6 +1078,7 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
                         <button
                           type="button"
                           className="table-action"
+                          data-interaction-native="true"
                           disabled={busyId === row.__id}
                           onClick={() => void onCompleteFollowUp(row)}
                         >
@@ -1261,7 +1285,12 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                     </td>
                   ))}
                   <td className="actions-cell">
-                    <TableRowActions record={String(row[columns[0]] ?? row.__id)} entityKey={entityKey} />
+                    <TableRowActions
+                      record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                      entityKey={entityKey}
+                      canEdit={false}
+                      canDelete={false}
+                    />
                   </td>
                 </tr>
               ))
@@ -1276,7 +1305,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
 
 function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   if (!shouldUseDesignFixtures()) {
-    if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
+    if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended' || screen.route === '/admin/people') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.route === '/admin/roles') return <IdentityRolesTable requestedScope={requestedScope} />;
     if (screen.route === '/admin/access/history') return <IdentityAccessDecisionsTable requestedScope={requestedScope} />;
     const opsDataset = resolveOpsDataset(screen);
@@ -2171,7 +2200,7 @@ function WorkflowView({ screen }: { screen: AdminScreen }) {
             </div>
             {workflowMessage ? <p className="field-help" role="status">{workflowMessage}</p> : null}
             <div className="form-footer">
-              <button className="primary-button" type="button" disabled={workflowBusy} onClick={() => void submitTransition()}>
+              <button className="primary-button" type="button" data-interaction-native="true" disabled={workflowBusy} onClick={() => void submitTransition()}>
                 {workflowBusy ? 'Submitting…' : 'Submit transition'}
               </button>
             </div>
@@ -2240,8 +2269,158 @@ function JourneyView({ screen }: { screen: AdminScreen }) {
 }
 
 function ApprovalView({ screen }: { screen: AdminScreen }) {
+  const isPrayer = screen.nav === 'prayer' || screen.title.includes('Prayer');
+  const live = shouldUseOperationsLiveData();
+  const recordId = pastoralRecordIdFromRoute(screen.route);
+  const [prayer, setPrayer] = useState<PrayerRequestRecord | null>(null);
+  const [need, setNeed] = useState<PastoralNeedRecord | null>(null);
+  const [loaded, setLoaded] = useState(!live);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setLoaded(false);
+      try {
+        if (isPrayer) {
+          const result = await listPrayerRequests({ perPage: 100, scope: defaultOpsScope(screen.scope) });
+          const match = recordId ? result.items.find((item) => item.id === recordId) : result.items[0] ?? null;
+          if (!cancelled) setPrayer(match ?? null);
+        } else {
+          const result = await listPastoralNeeds({ perPage: 100, scope: defaultOpsScope(screen.scope) });
+          const match = recordId ? result.items.find((item) => item.id === recordId) : result.items[0] ?? null;
+          if (!cancelled) setNeed(match ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) setError(operationsErrorMessage(err, 'Unable to load this request.'));
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isPrayer, live, recordId, screen.scope]);
+
+  async function onTransition(status: string) {
+    const id = isPrayer ? prayer?.id : need?.id;
+    if (!id) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      if (isPrayer) {
+        const updated = await transitionPrayerRequest(id, status, defaultOpsScope(screen.scope));
+        setPrayer(updated);
+        setMessage(status === 'rejected' ? 'Prayer request rejected.' : `Prayer request marked ${status}.`);
+      } else {
+        const updated = await transitionPastoralNeed(id, status, defaultOpsScope(screen.scope));
+        setNeed(updated);
+        setMessage(status === 'rejected' ? 'Need request rejected.' : `Need request marked ${status}.`);
+      }
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Unable to update this request.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (live) {
+    const empty = loaded && (isPrayer ? prayer === null : need === null);
+    return (
+      <div className="approval-grid">
+        <article className="card approval-details">
+          <h2>{isPrayer ? 'Request' : 'Need Details'}</h2>
+          {error ? <p className="field-help identity-error" role="alert">{error}</p> : null}
+          {!loaded && !error ? <p className="field-help">Loading…</p> : null}
+          {empty && !error ? <p className="field-help">No live {isPrayer ? 'prayer requests' : 'need requests'} in this scope.</p> : null}
+          {isPrayer && prayer ? (
+            <>
+              <div><span>Request</span><strong>{prayer.subject}</strong></div>
+              <div><span>Requested By</span><strong>{prayer.person_name || '—'}</strong></div>
+              <div><span>Requested on</span><strong>{prayer.created_at ? new Date(prayer.created_at).toLocaleDateString() : '—'}</strong></div>
+              <div><span>Status</span><strong>{prayer.status}</strong></div>
+            </>
+          ) : null}
+          {!isPrayer && need ? (
+            <>
+              <div><span>Need</span><strong>{need.summary}</strong></div>
+              <div><span>Requested By</span><strong>{need.person_name || '—'}</strong></div>
+              <div><span>Category</span><strong>{need.category}</strong></div>
+              <div><span>Requested on</span><strong>{need.created_at ? new Date(need.created_at).toLocaleDateString() : '—'}</strong></div>
+              <div><span>Status</span><strong>{need.status}</strong></div>
+            </>
+          ) : null}
+        </article>
+        <article className="card approval-review">
+          <h2>{isPrayer ? 'Assign To' : 'Review'}</h2>
+          {isPrayer && prayer ? (
+            <label>
+              <span>Details</span>
+              <textarea readOnly rows={5} value={prayer.body} />
+            </label>
+          ) : null}
+          {!isPrayer && need ? (
+            <label>
+              <span>Details</span>
+              <textarea readOnly rows={5} value={need.summary} />
+            </label>
+          ) : null}
+          <p className="field-help">Reject or assign updates the live status. Intercessor names are not stored on this record yet.</p>
+          {message ? <p className="field-help" role="status">{message}</p> : null}
+          <div className="form-footer">
+            <button className="danger-button" type="button" data-interaction-native="true" disabled={busy || empty} onClick={() => void onTransition('rejected')}>
+              {busy ? 'Saving…' : 'Reject'}
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              data-interaction-native="true"
+              disabled={busy || empty}
+              onClick={() => void onTransition(isPrayer ? 'assigned' : 'approved')}
+            >
+              {busy ? 'Saving…' : screen.action ?? (isPrayer ? 'Assign Prayer' : 'Approve')}
+            </button>
+          </div>
+        </article>
+      </div>
+    );
+  }
+
   const entries = Object.entries(screen.details ?? {});
-  return <div className="approval-grid"><article className="card approval-details"><h2>{screen.title.includes('Prayer') ? 'Request' : 'Need Details'}</h2>{entries.slice(0,Math.ceil(entries.length/2)).map(([key,value])=><div key={key}><span>{key}</span><strong>{value}</strong></div>)}</article><article className="card approval-review"><h2>{screen.title.includes('Prayer') ? 'Assign To' : 'Review'}</h2>{entries.slice(Math.ceil(entries.length/2)).map(([key,value])=><label key={key}><span>{key}</span>{/Details|Notes/.test(key)?<textarea defaultValue={value}/>:<div className="token-input"><b>{value}</b></div>}</label>)}<div className="form-footer"><button className="danger-button">Reject</button><button className="primary-button">{screen.action}</button></div></article></div>;
+  return (
+    <div className="approval-grid">
+      <article className="card approval-details">
+        <h2>{isPrayer ? 'Request' : 'Need Details'}</h2>
+        {entries.slice(0, Math.ceil(entries.length / 2)).map(([key, value]) => (
+          <div key={key}><span>{key}</span><strong>{value}</strong></div>
+        ))}
+      </article>
+      <article className="card approval-review">
+        <h2>{isPrayer ? 'Assign To' : 'Review'}</h2>
+        {entries.slice(Math.ceil(entries.length / 2)).map(([key, value]) => (
+          <label key={key}>
+            <span>{key}</span>
+            {/Details|Notes/.test(key) ? <textarea defaultValue={/Notes/.test(key) ? '' : value} placeholder={/Notes/.test(key) ? 'Enter a note for the intercessor…' : undefined} /> : <div className="token-input"><b>{value}</b></div>}
+          </label>
+        ))}
+        <div className="form-footer">
+          <button className="danger-button" type="button">Reject</button>
+          <button className="primary-button" type="button">{screen.action}</button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function pastoralRecordIdFromRoute(route: string): string | null {
+  const match = route.match(/\/(?:prayer-requests|needs)\/([^/]+)\//);
+  if (!match) return null;
+  return /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(match[1]) ? match[1] : null;
 }
 
 function SettingsView({ screen }: { screen: AdminScreen }) {

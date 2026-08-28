@@ -25,7 +25,9 @@ export type ChurchRecord = {
   id: string;
   name: string;
   location_id?: string | null;
+  location_name?: string | null;
   administrative_unit_id?: string | null;
+  administrative_unit_name?: string | null;
   published_at?: string | null;
   created_at?: string | null;
 };
@@ -33,7 +35,9 @@ export type ChurchRecord = {
 export type HomeChurchRecord = {
   id: string;
   church_id?: string | null;
+  church_name?: string | null;
   leader_person_id?: string | null;
+  leader_name?: string | null;
   name: string;
   status: string;
   created_at?: string | null;
@@ -42,8 +46,10 @@ export type HomeChurchRecord = {
 export type HomeChurchApplicationRecord = {
   id: string;
   church_id?: string | null;
+  church_name?: string | null;
   home_church_id?: string | null;
   applicant_person_id?: string | null;
+  applicant_name?: string | null;
   proposed_name: string;
   expected_participants?: number;
   meeting_day?: string;
@@ -55,8 +61,12 @@ export type HomeChurchApplicationRecord = {
 export type FirstTimerRecord = {
   id: string;
   person_id?: string | null;
+  person_name?: string | null;
+  person_email?: string | null;
   church_id?: string | null;
+  church_name?: string | null;
   home_church_id?: string | null;
+  home_church_name?: string | null;
   registered_at?: string | null;
   contacted_at?: string | null;
 };
@@ -64,7 +74,9 @@ export type FirstTimerRecord = {
 export type FollowUpTaskRecord = {
   id: string;
   first_timer_id?: string | null;
+  person_name?: string | null;
   assigned_to_person_id?: string | null;
+  assigned_to_name?: string | null;
   type: string;
   status: string;
   due_at?: string | null;
@@ -76,6 +88,7 @@ export type CrusadeRecord = {
   id: string;
   name: string;
   location_id?: string | null;
+  location_name?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
   published_at?: string | null;
@@ -84,8 +97,11 @@ export type CrusadeRecord = {
 export type SoulRecord = {
   id: string;
   crusade_id?: string | null;
+  crusade_name?: string | null;
   person_id?: string | null;
+  person_name?: string | null;
   connected_church_id?: string | null;
+  connected_church_name?: string | null;
   status: string;
   mentor_assignment_id?: string | null;
   captured_at?: string | null;
@@ -96,8 +112,33 @@ export type SoulRecord = {
 export type MissionInvitationRecord = {
   id: string;
   crusade_id?: string | null;
+  crusade_name?: string | null;
   requester_person_id?: string | null;
+  requester_name?: string | null;
   requested_location_id?: string | null;
+  requested_location_name?: string | null;
+  status: string;
+  created_at?: string | null;
+  status_changed_at?: string | null;
+};
+
+export type PrayerRequestRecord = {
+  id: string;
+  person_id?: string | null;
+  person_name?: string | null;
+  person_email?: string | null;
+  subject: string;
+  body: string;
+  status: string;
+  created_at?: string | null;
+};
+
+export type PastoralNeedRecord = {
+  id: string;
+  person_id?: string | null;
+  person_name?: string | null;
+  category: string;
+  summary: string;
   status: string;
   created_at?: string | null;
 };
@@ -359,6 +400,40 @@ export function completeFollowUpTask(
   );
 }
 
+export function listPrayerRequests(params: ListQuery = {}): Promise<OpsListResult<PrayerRequestRecord>> {
+  return opsGetList<PrayerRequestRecord>('admin/church/prayer-requests', params);
+}
+
+export function transitionPrayerRequest(
+  prayerId: string,
+  status: string,
+  scope?: AdminScope,
+): Promise<PrayerRequestRecord> {
+  return opsMutate<PrayerRequestRecord>(
+    `admin/church/prayer-requests/${encodeURIComponent(prayerId)}/transitions`,
+    'POST',
+    { status },
+    { scope },
+  );
+}
+
+export function listPastoralNeeds(params: ListQuery = {}): Promise<OpsListResult<PastoralNeedRecord>> {
+  return opsGetList<PastoralNeedRecord>('admin/church/pastoral-needs', params);
+}
+
+export function transitionPastoralNeed(
+  needId: string,
+  status: string,
+  scope?: AdminScope,
+): Promise<PastoralNeedRecord> {
+  return opsMutate<PastoralNeedRecord>(
+    `admin/church/pastoral-needs/${encodeURIComponent(needId)}/transitions`,
+    'POST',
+    { status },
+    { scope },
+  );
+}
+
 export function listCrusades(params: ListQuery = {}): Promise<OpsListResult<CrusadeRecord>> {
   return opsGetList<CrusadeRecord>('admin/mission/crusades', params);
 }
@@ -448,7 +523,9 @@ export type OpsDatasetKey =
   | 'follow-up-tasks'
   | 'crusades'
   | 'souls'
-  | 'invitations';
+  | 'invitations'
+  | 'prayer-requests'
+  | 'pastoral-needs';
 
 /** Map admin screen routes/ids to church/mission list endpoints (no invented paths). */
 export function resolveOpsDataset(screen: {
@@ -477,6 +554,8 @@ export function resolveOpsDataset(screen: {
     return 'souls';
   }
   if (id === 'I-05' || /\/invitations\/?$/.test(route)) return 'invitations';
+  if (id === 'F-10' || route === '/admin/people/prayer-requests') return 'prayer-requests';
+  if (id === 'F-11' || route === '/admin/people/needs') return 'pastoral-needs';
   return null;
 }
 
@@ -501,6 +580,10 @@ export async function loadOpsDataset(
       return listSouls(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'invitations':
       return listMissionInvitations(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'prayer-requests':
+      return listPrayerRequests(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'pastoral-needs':
+      return listPastoralNeeds(params) as Promise<OpsListResult<Record<string, unknown>>>;
     default:
       return { items: [], pagination: { current_page: 1, per_page: 25, last_page: 1, total: 0 } };
   }
@@ -513,6 +596,19 @@ function shortDate(value?: string | null): string {
   } catch {
     return value;
   }
+}
+
+const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i;
+
+function humanValue(item: Record<string, unknown>, ...fields: string[]): string {
+  for (const field of fields) {
+    const value = item[field];
+    if (value === null || value === undefined || value === '') continue;
+    const text = String(value).trim();
+    if (!text || ULID_PATTERN.test(text)) continue;
+    return text;
+  }
+  return '—';
 }
 
 /** Project API records onto existing admin table column labels. */
@@ -534,53 +630,55 @@ export function opsRecordsToRows(
         case 'churches':
           mapped[column] =
             column === 'Church Name'
-              ? get('name')
+              ? humanValue(item, 'name')
               : column === 'Location'
-                ? get('location_id')
+                ? humanValue(item, 'location_name')
                 : column === 'Region'
-                  ? get('administrative_unit_id')
+                  ? humanValue(item, 'administrative_unit_name')
                   : column === 'Members'
                     ? '—'
                     : column === 'Status'
                       ? item.published_at
                         ? 'Active'
                         : 'Draft'
-                      : get(column.toLowerCase().replaceAll(' ', '_'));
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'home-churches':
           mapped[column] =
             column === 'Home Church'
-              ? get('name')
+              ? humanValue(item, 'name')
               : column === 'Leader'
-                ? get('leader_person_id')
+                ? humanValue(item, 'leader_name')
                 : column === 'Location'
-                  ? get('church_id')
+                  ? humanValue(item, 'church_name')
                   : column === 'Members'
                     ? '—'
                     : column === 'Status'
                       ? get('status')
-                      : get(column.toLowerCase().replaceAll(' ', '_'));
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'home-church-applications':
           mapped[column] =
             column === 'Applicant Name'
-              ? get('proposed_name')
+              ? humanValue(item, 'applicant_name', 'proposed_name')
               : column === 'Location'
-                ? get('church_id')
+                ? humanValue(item, 'church_name', 'proposed_name')
                 : column === 'Submitted On'
                   ? shortDate(get('status_changed_at') === '—' ? null : get('status_changed_at'))
                   : column === 'Status'
                     ? get('status')
-                    : get(column.toLowerCase().replaceAll(' ', '_'));
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'first-timers':
           mapped[column] =
             column === 'Name'
-              ? get('person_id')
-              : column === 'Phone' || column === 'Email'
+              ? humanValue(item, 'person_name')
+              : column === 'Phone'
                 ? '—'
+                : column === 'Email'
+                  ? humanValue(item, 'person_email')
                 : column === 'Church'
-                  ? get('church_id')
+                  ? humanValue(item, 'church_name', 'home_church_name')
                   : column === 'Visit Date' || column === 'First Visit'
                     ? shortDate(get('registered_at') === '—' ? null : get('registered_at'))
                     : column === 'Follow Up'
@@ -591,28 +689,28 @@ export function opsRecordsToRows(
                         ? item.contacted_at
                           ? 'Contacted'
                           : 'New'
-                        : get(column.toLowerCase().replaceAll(' ', '_'));
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'follow-up-tasks':
           mapped[column] =
             column === 'Name'
-              ? get('first_timer_id')
+              ? humanValue(item, 'person_name')
               : column === 'Last Contact'
                 ? '—'
                 : column === 'Next Follow-up'
                   ? shortDate(get('due_at') === '—' ? null : get('due_at'))
                   : column === 'Owner'
-                    ? get('assigned_to_person_id')
+                    ? humanValue(item, 'assigned_to_name')
                     : column === 'Status'
                       ? get('status')
-                      : get(column.toLowerCase().replaceAll(' ', '_'));
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'crusades':
           mapped[column] =
             column === 'Crusade Name' || column === 'Name'
-              ? get('name')
+              ? humanValue(item, 'name')
               : column === 'Location'
-                ? get('location_id')
+                ? humanValue(item, 'location_name')
                 : column === 'Start Date' || column === 'Starts'
                   ? shortDate(get('starts_at') === '—' ? null : get('starts_at'))
                   : column === 'End Date' || column === 'Ends'
@@ -623,35 +721,59 @@ export function opsRecordsToRows(
                         : 'Draft'
                       : column === 'Souls'
                         ? '—'
-                        : get(column.toLowerCase().replaceAll(' ', '_'));
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'souls':
           mapped[column] =
             column === 'Name' || column === 'Soul'
-              ? get('person_id')
+              ? humanValue(item, 'person_name')
               : column === 'Crusade'
-                ? get('crusade_id')
+                ? humanValue(item, 'crusade_name')
                 : column === 'Mentor'
-                  ? get('mentor_assignment_id')
+                  ? '—'
                   : column === 'Status'
                     ? get('status')
                     : column === 'Captured' || column === 'Date'
                       ? shortDate(get('captured_at') === '—' ? null : get('captured_at'))
-                      : get(column.toLowerCase().replaceAll(' ', '_'));
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'invitations':
           mapped[column] =
             column === 'Invitee'
-              ? get('requester_person_id')
+              ? humanValue(item, 'requester_name')
               : column === 'Location'
-                ? get('requested_location_id')
+                ? humanValue(item, 'requested_location_name')
                 : column === 'Invited By'
-                  ? get('crusade_id')
+                  ? humanValue(item, 'crusade_name')
                   : column === 'Date'
                     ? shortDate(get('created_at') === '—' ? null : get('created_at'))
                     : column === 'Status'
                       ? get('status')
-                      : get(column.toLowerCase().replaceAll(' ', '_'));
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'prayer-requests':
+          mapped[column] =
+            column === 'Request' || column === 'Name'
+              ? humanValue(item, 'subject')
+              : column === 'Requested By'
+                ? humanValue(item, 'person_name')
+                : column === 'Date'
+                  ? shortDate(get('created_at') === '—' ? null : get('created_at'))
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'pastoral-needs':
+          mapped[column] =
+            column === 'Request' || column === 'Name'
+              ? humanValue(item, 'summary', 'category')
+              : column === 'Requested By'
+                ? humanValue(item, 'person_name')
+                : column === 'Date'
+                  ? shortDate(get('created_at') === '—' ? null : get('created_at'))
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         default:
           mapped[column] = '—';

@@ -70,7 +70,7 @@ function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?
             const isStatus = /status|priority|progress|issued/i.test(column);
             return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
           })}
-          {showAction && <td><TableRowActions record={String(row[columns[0]] ?? 'record')} entityKey={entityKey} className="row-actions kca-row-actions" /></td>}
+          {showAction && <td><TableRowActions record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()} entityKey={entityKey} className="row-actions kca-row-actions" canEdit={false} canDelete={false} /></td>}
         </tr>)}</tbody>
       </table>
     </div>

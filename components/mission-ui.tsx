@@ -431,15 +431,18 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                   <td>
                     <div className="row-actions mission-row-actions">
                       <TableRowActions
-                        record={String(row[columns[0]] ?? 'record')}
+                        record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
                         entityKey={entityKey}
                         className="row-actions mission-row-actions"
+                        canEdit={false}
+                        canDelete={false}
                       />
                       {live && dataset === 'souls' ? (
                         <>
                           <button
                             type="button"
                             className="table-action"
+                            data-interaction-native="true"
                             disabled={busyId === row.__id}
                             onClick={() => void onAssignMentor(row)}
                           >
@@ -448,6 +451,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                           <button
                             type="button"
                             className="table-action"
+                            data-interaction-native="true"
                             disabled={busyId === row.__id}
                             onClick={() => void onCompleteFollowUp(row)}
                           >
