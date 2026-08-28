@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppBrand } from '@/components/app-brand';
+import { GeographySelect } from '@/components/geography-select';
+import { SearchSelect } from '@/components/search-select';
+import { formatLocationLine } from '@/lib/geography';
 import { formFieldsFor, type FormField } from '@/lib/site-content';
 import { flowNext, registerSteps } from '@/lib/site-flow';
 import type { SiteRoute } from '@/lib/site-routes';
@@ -33,6 +36,7 @@ import {
   readRegisterDraft,
   setPendingAuthEmail,
   writeRegisterDraft,
+  type RegisterDraft,
 } from '@/lib/auth-session';
 
 const languages = [
@@ -74,10 +78,12 @@ function Field({
   field,
   error,
   defaultValue,
+  draft,
 }: {
   field: FormField;
   error?: string;
   defaultValue?: string;
+  draft?: RegisterDraft;
 }) {
   const className = [field.wide ? 'wide' : undefined, error ? 'has-error' : undefined].filter(Boolean).join(' ') || undefined;
   const value = defaultValue ?? '';
@@ -87,6 +93,36 @@ function Field({
       : field.type === 'password'
         ? 'password'
         : (field.type ?? 'text');
+
+  if (field.type === 'geography') {
+    return (
+      <div className={className ?? 'wide'}>
+        <GeographySelect
+          defaultCountry={draft?.country || field.value || 'NG'}
+          defaultRegion={draft?.region}
+          defaultLocality={draft?.locality}
+          required
+        />
+        {error ? <span className="field-error">{error}</span> : null}
+      </div>
+    );
+  }
+
+  if (field.type === 'search-select') {
+    return (
+      <label className={className}>
+        {field.label}
+        <SearchSelect
+          name={field.name}
+          catalog={field.catalog}
+          defaultValue={value || field.value}
+          placeholder={`Search ${field.label.toLowerCase()}`}
+          required={field.name !== 'middle_name'}
+        />
+        {error ? <span className="field-error">{error}</span> : null}
+      </label>
+    );
+  }
 
   if (field.type === 'textarea') {
     return (
@@ -115,7 +151,7 @@ function Field({
       {field.label}
       <input
         name={field.name}
-        type={inputType === 'search-select' ? 'text' : inputType}
+        type={inputType}
         defaultValue={value}
         required={field.name !== 'confirm' && field.name !== 'middle_name'}
         autoComplete={
@@ -133,6 +169,34 @@ function Field({
       />
       {error ? <span className="field-error">{error}</span> : null}
     </label>
+  );
+}
+
+function RegisterReviewSummary({ draft }: { draft: RegisterDraft }) {
+  const fullName = [draft.given_name, draft.middle_name, draft.family_name].filter(Boolean).join(' ');
+  const location = formatLocationLine({
+    locality: draft.locality,
+    region: draft.region,
+    country: draft.country,
+    countryLabel: draft.country_label,
+  });
+  const rows: Array<[string, string]> = [
+    ['Full name', fullName || '—'],
+    ['Email', draft.email || '—'],
+    ['Phone', draft.phone || '—'],
+    ['Location', location || '—'],
+    ['Role', draft.role || 'Member'],
+  ];
+
+  return (
+    <dl className="register-review">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -393,6 +457,9 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
     if (path === '/otp') {
       setOtpMode(params.get('mode') === 'recovery' ? 'recovery' : 'totp');
     }
+    if (path === '/verify-email' && params.get('registered') === '1') {
+      setSuccess('Your account was created. Check your email for a verification link, then confirm below.');
+    }
   }, [path]);
 
   useEffect(() => {
@@ -596,6 +663,9 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
                   middle_name: nextDraft.middle_name || null,
                   family_name: nextDraft.family_name,
                   preferred_name: nextDraft.preferred_name || null,
+                  country: nextDraft.country || null,
+                  region: nextDraft.region || null,
+                  locality: nextDraft.locality || null,
                 },
                 email: nextDraft.email,
                 password: nextDraft.password,
@@ -604,7 +674,8 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               clearRegisterDraft();
               setPendingAuthEmail(user.email);
               setDone(true);
-              router.push('/verify-email');
+              setSuccess('Account created. We sent a verification link to your email.');
+              router.push('/verify-email?registered=1');
             } catch (err) {
               applyError(err);
             } finally {
@@ -627,6 +698,8 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           </p>
           {!apiReady && path.includes('/review') ? <ApiConfigMissing /> : null}
           {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
+          {success && path.includes('/review') ? <AuthBanner tone="success">{success}</AuthBanner> : null}
+          {path.includes('/review') ? <RegisterReviewSummary draft={draft} /> : null}
           {fields.length ? (
             <div className="form-grid">
               {fields.map((field) => {
@@ -643,6 +716,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
                   <Field
                     key={field.name}
                     field={field}
+                    draft={draft}
                     defaultValue={typeof fromDraft === 'string' ? fromDraft : ''}
                     error={
                       fieldErrors[field.name]?.[0] ??
@@ -723,9 +797,8 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
         <div className="auth-icon">✉</div>
         <h3>Verify Your Email</h3>
         <p className="auth-copy">
-          We requested a verification link for <b>{pendingEmail ?? 'your email address'}</b>. Delivery depends on
-          Laravel mail being configured. After you open the signed link, confirm below — we check{' '}
-          <code>GET /user/me</code> (no fake success).
+          We sent a verification link to <b>{pendingEmail ?? 'your email address'}</b>. Open that signed link, then
+          confirm below. We check your live session with the API — this page will not pretend the email is verified.
         </p>
         {error ? <AuthBanner tone="error">{error}</AuthBanner> : null}
         {success ? <AuthBanner tone="success">{success}</AuthBanner> : null}

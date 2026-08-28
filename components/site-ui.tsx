@@ -148,6 +148,7 @@ import {
 import { flowNext, successHref, heroPrimaryHref, kcaApplySteps, homeChurchSteps } from '@/lib/site-flow';
 import { InteractiveMap, type MapMarker } from '@/components/interactive-map';
 import { SearchSelect } from '@/components/search-select';
+import { GeographySelect } from '@/components/geography-select';
 
 type AsyncListState<T> =
   | { status: 'loading' }
@@ -2281,6 +2282,13 @@ function Field({ field }: { field: FormField }) {
         {field.label}
         <textarea name={field.name} defaultValue={field.value} rows={5} />
       </label>
+    );
+  }
+  if (field.type === 'geography') {
+    return (
+      <div className={className ?? 'wide'}>
+        <GeographySelect defaultCountry={field.value || 'NG'} required />
+      </div>
     );
   }
   if (field.type === 'search-select' && field.catalog) {

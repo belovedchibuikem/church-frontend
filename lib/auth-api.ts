@@ -42,6 +42,9 @@ export type BrowserUser = {
     middle_name: string | null;
     family_name: string | null;
     preferred_name: string | null;
+    country?: string | null;
+    region?: string | null;
+    locality?: string | null;
   };
 };
 
@@ -57,6 +60,9 @@ export type RegisterBrowserUserInput = {
     middle_name?: string | null;
     family_name: string;
     preferred_name?: string | null;
+    country?: string | null;
+    region?: string | null;
+    locality?: string | null;
   };
   email: string;
   password: string;
@@ -211,6 +217,9 @@ export async function registerBrowserUser(
         middle_name: input.profile.middle_name?.trim() || null,
         family_name: input.profile.family_name.trim(),
         preferred_name: input.profile.preferred_name?.trim() || null,
+        country: input.profile.country?.trim().toUpperCase() || null,
+        region: input.profile.region?.trim() || null,
+        locality: input.profile.locality?.trim() || null,
       },
       email: input.email.trim().toLowerCase(),
       password: input.password,

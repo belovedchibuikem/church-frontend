@@ -4,7 +4,7 @@ export type FaqItem = { q: string; a: string };
 export type FormField = {
   label: string;
   name: string;
-  type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'select' | 'search-select' | 'textarea' | 'number' | 'password' | 'checkbox';
+  type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'select' | 'search-select' | 'geography' | 'textarea' | 'number' | 'password' | 'checkbox';
   options?: string[];
   catalog?: 'country' | 'region' | 'administrativeUnit' | 'location' | 'church' | 'homeChurch' | 'person' | 'nationality';
   value?: string;
@@ -320,9 +320,7 @@ export const formFieldsFor = (path: string): FormField[] => {
   if (path.includes('/register/contact')) return [
     { label: 'Email Address', name: 'email', type: 'email', value: 'john.doe@email.com' },
     { label: 'Phone Number', name: 'phone', type: 'tel', value: '+234 801 234 5678' },
-    { label: 'Country', name: 'country', type: 'search-select', catalog: 'country', value: 'ng' },
-    { label: 'State / Region', name: 'region', type: 'search-select', catalog: 'region', value: 'ng-la' },
-    { label: 'City / Area', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', value: '01JADMINIKEJA' },
+    { label: 'Location', name: 'location', type: 'geography', wide: true, value: 'NG' },
   ];
   if (path.includes('/register/security')) return [
     { label: 'Password', name: 'password', type: 'password', value: 'Kingdom@2024' },
@@ -332,12 +330,7 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'About You', name: 'about', type: 'textarea', value: 'I am excited to grow with Family House Connect.', wide: true },
     { label: 'What best describes you?', name: 'role', type: 'select', options: ['Member', 'First-time visitor', 'Worker / Volunteer', 'KCA Student', 'Leader / Pastor'], value: 'Member' },
   ];
-  if (path.includes('/register/review')) return [
-    { label: 'Full Name', name: 'fullName', value: 'John Chinedu Doe' },
-    { label: 'Email', name: 'email', type: 'email', value: 'john.doe@email.com' },
-    { label: 'Phone', name: 'phone', type: 'tel', value: '+234 801 234 5678' },
-    { label: 'Role', name: 'role', type: 'select', options: ['Member', 'First-time visitor', 'Worker / Volunteer', 'KCA Student', 'Leader / Pastor'], value: 'Member' },
-  ];
+  if (path.includes('/register/review')) return [];
   if (path.includes('/otp') || path.includes('/verify-phone')) return [];
   if (path.includes('/verify-email')) return [];
   if (path.includes('/forgot-password')) return [{ label: 'Email or Phone Number', name: 'identity', value: 'john.doe@email.com', wide: true }];
@@ -357,7 +350,10 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Contact Phone', name: 'contact_phone', type: 'tel', value: '+2348012345678' },
     { label: 'Sponsoring Church', name: 'church_id', type: 'search-select', catalog: 'church', value: '01JCHURCHIKEJA', wide: true },
   ];
-  if (path.includes('/start-home-church/apply/location') || path.includes('/onboarding/location')) return [
+  if (path.includes('/onboarding/location')) return [
+    { label: 'Location', name: 'location', type: 'geography', wide: true, value: 'NG' },
+  ];
+  if (path.includes('/start-home-church/apply/location')) return [
     { label: 'Country', name: 'country', type: 'search-select', catalog: 'country', value: 'ng' },
     { label: 'State / Region', name: 'region', type: 'search-select', catalog: 'region', value: 'ng-la' },
     { label: 'Administrative Unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', value: '01JADMINIKEJA' },

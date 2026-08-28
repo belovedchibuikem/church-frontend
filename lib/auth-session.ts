@@ -10,6 +10,10 @@ export type RegisterDraft = {
   preferred_name?: string;
   email?: string;
   phone?: string;
+  country?: string;
+  country_label?: string;
+  region?: string;
+  locality?: string;
   password?: string;
   password_confirmation?: string;
   about?: string;
@@ -77,30 +81,44 @@ export function clearPendingAuthEmail(): void {
   window.sessionStorage.removeItem(PENDING_EMAIL_KEY);
 }
 
+function present(form: FormData, name: string): string | undefined {
+  if (!form.has(name)) return undefined;
+  const value = form.get(name);
+  return typeof value === 'string' ? value.trim() : undefined;
+}
+
+function compactDraft(draft: RegisterDraft): RegisterDraft {
+  const next: RegisterDraft = {};
+  for (const [key, value] of Object.entries(draft) as Array<[keyof RegisterDraft, string | undefined]>) {
+    if (value !== undefined) next[key] = value;
+  }
+  return next;
+}
+
 /** Map multi-step form names onto the Laravel register payload shape. */
 export function draftFromFormData(form: FormData): RegisterDraft {
-  const str = (name: string) => {
-    const value = form.get(name);
-    return typeof value === 'string' ? value.trim() : undefined;
-  };
+  const given = present(form, 'firstName') ?? present(form, 'given_name');
+  const family = present(form, 'lastName') ?? present(form, 'family_name');
+  const password = present(form, 'password');
+  const confirm = present(form, 'confirm') ?? present(form, 'password_confirmation');
+  const country = present(form, 'country');
 
-  const given = str('firstName') ?? str('given_name');
-  const family = str('lastName') ?? str('family_name');
-  const password = str('password');
-  const confirm = str('confirm') ?? str('password_confirmation');
-
-  return {
+  return compactDraft({
     given_name: given,
-    middle_name: str('middle_name'),
+    middle_name: present(form, 'middle_name'),
     family_name: family,
-    preferred_name: str('preferred_name'),
-    email: str('email'),
-    phone: str('phone'),
+    preferred_name: present(form, 'preferred_name'),
+    email: present(form, 'email'),
+    phone: present(form, 'phone'),
+    country: country ? country.toUpperCase() : country,
+    country_label: present(form, 'country_label'),
+    region: present(form, 'region'),
+    locality: present(form, 'locality'),
     password,
     password_confirmation: confirm,
-    about: str('about'),
-    role: str('role'),
-  };
+    about: present(form, 'about'),
+    role: present(form, 'role'),
+  });
 }
 
 export function isRegisterDraftComplete(draft: RegisterDraft): draft is RegisterDraft & {

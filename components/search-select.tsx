@@ -20,6 +20,9 @@ type Props = {
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  loading?: boolean;
+  /** Extra hidden input that stores the selected option label (e.g. country name). */
+  labelFieldName?: string;
   className?: string;
   onValueChange?: (value: string) => void;
 };
@@ -33,6 +36,8 @@ export function SearchSelect({
   placeholder = 'Search and select…',
   required = false,
   disabled = false,
+  loading: loadingProp = false,
+  labelFieldName,
   className,
   onValueChange,
 }: Props) {
@@ -52,8 +57,9 @@ export function SearchSelect({
   const [query, setQuery] = useState(initial?.label ?? '');
   const [value, setValue] = useState(initial?.value ?? controlledValue ?? '');
   const [remoteOptions, setRemoteOptions] = useState<SearchSelectOption[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingRemote, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loading = loadingProp || loadingRemote;
 
   useEffect(() => {
     if (controlledValue === undefined) return;
@@ -99,6 +105,7 @@ export function SearchSelect({
   }, [catalog, query]);
 
   const options = remoteOptions ?? fixtureOptions;
+  const selected = options.find((option) => option.value === value);
 
   const filtered = useMemo(() => {
     if (catalog && remoteOptions) return options;
@@ -128,16 +135,22 @@ export function SearchSelect({
   };
 
   return (
-    <div className={`search-select ${className ?? ''}`} ref={rootRef}>
-      <input type="hidden" name={name} value={value} required={required} />
+    <div
+      className={`search-select${open ? ' is-open' : ''}${disabled ? ' is-disabled' : ''}${className ? ` ${className}` : ''}`}
+      ref={rootRef}
+    >
+      <input type="hidden" name={name} value={value} />
+      {labelFieldName ? <input type="hidden" name={labelFieldName} value={selected?.label ?? (value ? query : '')} /> : null}
       <input
         type="search"
         role="combobox"
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-haspopup="listbox"
         autoComplete="off"
         disabled={disabled}
+        required={required && !value}
         placeholder={placeholder}
         value={query}
         onFocus={() => setOpen(true)}
@@ -148,6 +161,9 @@ export function SearchSelect({
           setOpen(true);
         }}
       />
+      <span className="search-select-chevron" aria-hidden="true">
+        ▾
+      </span>
       {open ? (
         <ul id={listId} role="listbox" className="search-select-menu">
           {loading ? <li className="search-select-empty">Loading…</li> : null}
