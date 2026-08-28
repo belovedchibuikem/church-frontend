@@ -3,9 +3,79 @@ import { fileURLToPath } from 'node:url';
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import vinext from 'vinext';
-import { defineConfig, loadEnv, searchForWorkspaceRoot } from 'vite';
+import { defineConfig, loadEnv, searchForWorkspaceRoot, type Plugin } from 'vite';
 import hostingConfig from './.openai/hosting.json';
 import { laravelDevProxyOrigin } from './lib/laravel-dev-proxy';
+
+const VINEXT_LINK_DYNAMIC_NAV = `			const { navigateClientSide } = await import("./navigation.js");
+			const setter = setPendingRef.current;
+			if (setter) setLinkForCurrentNavigation(setter);
+			setPending(true);
+			React.startTransition(() => {
+				navigateClientSide(navigateHref, replace ? "replace" : "push", scroll, true).finally(() => {
+					if (mountedRef.current) setPending(false);
+					if (setter) clearLinkForCurrentNavigation(setter);
+				});
+			});`;
+
+const VINEXT_LINK_RUNTIME_NAV = `			const runtimeNavigate = getNavigationRuntime()?.functions.navigate;
+			const setter = setPendingRef.current;
+			if (setter) setLinkForCurrentNavigation(setter);
+			setPending(true);
+			const historyMode = replace ? "replace" : "push";
+			React.startTransition(() => {
+				const finished = () => {
+					if (mountedRef.current) setPending(false);
+					if (setter) clearLinkForCurrentNavigation(setter);
+				};
+				getNavigationRuntime()?.functions.notifyLinkNavigationStart?.();
+				if (typeof runtimeNavigate === "function") {
+					Promise.resolve(runtimeNavigate(absoluteFullHref, 0, "navigate", historyMode, void 0, true)).finally(finished);
+					return;
+				}
+				if (replace) window.location.replace(absoluteFullHref);
+				else window.location.assign(absoluteFullHref);
+				finished();
+			});`;
+
+/** Rolldown folds vinext's navigation.js into a shared chunk and does not
+ *  re-export navigateClientSide / prefetch helpers. Link then dynamically
+ *  imports missing names, so clicks throw and prefetch logs "is not a function".
+ *  Use the already-registered runtime navigate, and skip RSC prefetch. */
+function fixVinextLinkNavigation(): Plugin {
+  return {
+    name: 'fhc-fix-vinext-link-navigation',
+    enforce: 'pre',
+    transform(code, id) {
+      const file = id.replace(/\\/g, '/').split('?')[0] ?? id;
+      if (file.endsWith('/vinext/dist/shims/link.js')) {
+        if (!code.includes(VINEXT_LINK_DYNAMIC_NAV)) {
+          this.warn('vinext link.js click handler changed; client navigation patch was not applied');
+          return null;
+        }
+        return { code: code.replace(VINEXT_LINK_DYNAMIC_NAV, VINEXT_LINK_RUNTIME_NAV), map: null };
+      }
+      if (file.endsWith('/vinext/dist/shims/link-prefetch.js')) {
+        if (!code.includes('input.nodeEnv === "production" && input.prefetch !== false')) {
+          return null;
+        }
+        return {
+          code: code
+            .replace(
+              'return input.nodeEnv === "production" && input.prefetch !== false && !input.isDangerous;',
+              'return false;',
+            )
+            .replace(
+              'return input.routerMode === "pages" || input.prefetch !== false;',
+              'return false;',
+            ),
+          map: null,
+        };
+      }
+      return null;
+    },
+  };
+}
 
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
 const generatedTypescriptClientDir = path.resolve(
@@ -65,7 +135,7 @@ export default defineConfig(async ({ mode }) => {
 
   // Handle `@import "tailwindcss"` before Vite's PostCSS importer. Nitro's
   // RSC/SSR CSS pass otherwise treats it as a project-root file and fails.
-  const plugins = [tailwindcss(), vinext()];
+  const plugins = [tailwindcss(), vinext(), fixVinextLinkNavigation()];
 
   if (isVercel) {
     const { nitro } = await import('nitro/vite');
