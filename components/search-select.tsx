@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale } from '@/components/locale-provider';
 import { designFixturesEnabled } from '../lib/admin-operations-api';
-import { catalogOptions, loadFormCatalogOptions, type LiveCatalogKey } from '../lib/form-catalogs';
+import {
+  catalogOptions,
+  loadFormCatalogPage,
+  type LiveCatalogKey,
+} from '../lib/form-catalogs';
 
 export type SearchSelectOption = {
   value: string;
@@ -28,6 +32,17 @@ type Props = {
   onValueChange?: (value: string) => void;
 };
 
+const PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 280;
+
+function readSiblingHiddenValue(root: HTMLElement | null, fieldName: string): string | undefined {
+  const form = root?.closest('form');
+  if (!form) return undefined;
+  const input = form.querySelector<HTMLInputElement>(`input[name="${fieldName}"]`);
+  const value = input?.value?.trim();
+  return value || undefined;
+}
+
 export function SearchSelect({
   name,
   options: staticOptions,
@@ -47,6 +62,7 @@ export function SearchSelect({
   const resolvedPlaceholder =
     placeholder ?? t('common.searchAndSelect', { defaultMessage: 'Search and select…' });
   const rootRef = useRef<HTMLDivElement>(null);
+  const requestSeq = useRef(0);
   const fixtureOptions =
     staticOptions ??
     (catalog && catalog in catalogOptions
@@ -59,64 +75,116 @@ export function SearchSelect({
   );
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(initial?.label ?? '');
+  const [debouncedQuery, setDebouncedQuery] = useState(initial?.label ?? '');
   const [value, setValue] = useState(initial?.value ?? controlledValue ?? '');
-  const [remoteOptions, setRemoteOptions] = useState<SearchSelectOption[] | null>(null);
+  const [remoteOptions, setRemoteOptions] = useState<SearchSelectOption[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [loadingRemote, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loading = loadingProp || loadingRemote;
+  const selectedLabelRef = useRef(initial?.label ?? '');
 
   useEffect(() => {
     if (controlledValue === undefined) return;
-    const pool = remoteOptions ?? fixtureOptions;
+    const pool = remoteOptions.length > 0 ? remoteOptions : fixtureOptions;
     const match = pool.find((option) => option.value === controlledValue || option.label === controlledValue);
     setValue(controlledValue);
-    if (match) setQuery(match.label);
+    if (match) {
+      setQuery(match.label);
+      selectedLabelRef.current = match.label;
+      setDebouncedQuery(match.label);
+    }
   }, [controlledValue, fixtureOptions, remoteOptions]);
 
   useEffect(() => {
-    if (!catalog) {
-      setRemoteOptions(null);
-      return;
-    }
+    if (!open) return;
+    const timer = window.setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [query, open]);
 
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setLoading(true);
+  const loadPage = useCallback(
+    async (nextPage: number, append: boolean, searchOverride?: string) => {
+      if (!catalog) return;
+      const seq = ++requestSeq.current;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
       setError(null);
-      void loadFormCatalogOptions(catalog as LiveCatalogKey, query, controller.signal)
-        .then((items) => {
-          if (!controller.signal.aborted) setRemoteOptions(items);
-        })
-        .catch((err: unknown) => {
-          if (controller.signal.aborted) return;
-          if (designFixturesEnabled()) {
-            setRemoteOptions(fixtureOptions);
-          } else {
-            setRemoteOptions([]);
-          }
+
+      const countryId = readSiblingHiddenValue(rootRef.current, 'country_id');
+      const administrativeUnitId = readSiblingHiddenValue(rootRef.current, 'administrative_unit_id');
+      const rawSearch = searchOverride ?? debouncedQuery;
+      const searchText =
+        value && rawSearch.trim() === selectedLabelRef.current.trim() ? '' : rawSearch.trim();
+
+      try {
+        const result = await loadFormCatalogPage(catalog as LiveCatalogKey, {
+          query: searchText,
+          page: nextPage,
+          perPage: PAGE_SIZE,
+          countryId:
+            catalog === 'administrativeUnit' || catalog === 'region' || catalog === 'location'
+              ? countryId
+              : undefined,
+          administrativeUnitId: catalog === 'location' ? administrativeUnitId : undefined,
+        });
+        if (seq !== requestSeq.current) return;
+        setRemoteOptions((prev) => {
+          if (!append) return result.items;
+          const seen = new Set(prev.map((item) => item.value));
+          return [...prev, ...result.items.filter((item) => !seen.has(item.value))];
+        });
+        setPage(result.page);
+        setHasMore(result.hasMore);
+        setTotal(result.total);
+      } catch (err: unknown) {
+        if (seq !== requestSeq.current) return;
+        if (designFixturesEnabled()) {
+          const needle = rawSearch.trim().toLowerCase();
+          const filtered = !needle
+            ? fixtureOptions
+            : fixtureOptions.filter(
+                (option) =>
+                  option.label.toLowerCase().includes(needle) ||
+                  option.value.toLowerCase().includes(needle) ||
+                  (option.meta ?? '').toLowerCase().includes(needle),
+              );
+          setRemoteOptions(filtered.slice(0, PAGE_SIZE));
+          setHasMore(filtered.length > PAGE_SIZE);
+          setTotal(filtered.length);
+          setPage(1);
+        } else {
+          if (!append) setRemoteOptions([]);
+          setHasMore(false);
           setError(
             err instanceof Error
               ? err.message
               : t('errors.unableToLoadCatalogOptions', { defaultMessage: 'Unable to load catalog options.' }),
           );
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setLoading(false);
-        });
-    }, 220);
+        }
+      } finally {
+        if (seq === requestSeq.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [catalog, debouncedQuery, fixtureOptions, t, value],
+  );
 
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fixtureOptions is derived each render
-  }, [catalog, query, t]);
+  useEffect(() => {
+    if (!catalog || !open) return;
+    void loadPage(1, false, debouncedQuery);
+  }, [catalog, open, debouncedQuery, loadPage]);
 
-  const options = remoteOptions ?? fixtureOptions;
-  const selected = options.find((option) => option.value === value);
+  const options = catalog ? remoteOptions : fixtureOptions;
+  const selected = options.find((option) => option.value === value) ??
+    fixtureOptions.find((option) => option.value === value);
 
   const filtered = useMemo(() => {
-    if (catalog && remoteOptions) return options;
+    if (catalog) return options;
     const needle = query.trim().toLowerCase();
     if (!needle) return options;
     return options.filter(
@@ -125,7 +193,7 @@ export function SearchSelect({
         option.value.toLowerCase().includes(needle) ||
         (option.meta ?? '').toLowerCase().includes(needle),
     );
-  }, [catalog, options, query, remoteOptions]);
+  }, [catalog, options, query]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -142,7 +210,6 @@ export function SearchSelect({
       event.stopPropagation();
       setOpen(false);
     };
-    // Capture so the admin drawer does not close while the menu is open.
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [open]);
@@ -150,6 +217,8 @@ export function SearchSelect({
   const selectOption = (option: SearchSelectOption) => {
     setValue(option.value);
     setQuery(option.label);
+    selectedLabelRef.current = option.label;
+    setDebouncedQuery(option.label);
     setOpen(false);
     onValueChange?.(option.value);
   };
@@ -160,7 +229,13 @@ export function SearchSelect({
       ref={rootRef}
     >
       <input type="hidden" name={name} value={value} />
-      {labelFieldName ? <input type="hidden" name={labelFieldName} value={selected?.label ?? (value ? query : '')} /> : null}
+      {labelFieldName ? (
+        <input
+          type="hidden"
+          name={labelFieldName}
+          value={selected?.label ?? (value ? query : '')}
+        />
+      ) : null}
       <input
         type="search"
         role="combobox"
@@ -177,6 +252,7 @@ export function SearchSelect({
         onChange={(event) => {
           setQuery(event.target.value);
           setValue('');
+          selectedLabelRef.current = '';
           onValueChange?.('');
           setOpen(true);
         }}
@@ -186,28 +262,46 @@ export function SearchSelect({
       </span>
       {open ? (
         <ul id={listId} role="listbox" className="search-select-menu">
-          {loading ? (
+          {loading && filtered.length === 0 ? (
             <li className="search-select-empty">{t('common.loading', { defaultMessage: 'Loading…' })}</li>
           ) : null}
           {!loading && error ? <li className="search-select-empty">{error}</li> : null}
           {!loading && !error && filtered.length === 0 ? (
             <li className="search-select-empty">{t('common.noMatches', { defaultMessage: 'No matches' })}</li>
           ) : null}
-          {!loading &&
-            filtered.map((option) => (
-              <li key={option.value}>
-                <button
-                  type="button"
-                  role="option"
-                  data-interaction-native="true"
-                  aria-selected={value === option.value}
-                  onClick={() => selectOption(option)}
-                >
-                  <strong>{option.label}</strong>
-                  {option.meta ? <span>{option.meta}</span> : null}
-                </button>
-              </li>
-            ))}
+          {filtered.map((option) => (
+            <li key={option.value}>
+              <button
+                type="button"
+                role="option"
+                data-interaction-native="true"
+                aria-selected={value === option.value}
+                onClick={() => selectOption(option)}
+              >
+                <strong>{option.label}</strong>
+                {option.meta ? <span>{option.meta}</span> : null}
+              </button>
+            </li>
+          ))}
+          {catalog && hasMore ? (
+            <li className="search-select-more">
+              <button
+                type="button"
+                data-interaction-native="true"
+                disabled={loadingMore || loading}
+                onClick={() => void loadPage(page + 1, true)}
+              >
+                {loadingMore
+                  ? t('common.loading', { defaultMessage: 'Loading…' })
+                  : t('common.loadMore', {
+                      defaultMessage: 'Load more{total}',
+                      vars: {
+                        total: total > 0 ? ` (${filtered.length} of ${total})` : '',
+                      },
+                    })}
+              </button>
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </div>

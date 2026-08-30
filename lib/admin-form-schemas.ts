@@ -67,7 +67,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     fields: [
       { label: 'Name', name: 'name', type: 'text', required: true, placeholder: 'Enter church name' },
       { label: 'Country', name: 'country_id', type: 'search-select', catalog: 'country', placeholder: 'Search country', helpText: 'Required when creating a new location (not selecting an existing one).' },
-      { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', required: true, placeholder: 'Search unit' },
+      { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', required: true, placeholder: 'Search unit', helpText: 'Org branch that owns this church (state/zone). Select Country first to narrow results. Type to search the API.' },
       { label: 'Existing location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location (or create below)' },
       { label: 'New location name', name: 'location_name', type: 'text', placeholder: 'e.g. Ikeja Campus', helpText: 'Required when no existing location is selected.' },
       { label: 'Address line 1', name: 'address_line_one', type: 'text', placeholder: 'Street address', wide: true },

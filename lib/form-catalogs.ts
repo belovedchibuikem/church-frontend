@@ -13,9 +13,9 @@ import {
 } from './admin-operations-api';
 import {
   isOrganizationApiConfigured,
-  listCountries,
-  listLocations,
-  listUnits,
+  listCountriesPage,
+  listLocationsPage,
+  listUnitsPage,
 } from './admin-organization-api';
 import { identityApiConfigured, listAdminUsers } from './admin-identity-api';
 
@@ -121,76 +121,174 @@ export async function loadFormCatalogOptions(
   query = '',
   signal?: AbortSignal,
 ): Promise<SearchSelectOption[]> {
+  const page = await loadFormCatalogPage(catalog, { query, page: 1, signal });
+  return page.items;
+}
+
+export type FormCatalogPage = {
+  items: SearchSelectOption[];
+  page: number;
+  hasMore: boolean;
+  total: number;
+};
+
+export type FormCatalogPageFilters = {
+  query?: string;
+  page?: number;
+  perPage?: number;
+  /** When set, units/locations are filtered to this country ULID. */
+  countryId?: string;
+  /** When set, locations are filtered to this administrative unit ULID. */
+  administrativeUnitId?: string;
+  signal?: AbortSignal;
+};
+
+/**
+ * Paginated catalog loader for search-selects. Never walks every page of world geography.
+ */
+export async function loadFormCatalogPage(
+  catalog: LiveCatalogKey,
+  filters: FormCatalogPageFilters = {},
+): Promise<FormCatalogPage> {
+  const query = filters.query ?? '';
+  const page = Math.max(1, filters.page ?? 1);
+  const perPage = Math.min(50, Math.max(5, filters.perPage ?? 20));
+  const signal = filters.signal;
+  const empty = (): FormCatalogPage => ({ items: [], page, hasMore: false, total: 0 });
+
   const domainKey =
     (FORM_TO_DOMAIN_CATALOG[catalog as string] as CatalogDomainKey | undefined) ??
     (typeof catalog === 'string' && catalog.includes('.') ? (catalog as CatalogDomainKey) : undefined);
 
   if (domainKey && shouldUseCatalogLiveData()) {
-    return searchCatalogOptions(domainKey, query, { signal });
+    const items = await searchCatalogOptions(domainKey, query, { signal, perPage });
+    return {
+      items,
+      page: 1,
+      hasMore: items.length >= perPage,
+      total: items.length,
+    };
   }
 
   if (shouldUseOperationsLiveData()) {
     if (catalog === 'church') {
-      const result = await listChurches({ search: query || undefined, perPage: 25, signal });
-      return result.items.map((item) => ({
-        value: item.id,
-        label: item.name,
-        meta: item.location_id ?? undefined,
-      }));
+      const result = await listChurches({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.name,
+          meta: item.location_id ?? undefined,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
     }
     if (catalog === 'homeChurch') {
-      const result = await listHomeChurches({ search: query || undefined, perPage: 25, signal });
-      return result.items.map((item) => ({
-        value: item.id,
-        label: item.name,
-        meta: item.status,
-      }));
+      const result = await listHomeChurches({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.name,
+          meta: item.status,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
     }
   }
 
   if (!designFixturesEnabled() && isOrganizationApiConfigured()) {
     if (catalog === 'country') {
-      const items = await listCountries({ search: query || undefined, perPage: 25 }, { signal });
-      return items.map((item) => ({
-        value: item.id,
-        label: item.name,
-        meta: item.iso_code,
-      }));
+      const result = await listCountriesPage(
+        { search: query || undefined, page, perPage },
+        { signal },
+      );
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.name,
+          meta: item.iso_code,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
     }
     if (catalog === 'region' || catalog === 'administrativeUnit') {
-      const items = await listUnits({ search: query || undefined, perPage: 25 }, { signal });
-      return items.map((item) => ({
-        value: item.id,
-        label: item.name,
-        meta: item.administrative_level?.name ?? item.country?.name,
-      }));
+      const result = await listUnitsPage(
+        {
+          search: query || undefined,
+          page,
+          perPage,
+          countryId: filters.countryId,
+        },
+        { signal },
+      );
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.name,
+          meta: item.administrative_level?.name ?? item.country?.name,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
     }
     if (catalog === 'location') {
-      const items = await listLocations({ search: query || undefined, perPage: 25 }, { signal });
-      return items.map((item) => ({
-        value: item.id,
-        label: item.name,
-        meta: item.administrative_unit?.name ?? item.country?.name,
-      }));
+      const result = await listLocationsPage(
+        {
+          search: query || undefined,
+          page,
+          perPage,
+          countryId: filters.countryId,
+          administrativeUnitId: filters.administrativeUnitId,
+        },
+        { signal },
+      );
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.name,
+          meta: item.administrative_unit?.name ?? item.country?.name,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
     }
   }
 
   if (!designFixturesEnabled() && catalog === 'person' && identityApiConfigured()) {
-    const result = await listAdminUsers({ search: query || undefined, perPage: 25 });
-    return result.data
+    const result = await listAdminUsers({ search: query || undefined, perPage, page });
+    const items = result.data
       .filter((user) => Boolean(user.person_id))
       .map((user) => ({
         value: String(user.person_id),
         label: user.name,
         meta: user.email,
       }));
+    return {
+      items,
+      page: result.pagination.current_page,
+      hasMore: result.pagination.current_page < result.pagination.last_page,
+      total: result.pagination.total,
+    };
   }
 
   if (!designFixturesEnabled()) {
-    // Production mode: never silently substitute fixture people/org rows.
-    return [];
+    return empty();
   }
 
-  const staticOptions = catalogOptions[catalog as FormCatalogKey] ?? [];
-  return filterStatic(staticOptions, query);
+  const staticOptions = filterStatic(catalogOptions[catalog as FormCatalogKey] ?? [], query);
+  const start = (page - 1) * perPage;
+  const slice = staticOptions.slice(start, start + perPage);
+  return {
+    items: slice,
+    page,
+    hasMore: start + perPage < staticOptions.length,
+    total: staticOptions.length,
+  };
 }

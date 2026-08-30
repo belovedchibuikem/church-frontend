@@ -204,7 +204,12 @@ function newIdempotencyKey(): string {
 
 function resolveScope(scope?: string | AdminScope): AdminScope {
   if (!scope) return GLOBAL_ADMIN_SCOPE;
-  if (typeof scope === 'object' && scope.type && scope.id) return scope;
+  if (typeof scope === 'object' && scope.type && scope.id) {
+    if (scope.type === 'global' || /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(scope.id)) {
+      return scope;
+    }
+    return GLOBAL_ADMIN_SCOPE;
+  }
   return defaultOpsScope(typeof scope === 'string' ? scope : undefined);
 }
 

@@ -216,6 +216,35 @@ async function paginateAll<T>(
   return items;
 }
 
+export type OrganizationPage<T> = {
+  items: T[];
+  pagination: PaginationMeta;
+};
+
+/** Single-page list (no auto-walk). Use for search-selects and load-more UIs. */
+export async function listOrganizationPage<T>(
+  path: string,
+  query: OrganizationListQuery = {},
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<OrganizationPage<T>> {
+  const page = query.page ?? 1;
+  const perPage = query.perPage ?? 20;
+  const envelope = await organizationRequest<T[]>(path, {
+    ...options,
+    query: listQueryParams({ ...query, page, perPage }),
+  });
+  const pagination = (envelope.meta?.pagination as PaginationMeta | undefined) ?? {
+    current_page: page,
+    per_page: perPage,
+    last_page: 1,
+    total: Array.isArray(envelope.data) ? envelope.data.length : 0,
+  };
+  return {
+    items: Array.isArray(envelope.data) ? envelope.data : [],
+    pagination,
+  };
+}
+
 export function isOrganizationApiConfigured(): boolean {
   return resolveApiV1BaseUrl() !== null;
 }
@@ -241,6 +270,17 @@ export async function listCountries(
   options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
 ): Promise<AdminCountry[]> {
   return paginateAll<AdminCountry>('admin/organization/countries', { sort: 'name', ...query }, options);
+}
+
+export async function listCountriesPage(
+  query: OrganizationListQuery = {},
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<OrganizationPage<AdminCountry>> {
+  return listOrganizationPage<AdminCountry>(
+    'admin/organization/countries',
+    { sort: 'name', perPage: 20, ...query },
+    options,
+  );
 }
 
 export async function createCountry(
@@ -285,6 +325,17 @@ export async function listUnits(
   return paginateAll<AdminAdministrativeUnit>('admin/organization/units', { sort: 'name', ...query }, options);
 }
 
+export async function listUnitsPage(
+  query: OrganizationListQuery = {},
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<OrganizationPage<AdminAdministrativeUnit>> {
+  return listOrganizationPage<AdminAdministrativeUnit>(
+    'admin/organization/units',
+    { sort: 'name', perPage: 20, ...query },
+    options,
+  );
+}
+
 export async function createUnit(
   body: CreateUnitInput,
   options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
@@ -320,6 +371,17 @@ export async function listLocations(
   options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
 ): Promise<AdminLocation[]> {
   return paginateAll<AdminLocation>('admin/organization/locations', { sort: 'name', ...query }, options);
+}
+
+export async function listLocationsPage(
+  query: OrganizationListQuery = {},
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<OrganizationPage<AdminLocation>> {
+  return listOrganizationPage<AdminLocation>(
+    'admin/organization/locations',
+    { sort: 'name', perPage: 20, ...query },
+    options,
+  );
 }
 
 export async function createLocation(
@@ -401,11 +463,23 @@ export function organizationErrorMessage(error: unknown): string {
     if (error.status === 401) {
       return 'Sign in as an admin with organization permissions and a recent MFA challenge.';
     }
+    if (error.status === 404 || error.code === 'RESOURCE_NOT_FOUND') {
+      return (
+        'Location/unit was not found in your current admin scope. ' +
+        'Pick a country and administrative unit that match your scope (or use Global), then retry.'
+      );
+    }
     return error.message;
   }
   if (error instanceof ApiError) {
     if (error.status === 403 && /mfa/i.test(`${error.code ?? ''} ${error.message}`)) {
       return 'Recent MFA is required for organization APIs. Complete MFA, then retry.';
+    }
+    if (error.status === 404) {
+      return (
+        'Location/unit was not found in your current admin scope. ' +
+        'Pick a country and administrative unit that match your scope (or use Global), then retry.'
+      );
     }
     return error.message;
   }

@@ -265,7 +265,10 @@ export function defaultOpsScope(requestedScope?: string): AdminScope {
   }
   const [type, ...rest] = requestedScope.split(':');
   const id = rest.join(':');
-  if (type && id) return { type, id };
+  // Fixture/UI labels like "country:nigeria" are not API scope keys — only ULIDs (or global).
+  if (type && id && (type === 'global' || /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(id))) {
+    return { type, id };
+  }
   return GLOBAL_ADMIN_SCOPE;
 }
 
@@ -288,6 +291,13 @@ function toOpsError(error: unknown, fallback: string): AdminOperationsApiError {
 
 export function operationsErrorMessage(error: unknown, fallback: string): string {
   const ops = toOpsError(error, fallback);
+  if (ops.status === 404 || ops.code === 'RESOURCE_NOT_FOUND') {
+    return (
+      'Church create failed: the country, administrative unit, or location is outside your admin scope, ' +
+      'or was not found. Select a unit that belongs to the chosen country, switch Scope to Global if you have access, then try again.' +
+      (ops.code ? ` (${ops.code})` : '')
+    );
+  }
   return ops.code ? `${ops.message} (${ops.code})` : ops.message;
 }
 
