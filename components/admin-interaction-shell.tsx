@@ -81,7 +81,6 @@ export function AdminInteractionShell({ children, route, title, permission, scop
   });
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('fhc-admin-sidebar') === 'collapsed');
   const [navigationOpen, setNavigationOpen] = useState(false);
-  const matchingRecords = query ? records.filter((record) => record.toLowerCase().includes(query.toLowerCase())) : [];
   const contextualReturn = returnTo && isCanonicalAdminPath(returnTo) ? returnTo : undefined;
   const contextualModule = contextualReturn ? getAdminModuleForRoute(contextualReturn) : undefined;
 
@@ -539,17 +538,9 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     if (navigationOpen) setNavigationOpen(false);
   };
 
-  const showOverview = () => {
-    setActiveTab(tabItems[0] ?? '');
-    updateUrlState('tab', undefined);
-  };
-
-  return <div ref={rootRef} className={`interaction-shell ${collapsed ? 'sidebar-collapsed' : ''} ${navigationOpen ? 'navigation-open' : ''}`} onClickCapture={handleClick} onInput={handleInput} onKeyDownCapture={handleRootKeyDown}>
+  return <div ref={rootRef} className={`interaction-shell ${collapsed ? 'sidebar-collapsed' : ''} ${navigationOpen ? 'navigation-open' : ''}`} data-filtered-matches={matches ?? undefined} onClickCapture={handleClick} onInput={handleInput} onKeyDownCapture={handleRootKeyDown}>
     {children}
     {contextualReturn && contextualModule && <button className="interaction-return-button" type="button" data-interaction-native="true" onClick={() => navigate(contextualReturn, false)}>← Back to {contextualModule.label}</button>}
-    {!inPageWizard && activeTab && activeTab !== tabItems[0] && <section className="interaction-tab-workspace" role="tabpanel" aria-live="polite"><header><div><span>{currentModule.label}</span><h2>{activeTab}</h2><p>{title} · {scope} scope</p></div><button type="button" data-interaction-native="true" onClick={showOverview}>Back to overview</button></header><div className="interaction-tab-metrics"><article><small>Visible records</small><strong>{records.length || items.length || Object.keys(details).length}</strong></article><article><small>Permission</small><strong>{permission}</strong></article><article><small>Section</small><strong>{activeTab}</strong></article></div><div className="interaction-tab-grid"><article><h3>{activeTab} overview</h3><dl>{Object.entries(details).slice(0, 8).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}{Object.keys(details).length === 0 && <div><dt>Context</dt><dd>Records and actions for {activeTab.toLowerCase()} are shown below.</dd></div>}</dl></article><article><h3>Records</h3>{records.slice(0, 8).map((record, index) => <button type="button" key={`${record}-${index}`} aria-label={`View ${record.split(' · ')[0]}`}><span>{String(index + 1).padStart(2, '0')}</span>{record}</button>)}{records.length === 0 && items.slice(0, 8).map((item, index) => <button type="button" key={item}><span>{String(index + 1).padStart(2, '0')}</span>{item}</button>)}</article></div></section>}
-    {query && records.length > 0 && <section className="interaction-search-results" aria-label="Filtered results"><header><strong>{matchingRecords.length} matching record{matchingRecords.length === 1 ? '' : 's'}</strong><span>Search: {query}</span></header>{matchingRecords.slice(0, 5).map((record, index) => <button type="button" key={`${record}-${index}`} aria-label={`View search result ${index + 1}`}>{record}</button>)}{matchingRecords.length === 0 && <p>No records match this search.</p>}</section>}
-    {matches !== null && records.length === 0 && <div className="interaction-result-count" role="status">{matches} matching record{matches === 1 ? '' : 's'}</div>}
     {navigationOpen && <button className="interaction-nav-backdrop" type="button" aria-label="Close navigation" data-interaction-native="true" onClick={() => setNavigationOpen(false)}/>} 
     {overlay && <div className="interaction-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeOverlay(); }}>
       <section className={overlay.type === 'drawer' ? 'interaction-drawer' : 'interaction-dialog interaction-dialog-wide'} role="dialog" aria-modal="true" aria-labelledby="interaction-title" aria-describedby="interaction-description" onKeyDown={trapFocus} id={overlay.mode === 'modules' ? 'admin-module-launcher' : undefined}>

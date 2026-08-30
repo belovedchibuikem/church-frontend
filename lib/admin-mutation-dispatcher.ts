@@ -35,6 +35,9 @@ import {
   operationsErrorMessage,
   recordSoulFollowUp,
   registerFirstTimer,
+  updateFirstTimer,
+  deleteFirstTimer,
+  mutateMinistryRecord,
   transitionHomeChurchApplication,
   type AdminScope,
 } from './admin-operations-api.ts';
@@ -699,7 +702,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       scope,
     );
   }
-  if ((route.includes('/first-timers') || routeStarts(route, '/admin/people/first-timers')) && labelIs(label, /register|create|add|save|submit/)) {
+  if ((route.includes('/first-timers') || routeStarts(route, '/admin/people/first-timers')) && labelIs(label, /register|create|add/) && !labelIs(label, /edit|update|delete|remove/)) {
     return registerFirstTimer(
       {
         person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
@@ -710,6 +713,63 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       },
       scope,
     );
+  }
+  if ((route.includes('/first-timers') || routeStarts(route, '/admin/people/first-timers')) && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|register|create|add/)) {
+    return updateFirstTimer(
+      requireId(pickRecord(ctx, 'first_timer_id', 'id'), 'first timer'),
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
+        church_id: requireId(firstUlid(payload.church_id), 'church'),
+        home_church_id: firstUlid(payload.home_church_id) ?? null,
+        registered_at: field(payload, 'registered_at', 'startDate') ?? null,
+      },
+      scope,
+    );
+  }
+  if ((route.includes('/first-timers') || routeStarts(route, '/admin/people/first-timers')) && labelIs(label, /delete|remove/)) {
+    return deleteFirstTimer(requireId(pickRecord(ctx, 'first_timer_id', 'id'), 'first timer'), scope);
+  }
+  if (route.includes('/converts') && labelIs(label, /add|create|register|save|submit/) && !labelIs(label, /edit|update|delete|remove/)) {
+    return mutateMinistryRecord('admin/church/converts', 'POST', {
+      person_id: requireId(firstUlid(payload.person_id), 'person'),
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      home_church_id: firstUlid(payload.home_church_id) ?? null,
+      converted_at: field(payload, 'converted_at') ?? null,
+      baptized_at: field(payload, 'baptized_at') ?? null,
+      source: field(payload, 'source') ?? null,
+      status: field(payload, 'status') ?? 'active',
+      notes: field(payload, 'notes') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/converts') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
+    return mutateMinistryRecord(`admin/church/converts/${encodeURIComponent(requireId(pickRecord(ctx, 'convert_id', 'id'), 'convert'))}`, 'PUT', {
+      person_id: requireId(firstUlid(payload.person_id), 'person'),
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      home_church_id: firstUlid(payload.home_church_id) ?? null,
+      converted_at: field(payload, 'converted_at') ?? null,
+      baptized_at: field(payload, 'baptized_at') ?? null,
+      source: field(payload, 'source') ?? null,
+      status: field(payload, 'status') ?? 'active',
+      notes: field(payload, 'notes') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/converts') && labelIs(label, /delete|remove/)) {
+    return mutateMinistryRecord(`admin/church/converts/${encodeURIComponent(requireId(pickRecord(ctx, 'convert_id', 'id'), 'convert'))}`, 'DELETE', undefined, scope);
+  }
+  if ((route.includes('/evangelism') || route.includes('/departments') || route.includes('/workers') || route.includes('/leadership') || route.includes('/leaders') || route.includes('/disciples') || route.includes('/counselling') || route.includes('/testimonies') || route.includes('/attendance')) && labelIs(label, /delete|remove/)) {
+    const id = requireId(pickRecord(ctx, 'id'), 'record');
+    const path = route.includes('/evangelism')
+      ? `admin/church/evangelism-activities/${id}`
+      : route.includes('/departments')
+        ? `admin/church/departments/${id}`
+        : route.includes('/counselling')
+          ? `admin/church/counselling-cases/${id}`
+          : route.includes('/testimonies')
+            ? `admin/church/testimonies/${id}`
+            : route.includes('/attendance')
+              ? `admin/church/attendance/${id}`
+              : `admin/church/role-assignments/${id}`;
+    return mutateMinistryRecord(path, 'DELETE', undefined, scope);
   }
   if (routeStarts(route, '/admin/people/follow-up', '/admin/churches') && labelIs(label, /complete follow|mark complete|complete task/) ) {
     return completeFollowUpTask(

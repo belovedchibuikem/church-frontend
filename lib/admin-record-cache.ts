@@ -61,6 +61,12 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
   }
   if (asText(item.published_at)) details['Published at'] = String(item.published_at);
 
+  // Church edit form: location_name is "new location" — clear it when an existing location is selected.
+  if (details.location_id) {
+    details.location_id_label = details.location_id_label || details.location_name || details.Location || '';
+    delete details.location_name;
+  }
+
   return details;
 }
 

@@ -26,6 +26,13 @@ export type ChurchRecord = {
   name: string;
   location_id?: string | null;
   location_name?: string | null;
+  country_id?: string | null;
+  country_name?: string | null;
+  address_line_one?: string | null;
+  address_line_two?: string | null;
+  locality?: string | null;
+  postal_code?: string | null;
+  timezone?: string | null;
   administrative_unit_id?: string | null;
   administrative_unit_name?: string | null;
   published_at?: string | null;
@@ -457,6 +464,31 @@ export function registerFirstTimer(
   });
 }
 
+export function updateFirstTimer(
+  firstTimerId: string,
+  input: RegisterFirstTimerInput,
+  scope?: AdminScope,
+): Promise<FirstTimerRecord> {
+  return opsMutate<FirstTimerRecord>(
+    `admin/church/first-timers/${encodeURIComponent(firstTimerId)}`,
+    'PUT',
+    input as unknown as JsonObject,
+    { scope },
+  );
+}
+
+export function deleteFirstTimer(
+  firstTimerId: string,
+  scope?: AdminScope,
+): Promise<{ id: string; deleted: boolean }> {
+  return opsMutate<{ id: string; deleted: boolean }>(
+    `admin/church/first-timers/${encodeURIComponent(firstTimerId)}`,
+    'DELETE',
+    undefined,
+    { scope },
+  );
+}
+
 export function listFollowUpTasks(params: ListQuery = {}): Promise<OpsListResult<FollowUpTaskRecord>> {
   return opsGetList<FollowUpTaskRecord>('admin/church/follow-up-tasks', params);
 }
@@ -507,6 +539,79 @@ export async function assignPrayerRequest(
 
 export function listPastoralNeeds(params: ListQuery = {}): Promise<OpsListResult<PastoralNeedRecord>> {
   return opsGetList<PastoralNeedRecord>('admin/church/pastoral-needs', params);
+}
+
+export function listPeopleDirectory(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/people', params);
+}
+
+export function listConverts(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/converts', params);
+}
+
+export function listEvangelismActivities(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/evangelism-activities', params);
+}
+
+export function listDepartments(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/departments', params);
+}
+
+export function listWorkers(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/workers', params);
+}
+
+export function listLeaders(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/leaders', params);
+}
+
+export function listDisciples(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/disciples', params);
+}
+
+export function listCounsellingCases(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/counselling-cases', params);
+}
+
+export function listTestimonies(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/testimonies', params);
+}
+
+export function listAttendance(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/attendance', params);
+}
+
+export function listChurchGroups(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/groups', params);
+}
+
+export function listAnnouncements(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/announcements', params);
+}
+
+export function listSafeguardingIncidents(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/safeguarding/incidents', params);
+}
+
+export function createConvert(input: JsonObject, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return opsMutate('admin/church/converts', 'POST', input, { scope });
+}
+
+export function updateConvert(id: string, input: JsonObject, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return opsMutate(`admin/church/converts/${encodeURIComponent(id)}`, 'PUT', input, { scope });
+}
+
+export function deleteConvert(id: string, scope?: AdminScope): Promise<{ id: string; deleted: boolean }> {
+  return opsMutate(`admin/church/converts/${encodeURIComponent(id)}`, 'DELETE', undefined, { scope });
+}
+
+export function mutateMinistryRecord(
+  path: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  input?: JsonObject,
+  scope?: AdminScope,
+): Promise<Record<string, unknown>> {
+  return opsMutate(path, method, input, { scope });
 }
 
 export function transitionPastoralNeed(
@@ -614,7 +719,20 @@ export type OpsDatasetKey =
   | 'souls'
   | 'invitations'
   | 'prayer-requests'
-  | 'pastoral-needs';
+  | 'pastoral-needs'
+  | 'people'
+  | 'converts'
+  | 'evangelism-activities'
+  | 'departments'
+  | 'workers'
+  | 'leaders'
+  | 'disciples'
+  | 'counselling-cases'
+  | 'testimonies'
+  | 'attendance'
+  | 'groups'
+  | 'announcements'
+  | 'safeguarding-incidents';
 
 /** Map admin screen routes/ids to church/mission list endpoints (no invented paths). */
 export function resolveOpsDataset(screen: {
@@ -626,9 +744,9 @@ export function resolveOpsDataset(screen: {
   const { id, route, nav } = screen;
   if (id === 'E-02' || route === '/admin/churches') return 'churches';
   if (id === 'D-07' || route === '/admin/home-churches') return 'home-churches';
-  if (route.includes('/small-groups')) return 'home-churches';
+  if (route.includes('/small-groups')) return 'groups';
   if (route.includes('/members') && !route.includes('/membership')) return 'memberships';
-  if (route.includes('/disciples')) return 'follow-up-tasks';
+  if (route.includes('/disciples') || route.includes('/discipleship')) return 'disciples';
   if (id === 'D-02' || route.startsWith('/admin/home-churches/applications')) {
     if (route === '/admin/home-churches/applications' || id === 'D-02') return 'home-church-applications';
   }
@@ -645,9 +763,20 @@ export function resolveOpsDataset(screen: {
   if (id === 'I-10' || id === 'I-13' || route === '/admin/mission/souls' || route === '/admin/mission/mentor-assignments') {
     return 'souls';
   }
-  if (id === 'I-05' || /\/invitations\/?$/.test(route)) return 'invitations';
+  if (route.includes('/invitations')) return 'invitations';
   if (id === 'F-10' || route === '/admin/people/prayer-requests') return 'prayer-requests';
   if (id === 'F-11' || route === '/admin/people/needs') return 'pastoral-needs';
+  if (route === '/admin/people' || id === 'F-01') return 'people';
+  if (route.includes('/converts') || nav === 'converts') return 'converts';
+  if (route.includes('/evangelism')) return 'evangelism-activities';
+  if (route.includes('/departments')) return 'departments';
+  if (route.includes('/workers') || nav === 'workers') return 'workers';
+  if (route.includes('/leadership') || nav === 'leaders' || route.endsWith('/leaders')) return 'leaders';
+  if (route.includes('/counselling')) return 'counselling-cases';
+  if (route.includes('/testimonies')) return 'testimonies';
+  if (route.includes('/attendance')) return 'attendance';
+  if (route.includes('/activities')) return 'announcements';
+  if (route.includes('/safeguarding')) return 'safeguarding-incidents';
   return null;
 }
 
@@ -678,6 +807,32 @@ export async function loadOpsDataset(
       return listPrayerRequests(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'pastoral-needs':
       return listPastoralNeeds(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'people':
+      return listPeopleDirectory(params);
+    case 'converts':
+      return listConverts(params);
+    case 'evangelism-activities':
+      return listEvangelismActivities(params);
+    case 'departments':
+      return listDepartments(params);
+    case 'workers':
+      return listWorkers(params);
+    case 'leaders':
+      return listLeaders(params);
+    case 'disciples':
+      return listDisciples(params);
+    case 'counselling-cases':
+      return listCounsellingCases(params);
+    case 'testimonies':
+      return listTestimonies(params);
+    case 'attendance':
+      return listAttendance(params);
+    case 'groups':
+      return listChurchGroups(params);
+    case 'announcements':
+      return listAnnouncements(params);
+    case 'safeguarding-incidents':
+      return listSafeguardingIncidents(params);
     default:
       return { items: [], pagination: { current_page: 1, per_page: 25, last_page: 1, total: 0 } };
   }
@@ -768,8 +923,8 @@ export function opsRecordsToRows(
             column === 'Name'
               ? humanValue(item, 'person_name')
               : column === 'Phone'
-                ? '—'
-                : column === 'Email'
+                ? humanValue(item, 'person_phone', 'phone')
+              : column === 'Email'
                   ? humanValue(item, 'person_email')
                 : column === 'Church'
                   ? humanValue(item, 'church_name', 'home_church_name')
@@ -889,8 +1044,159 @@ export function opsRecordsToRows(
                     ? get('status')
                     : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
+        case 'people':
+          mapped[column] =
+            column === 'Name' || column === 'User'
+              ? humanValue(item, 'name', 'person_name')
+              : column === 'ID'
+                ? humanValue(item, 'id')
+                : column === 'Type'
+                  ? humanValue(item, 'type')
+                  : column === 'Church'
+                    ? humanValue(item, 'church_name')
+                    : column === 'Phone'
+                      ? humanValue(item, 'phone', 'person_phone')
+                      : column === 'Email'
+                        ? humanValue(item, 'email', 'person_email')
+                        : column === 'Last Contact'
+                          ? shortDate(get('last_contact') === '—' ? null : get('last_contact'))
+                          : column === 'Status'
+                            ? get('status')
+                            : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'converts':
+          mapped[column] =
+            column === 'Name'
+              ? humanValue(item, 'person_name')
+              : column === 'Phone'
+                ? humanValue(item, 'person_phone')
+                : column === 'Church'
+                  ? humanValue(item, 'church_name')
+                  : column === 'Converted On' || column === 'Date'
+                    ? shortDate(get('converted_at') === '—' ? null : get('converted_at'))
+                    : column === 'Baptized'
+                      ? item.baptized_at
+                        ? 'Yes'
+                        : 'No'
+                      : column === 'Status'
+                        ? get('status')
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'evangelism-activities':
+          mapped[column] =
+            column === 'Name' || column === 'Activity' || column === 'Title'
+              ? humanValue(item, 'title', 'name')
+              : column === 'Church'
+                ? humanValue(item, 'church_name')
+                : column === 'Date'
+                  ? shortDate(get('occurred_at') === '—' ? null : get('occurred_at'))
+                  : column === 'Souls' || column === 'Reached'
+                    ? get('souls_reached')
+                    : column === 'Decisions'
+                      ? get('decisions')
+                      : column === 'Status'
+                        ? get('status')
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'departments':
+        case 'groups':
+          mapped[column] =
+            column === 'Name' || column === 'Department' || column === 'Group'
+              ? humanValue(item, 'name')
+              : column === 'Leader'
+                ? humanValue(item, 'leader_name')
+                : column === 'Church'
+                  ? humanValue(item, 'church_name')
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'workers':
+        case 'leaders':
+        case 'disciples':
+          mapped[column] =
+            column === 'Name' || column === 'Worker' || column === 'Leader' || column === 'Disciple'
+              ? humanValue(item, 'person_name', 'title')
+              : column === 'Role' || column === 'Title'
+                ? humanValue(item, 'title')
+                : column === 'Department'
+                  ? humanValue(item, 'department_name')
+                  : column === 'Church'
+                    ? humanValue(item, 'church_name')
+                    : column === 'Phone'
+                      ? humanValue(item, 'person_phone')
+                      : column === 'Status'
+                        ? get('status')
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'counselling-cases':
+          mapped[column] =
+            column === 'Client' || column === 'Name'
+              ? humanValue(item, 'person_name')
+              : column === 'Counselor'
+                ? humanValue(item, 'counselor_name')
+                : column === 'Last Updated' || column === 'Date'
+                  ? shortDate(get('updated_at') === '—' ? null : get('updated_at'))
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'testimonies':
+          mapped[column] =
+            column === 'Testimony' || column === 'Title' || column === 'Name'
+              ? humanValue(item, 'title', 'name')
+              : column === 'By'
+                ? humanValue(item, 'person_name')
+                : column === 'Date'
+                  ? shortDate(get('submitted_at') === '—' ? null : get('submitted_at'))
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'attendance':
+          mapped[column] =
+            column === 'Home Church' || column === 'Name' || column === 'Church'
+              ? humanValue(item, 'home_church_name', 'church_name', 'name')
+              : column === 'Date' || column === 'Service Date'
+                ? shortDate(get('service_date') === '—' ? null : get('service_date'))
+                : column === 'Adults'
+                  ? get('adults')
+                  : column === 'Children'
+                    ? get('children')
+                    : column === 'First Timers'
+                      ? get('first_timers')
+                      : column === 'Total'
+                        ? get('total')
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'announcements':
+          mapped[column] =
+            column === 'Title' || column === 'Name' || column === 'Activity'
+              ? humanValue(item, 'title', 'name')
+              : column === 'Church'
+                ? humanValue(item, 'church_name')
+                : column === 'Date'
+                  ? shortDate(get('published_at') === '—' ? null : get('published_at'))
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'safeguarding-incidents':
+          mapped[column] =
+            column === 'Name' || column === 'Concern' || column === 'Type'
+              ? humanValue(item, 'concern_type', 'name')
+              : column === 'Severity'
+                ? get('severity')
+                : column === 'Person'
+                  ? humanValue(item, 'person_name')
+                  : column === 'Date'
+                    ? shortDate(get('reported_at') === '—' ? null : get('reported_at'))
+                    : column === 'Status'
+                      ? get('status')
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
         default:
-          mapped[column] = '—';
+          mapped[column] = humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
       }
     }
 

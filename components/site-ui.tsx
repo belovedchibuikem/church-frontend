@@ -24,6 +24,7 @@ import {
 } from '@/components/member-pages';
 import { useAuth } from '@/components/auth-provider';
 import { AuthScreen, MemberLogoutButton } from '@/components/auth-ui';
+import { InteractiveMap, type MapMarker } from '@/components/interactive-map';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { useLocale } from '@/components/locale-provider';
 import { localeMeta, supportedLocales, type TranslateOptions } from '@/lib/i18n/types.ts';

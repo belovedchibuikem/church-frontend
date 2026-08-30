@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { hasAdministratorCapabilities, type AccessDecision } from '../lib/access-control';
 import {
@@ -75,6 +75,7 @@ import {
   completeFollowUpTask,
   createChurch,
   defaultOpsScope,
+  listFollowUpTasks,
   listPastoralNeeds,
   listPrayerRequests,
   loadOpsDataset,
@@ -86,11 +87,18 @@ import {
   transitionHomeChurchApplication,
   transitionPastoralNeed,
   transitionPrayerRequest,
+  type FollowUpTaskRecord,
   type OpsDatasetKey,
   type PastoralNeedRecord,
   type PrayerRequestRecord,
 } from '../lib/admin-operations-api';
+import { extractUlid } from '../lib/admin-mutation-dispatcher';
 import { stashAdminRecords } from '../lib/admin-record-cache';
+import {
+  platformErrorMessage,
+  queryPlatformSearch,
+  type PlatformSearchHit,
+} from '../lib/admin-platform-api';
 import {
   countriesToSelectOptions,
   createLocation,
@@ -471,12 +479,6 @@ function DashboardLiveNotice({ loading, error }: { loading?: boolean; error?: st
 }
 
 function pendingLiveApiMessage(route: string): string | null {
-  if (route.includes('/converts')) {
-    return 'Convert and baptism records are not registered in the protected API yet. Use First Timers and Follow-Up for live pastoral intake.';
-  }
-  if (route.includes('/evangelism')) {
-    return 'Church evangelism activities are not registered in the protected API yet. Mission soul capture is available under Mission Operations.';
-  }
   return null;
 }
 
@@ -569,6 +571,19 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
         perPage: 25,
         sort: '-created_at',
       });
+      stashAdminRecords(
+        result.data.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          status: user.account_status,
+          person_id: user.person_id,
+          created_at: user.created_at,
+          suspended_at: user.suspended_at,
+          suspension_reason: user.suspension_reason,
+          roles: user.roles?.map((role) => role.name ?? role.code).filter(Boolean).join(', '),
+        })),
+      );
       setUsers(result.data);
       setTotal(result.pagination.total);
       setMessage(`Showing ${result.data.length} of ${result.pagination.total} users`);
@@ -672,6 +687,12 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
                   {!suspendedOnly && <td>{formatTimestamp(user.created_at)}</td>}
                   <td className="actions-cell">
                     <div className="row-actions">
+                      <TableRowActions
+                        record={formatRowActionRecord(user.name, user.id)}
+                        entityKey="user"
+                        canEdit={false}
+                        canDelete={false}
+                      />
                       {user.account_status === 'suspended' ? (
                         <button type="button" className="table-action" data-interaction-native="true" disabled={busyId === user.id} onClick={() => void onReactivate(user)}>{t('admin.reactivate', { defaultMessage: 'Reactivate' })}</button>
                       ) : (
@@ -702,6 +723,14 @@ function IdentityRolesTable({ requestedScope }: { requestedScope?: string }) {
       try {
         const result = await listAdminRoles({ scope: defaultAdminScope(requestedScope), perPage: 50, sort: 'code' });
         if (cancelled) return;
+        stashAdminRecords(
+          result.data.map((role) => ({
+            id: role.id,
+            name: role.name,
+            code: role.code,
+            permissions: String(role.permissions?.length ?? 0),
+          })),
+        );
         setRoles(result.data);
         setTotal(result.pagination.total);
         setError(null);
@@ -725,16 +754,24 @@ function IdentityRolesTable({ requestedScope }: { requestedScope?: string }) {
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>
-          <thead><tr><th>{t('admin.roleName', { defaultMessage: 'Role Name' })}</th><th>{t('admin.code', { defaultMessage: 'Code' })}</th><th>{t('admin.permissions', { defaultMessage: 'Permissions' })}</th><th>{t('admin.status', { defaultMessage: 'Status' })}</th></tr></thead>
+          <thead><tr><th>{t('admin.roleName', { defaultMessage: 'Role Name' })}</th><th>{t('admin.code', { defaultMessage: 'Code' })}</th><th>{t('admin.permissions', { defaultMessage: 'Permissions' })}</th><th>{t('admin.status', { defaultMessage: 'Status' })}</th><th>{t('admin.actions', { defaultMessage: 'Actions' })}</th></tr></thead>
           <tbody>
             {roles.length === 0 ? (
-              <tr><td colSpan={4}>{error ? t('admin.rolesUnavailable', { defaultMessage: 'Roles unavailable.' }) : t('admin.noRolesReturned', { defaultMessage: 'No roles returned.' })}</td></tr>
+              <tr><td colSpan={5}>{error ? t('admin.rolesUnavailable', { defaultMessage: 'Roles unavailable.' }) : t('admin.noRolesReturned', { defaultMessage: 'No roles returned.' })}</td></tr>
             ) : roles.map((role) => (
               <tr key={role.id}>
                 <td>{role.name}</td>
                 <td><code>{role.code}</code></td>
                 <td>{role.permissions?.length ?? '—'}</td>
                 <td><StatusBadge value={t('admin.active', { defaultMessage: 'Active' })} /></td>
+                <td className="actions-cell">
+                  <TableRowActions
+                    record={formatRowActionRecord(role.name, role.id)}
+                    entityKey="role"
+                    canEdit={false}
+                    canDelete={false}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1020,6 +1057,7 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
   const entityKey = resolveEntityKey(screen.route, screen.id);
   const reviewLabel = screen.nav === 'applications' ? 'Review' : undefined;
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
+  const [liveItems, setLiveItems] = useState<Array<Record<string, unknown>>>([]);
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('Loading…');
   const [error, setError] = useState<string | null>(null);
@@ -1033,6 +1071,7 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
     try {
       const result = await loadOpsDataset(dataset, { scope: defaultOpsScope(screen.scope), perPage: 25 });
       stashAdminRecords(result.items as Array<Record<string, unknown>>);
+      setLiveItems(result.items as Array<Record<string, unknown>>);
       setRows(opsRecordsToRows(dataset, result.items, columns));
       setTotal(result.pagination.total);
       setMessage(
@@ -1042,6 +1081,7 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
       );
     } catch (err) {
       setRows([]);
+      setLiveItems([]);
       setTotal(0);
       setError(operationsErrorMessage(err, 'Unable to load church/mission operations.'));
       setMessage('Live operations data unavailable');
@@ -1153,9 +1193,36 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
     }
   }
 
+  const liveMetrics = useMemo(() => {
+    if (dataset !== 'first-timers') {
+      return [{ label: 'Total', value: String(total) }, ...(screen.metrics ?? []).slice(1, 4)];
+    }
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    let todayCount = 0;
+    let weekCount = 0;
+    let followedCount = 0;
+    for (const item of liveItems) {
+      const registered = item.registered_at ? Date.parse(String(item.registered_at)) : Number.NaN;
+      if (!Number.isNaN(registered)) {
+        if (registered >= startOfToday.getTime()) todayCount += 1;
+        if (registered >= weekAgo) weekCount += 1;
+      }
+      if (item.contacted_at) followedCount += 1;
+    }
+    const followedPct = liveItems.length === 0 ? 0 : Math.round((followedCount / liveItems.length) * 100);
+    return [
+      { label: 'Total', value: String(total) },
+      { label: 'This Week', value: String(weekCount) },
+      { label: 'Today', value: String(todayCount) },
+      { label: 'Followed Up', value: `${followedPct}%` },
+    ];
+  }, [dataset, liveItems, screen.metrics, total]);
+
   return (
     <>
-      <MetricCards metrics={[{ label: 'Total', value: String(total) }, ...(screen.metrics ?? []).slice(1, 4)]} />
+      <MetricCards metrics={liveMetrics} />
       {dataset === 'first-timers' ? (
         <form className="card form-card" onSubmit={(event) => void onRegisterFirstTimer(event)}>
           <h2 className="section-title">{t('admin.registerFirstTimer', { defaultMessage: 'Register first timer' })}</h2>
@@ -1499,11 +1566,12 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
 function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const { t } = useLocale();
   if (!shouldUseDesignFixtures()) {
-    if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended' || screen.route === '/admin/people') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
+    if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.route === '/admin/roles') return <IdentityRolesTable requestedScope={requestedScope} />;
     if (screen.route === '/admin/access/history') return <IdentityAccessDecisionsTable requestedScope={requestedScope} />;
     const opsDataset = resolveOpsDataset(screen);
     if (opsDataset && shouldUseOperationsLiveData()) return <OperationsLiveTable screen={screen} dataset={opsDataset} />;
+    if (screen.route === '/admin/people') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.batch === 'C' && isOrganizationCatalogRoute(screen.route)) {
       return <OrganizationCatalogTable screen={screen} />;
     }
@@ -1562,15 +1630,328 @@ function FeedView({ screen }: { screen: AdminScreen }) {
 }
 
 function ScopeGrid({ screen }: { screen: AdminScreen }) {
-  return <><div className="scope-current">Current Scope <strong>Global⌄</strong></div><div className="scope-grid">{(screen.items ?? []).map((item,index)=><Link href={`/admin/scope?scope=${item.toLowerCase()}`} className="card scope-card" key={item}><span className="scope-icon">{['◉','⚑','◇','▥','♧','⌖'][index]}</span><strong>{item}</strong><small>{['All countries and data','View by continent','Select a country','View by region','By denomination/network','By mission location'][index]}</small></Link>)}</div></>;
+  const [assignments, setAssignments] = useState<AdminScopeAssignment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('Loading scopes…');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await listAdminScopeAssignments({ perPage: 50, sort: '-created_at' });
+        if (cancelled) return;
+        setAssignments(result.data);
+        setMessage(
+          result.data.length === 0
+            ? 'No scope assignments yet. Global remains available.'
+            : `Loaded ${result.data.length} scope assignment(s).`,
+        );
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setAssignments([]);
+        setError(identityErrorMessage(err));
+        setMessage('Unable to load live scope assignments.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const cards = (screen.items ?? ['Global', 'Continent', 'Country', 'Region', 'Church Network', 'Mission Field']).map(
+    (item, index) => ({
+      label: item,
+      href: `/admin/scope?scope=${encodeURIComponent(item.toLowerCase().replaceAll(' ', '-'))}`,
+      icon: ['◉', '⚑', '◇', '▥', '♧', '⌖'][index] ?? '◉',
+      copy: [
+        'All countries and data',
+        'View by continent',
+        'Select a country',
+        'View by region',
+        'By denomination/network',
+        'By mission location',
+      ][index] ?? 'Open this scope',
+    }),
+  );
+
+  return (
+    <>
+      <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+        {error ?? message}
+      </p>
+      <div className="scope-current">
+        Current Scope <strong>Global</strong>
+      </div>
+      <div className="scope-grid">
+        {cards.map((card) => (
+          <Link href={card.href} className="card scope-card" key={card.label}>
+            <span className="scope-icon">{card.icon}</span>
+            <strong>{card.label}</strong>
+            <small>{card.copy}</small>
+          </Link>
+        ))}
+      </div>
+      {assignments.length > 0 ? (
+        <div className="card table-card" style={{ marginTop: 18 }}>
+          <h2 className="section-title">Live scope assignments</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Scope ID</th>
+                <th>Role assignment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assignments.slice(0, 12).map((row) => (
+                <tr key={row.id}>
+                  <td>{row.scope?.type ?? '—'}</td>
+                  <td>
+                    <code>{row.scope?.id ?? '—'}</code>
+                  </td>
+                  <td>
+                    <code>{row.role_assignment?.id ?? row.id}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function CommandView({ screen }: { screen: AdminScreen }) {
-  return <><label className="command-search"><span>⌕</span><input aria-label="Command search" placeholder="Search churches, members, events, giving, requests..." /></label><div className="chip-row">{['Church','Member','Event','Donation','Mission','User'].map(item=><button key={item}>{item}</button>)}</div><h2 className="section-title">Popular Commands</h2><div className="action-grid">{(screen.items ?? []).map((item,index)=><button className="card action-card" key={item}><span>⌘</span><strong>{item}</strong><small>{['Review and decide','Download scoped data','Open performance','Download scoped data','Draft a message','Create secure report'][index]}</small></button>)}</div></>;
+  const [term, setTerm] = useState('');
+  const [hits, setHits] = useState<PlatformSearchHit[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string>('all');
+
+  async function runSearch(nextTerm = term, resourceType = filter) {
+    const clean = nextTerm.trim();
+    if (clean.length < 2) {
+      setHits([]);
+      setError(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const results = await queryPlatformSearch(clean, {
+        resourceTypes: resourceType === 'all' ? [] : [resourceType.toLowerCase()],
+        limit: 20,
+      });
+      setHits(results);
+    } catch (err) {
+      setHits([]);
+      setError(platformErrorMessage(err, 'Platform search failed.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const commandLinks = [
+    { label: 'Approve Home Church', href: '/admin/home-churches/applications', copy: 'Review and decide' },
+    { label: 'View Country Report', href: '/admin/reports', copy: 'Open performance' },
+    { label: 'Create Announcement', href: '/admin/communications', copy: 'Draft a message' },
+    { label: 'Export Member List', href: '/admin/people', copy: 'Open people directory' },
+    { label: 'Churches', href: '/admin/churches', copy: 'Manage churches' },
+    { label: 'Generate Audit Report', href: '/admin/audit', copy: 'Create secure report' },
+  ];
+
+  return (
+    <>
+      <label className="command-search">
+        <span>⌕</span>
+        <input
+          aria-label="Command search"
+          placeholder="Search churches, members, events, giving, requests..."
+          value={term}
+          data-interaction-native="true"
+          onChange={(event) => setTerm(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              void runSearch();
+            }
+          }}
+        />
+        <button type="button" className="primary-button" data-interaction-native="true" disabled={busy} onClick={() => void runSearch()}>
+          {busy ? 'Searching…' : 'Search'}
+        </button>
+      </label>
+      <div className="chip-row">
+        {['all', 'Church', 'Member', 'Event', 'Donation', 'Mission', 'User'].map((item) => (
+          <button
+            key={item}
+            type="button"
+            data-interaction-native="true"
+            className={filter === item ? 'is-active' : undefined}
+            onClick={() => {
+              setFilter(item);
+              void runSearch(term, item);
+            }}
+          >
+            {item === 'all' ? 'All' : item}
+          </button>
+        ))}
+      </div>
+      {error ? <p className="field-help identity-error" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {hits.length > 0 ? (
+        <div className="card table-card" style={{ marginBottom: 18 }}>
+          <h2 className="section-title">Search results</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Summary</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hits.map((hit) => (
+                <tr key={`${hit.resource_type}-${hit.resource_id}`}>
+                  <td>{hit.title}</td>
+                  <td>{hit.resource_type}</td>
+                  <td>{hit.summary ?? '—'}</td>
+                  <td className="actions-cell">
+                    <TableRowActions
+                      record={formatRowActionRecord(hit.title, hit.resource_id)}
+                      canEdit={false}
+                      canDelete={false}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      <h2 className="section-title">Popular Commands</h2>
+      <div className="action-grid">
+        {commandLinks.map((item) => (
+          <Link className="card action-card" key={item.label} href={item.href}>
+            <span>⌘</span>
+            <strong>{item.label}</strong>
+            <small>{item.copy}</small>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
 }
 
 function TasksView({ screen }: { screen: AdminScreen }) {
-  return <div className="card task-list">{(screen.items ?? []).map((item,index)=><label className="task-item" key={item}><input type="checkbox" /><span>{item}</span><small>Assigned to You</small><time>{index<2?'Today':index===2?'Tomorrow':'May 13, 2024'}</time></label>)}</div>;
+  const [tasks, setTasks] = useState<FollowUpTaskRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [message, setMessage] = useState('Loading tasks…');
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'pending' | 'completed'>('pending');
+
+  const refresh = useCallback(async () => {
+    if (!shouldUseOperationsLiveData()) {
+      setTasks([]);
+      setMessage('Operations API is not configured for live tasks.');
+      return;
+    }
+    setError(null);
+    setMessage('Loading tasks…');
+    try {
+      const result = await listFollowUpTasks({ scope: defaultOpsScope(screen.scope), perPage: 50 });
+      stashAdminRecords(result.items as unknown as Array<Record<string, unknown>>);
+      setTasks(result.items);
+      setTotal(result.pagination.total);
+      setMessage(
+        result.pagination.total === 0
+          ? 'No follow-up tasks in this scope.'
+          : `Showing ${result.items.length} of ${result.pagination.total} follow-up tasks`,
+      );
+    } catch (err) {
+      setTasks([]);
+      setTotal(0);
+      setError(operationsErrorMessage(err, 'Unable to load follow-up tasks.'));
+      setMessage('Live tasks unavailable');
+    }
+  }, [screen.scope]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function onComplete(task: FollowUpTaskRecord) {
+    const reason = window.prompt('Completion reason code (e.g. contacted_successfully):', 'contacted_successfully');
+    if (!reason) return;
+    setBusyId(task.id);
+    setError(null);
+    try {
+      await completeFollowUpTask(task.id, reason.trim(), defaultOpsScope(screen.scope));
+      await refresh();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Follow-up completion failed.'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const pending = tasks.filter((task) => !/completed|done/i.test(task.status ?? ''));
+  const completed = tasks.filter((task) => /completed|done/i.test(task.status ?? ''));
+  const visible = tab === 'pending' ? pending : completed;
+
+  return (
+    <>
+      <div className="chip-row" style={{ marginBottom: 12 }}>
+        <button type="button" data-interaction-native="true" className={tab === 'pending' ? 'is-active' : undefined} onClick={() => setTab('pending')}>
+          My Tasks ({pending.length})
+        </button>
+        <button type="button" data-interaction-native="true" className={tab === 'completed' ? 'is-active' : undefined} onClick={() => setTab('completed')}>
+          Completed ({completed.length})
+        </button>
+        <span className="field-help">Total {total}</span>
+      </div>
+      {error ? <p className="field-help identity-error" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      <div className="card task-list">
+        {visible.length === 0 ? (
+          <p className="maps-settings-lead">{message}</p>
+        ) : (
+          visible.map((task) => (
+            <div className="task-item" key={task.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
+              <div>
+                <strong>{task.person_name || task.type || 'Follow-up task'}</strong>
+                <small style={{ display: 'block' }}>
+                  {task.assigned_to_name ? `Assigned to ${task.assigned_to_name}` : 'Unassigned'} · {task.status}
+                </small>
+                <time>{task.due_at ? formatTimestamp(task.due_at) : 'No due date'}</time>
+              </div>
+              <div className="row-actions">
+                <TableRowActions
+                  record={formatRowActionRecord(task.person_name ?? task.type, task.id)}
+                  entityKey="follow_up_task"
+                  canEdit={false}
+                  canDelete={false}
+                />
+                {tab === 'pending' ? (
+                  <button
+                    type="button"
+                    className="table-action"
+                    data-interaction-native="true"
+                    disabled={busyId === task.id}
+                    onClick={() => void onComplete(task)}
+                  >
+                    Complete
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  );
 }
 
 function KpiView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
@@ -1747,8 +2128,6 @@ function WizardView({ screen }: { screen: AdminScreen }) {
                   <span>{field.label}</span>
                   {field.type === 'search-select' ? (
                     <SearchSelect name={field.name} catalog={field.catalog} options={catalogOptions[field.catalog]} placeholder={`Search ${field.label.replace(' *', '')}`} />
-                  ) : field.type === 'select' ? (
-                    <select name={field.name} defaultValue=""><option value="" disabled>Select {field.label.replace(' *', '')}</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select>
                   ) : (
                     <input name={field.name} type={field.type} placeholder={`Enter ${field.label.replace(' *', '').toLowerCase()}`} />
                   )}

@@ -69,7 +69,7 @@ export function PaymentsSettingsPanel() {
         data.active
           ? t('settings.payments.liveProvider', {
               defaultMessage: 'Live provider: {provider}. Giving on web and mobile uses hosted checkout.',
-              vars: { provider: data.active_provider },
+              vars: { provider: data.active_provider ?? 'none' },
             })
           : t('settings.payments.inactive', {
               defaultMessage: 'Keys are stored encrypted. Activate to enable checkout and signed webhooks.',
@@ -102,7 +102,7 @@ export function PaymentsSettingsPanel() {
       setMessage(
         t('settings.payments.liveProvider', {
           defaultMessage: 'Live provider: {provider}. Giving on web and mobile uses hosted checkout.',
-          vars: { provider: data.active_provider },
+          vars: { provider: data.active_provider ?? 'none' },
         }),
       );
     } catch (error) {

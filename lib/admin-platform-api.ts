@@ -620,6 +620,31 @@ export async function wipeDemoDataset(
   return platformMutate('POST', 'admin/platform/demo/wipe', { confirmation }, scope);
 }
 
+export type PlatformSearchHit = {
+  resource_type: string;
+  resource_id: string;
+  title: string;
+  summary?: string | null;
+  classification?: string | null;
+  metadata?: JsonObject | null;
+};
+
+export async function queryPlatformSearch(
+  term: string,
+  options: { resourceTypes?: string[]; limit?: number; scope?: AdminScope } = {},
+): Promise<PlatformSearchHit[]> {
+  return platformMutate<PlatformSearchHit[]>(
+    'POST',
+    'admin/platform/search/queries',
+    {
+      term,
+      resource_types: options.resourceTypes ?? [],
+      limit: options.limit ?? 20,
+    },
+    options.scope ?? PLATFORM_GLOBAL_SCOPE,
+  );
+}
+
 export function platformErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof AdminPlatformApiError) {
     return error.code ? `${error.message} (${error.code})` : error.message;

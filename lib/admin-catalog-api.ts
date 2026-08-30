@@ -326,6 +326,8 @@ export function catalogRecordsToRows(
           'code',
           'purpose',
         );
+      } else if (key.includes('applicant')) {
+        mapped[column] = get('person_name', 'applicant_name', 'name');
       } else if (key.includes('status')) {
         mapped[column] = get('status');
       } else if (key.includes('author') || key.includes('donor') || key.includes('user') || key === 'by') {
@@ -353,12 +355,16 @@ export function catalogRecordsToRows(
       } else if (key.includes('language')) {
         mapped[column] = get('language_code', 'language');
       } else if (
+        key.includes('submitted') ||
+        key.includes('received') ||
         key.includes('date') ||
         key.includes('published') ||
         key.includes('updated') ||
         key === 'time'
       ) {
         mapped[column] = get(
+          'received_at',
+          'submitted_at',
           'published_at',
           'occurred_at',
           'opened_at',
@@ -370,6 +376,7 @@ export function catalogRecordsToRows(
           'created_at',
           'updated_at',
           'status_changed_at',
+          'reviewed_at',
         );
       } else if (key.includes('amount')) {
         mapped[column] = get('amount', 'amount_minor');
@@ -383,6 +390,10 @@ export function catalogRecordsToRows(
         mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
       } else if (key.includes('student')) {
         mapped[column] = get('student_name', 'person_name', 'enrollment_id');
+      } else if (key.includes('church')) {
+        mapped[column] = get('church_name', 'home_church_name', 'church');
+      } else if (key.includes('batch')) {
+        mapped[column] = get('batch_name', 'cohort_name', 'year_name', 'batch');
       } else if (key.includes('region')) {
         mapped[column] = get('cohort_name', 'region', 'locality');
       } else if (key.includes('translator')) {
