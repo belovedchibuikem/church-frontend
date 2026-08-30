@@ -357,7 +357,6 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Location', name: 'location', type: 'geography', wide: true, value: 'NG' },
     { label: 'Location Name', name: 'location_name', value: 'Ikeja Meeting Point', wide: true },
     { label: 'Address Line', name: 'address_line_one', value: '12 Allen Avenue', wide: true },
-  ];
     { label: 'Meeting Location', name: 'location_id', type: 'search-select', catalog: 'location', value: '01JLOCADENIYI', wide: true },
   ];
   if (path.includes('/start-home-church/apply/meeting')) return [
