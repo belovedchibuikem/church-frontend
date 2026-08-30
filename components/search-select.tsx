@@ -135,6 +135,18 @@ export function SearchSelect({
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setOpen(false);
+    };
+    // Capture so the admin drawer does not close while the menu is open.
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [open]);
+
   const selectOption = (option: SearchSelectOption) => {
     setValue(option.value);
     setQuery(option.label);
@@ -187,6 +199,7 @@ export function SearchSelect({
                 <button
                   type="button"
                   role="option"
+                  data-interaction-native="true"
                   aria-selected={value === option.value}
                   onClick={() => selectOption(option)}
                 >

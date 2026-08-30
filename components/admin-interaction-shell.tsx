@@ -310,6 +310,9 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     if (!button || button.dataset.interactionNative === 'true') return;
     if (screenKind === 'login' || screenKind === 'mfa') return;
     if (button.type === 'submit') return;
+    // SearchSelect option rows are buttons; do not treat them as admin page actions
+    // (that was replacing Create Church with an "AfghanistanAF" actions drawer).
+    if (button.closest('.search-select, .search-select-menu, [role="listbox"]')) return;
     if (button.closest('form') && !button.closest('.interaction-overlay')) return;
     if (button.closest('.branding-settings, .maps-settings') && !button.closest('.interaction-overlay')) return;
     const label = (button.getAttribute('aria-label') || button.textContent || '').trim();
@@ -493,6 +496,8 @@ export function AdminInteractionShell({ children, route, title, permission, scop
 
   const handleInput = (event: FormEvent<HTMLDivElement>) => {
     const input = event.target as HTMLInputElement;
+    // Ignore comboboxes inside overlays/forms so typing Country etc. does not drive page search.
+    if (input.closest('.search-select, .interaction-overlay, .interaction-action-form')) return;
     if (input.matches('input[type="search"], .search-box input, .kca-search input, .mission-search input, .platform-filter-bar input, input[placeholder*="Search" i]')) handleSearch(input.value);
   };
 
