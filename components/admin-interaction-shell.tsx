@@ -14,11 +14,22 @@ import {
   formatAdminActionSuccess,
   formatAdminMutationError,
 } from '../lib/admin-mutation-dispatcher';
+import { getAdminRecordDetails } from '../lib/admin-record-cache';
 import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
 
 type Overlay =
-  | { type: 'drawer' | 'dialog'; title: string; description: string; mode: 'filters' | 'profile' | 'modules' | 'action'; actionMode?: ActionSurfaceMode; label?: string; record?: string; entityKey?: string }
+  | {
+      type: 'drawer' | 'dialog';
+      title: string;
+      description: string;
+      mode: 'filters' | 'profile' | 'modules' | 'action';
+      actionMode?: ActionSurfaceMode;
+      label?: string;
+      record?: string;
+      entityKey?: string;
+      details?: Record<string, string>;
+    }
   | null;
 
 type Props = {
@@ -214,12 +225,18 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     return routes[clean];
   };
 
-  const openAction = (label: string, forcedMode?: ActionSurfaceMode, options?: { record?: string; entityKey?: string }) => {
+  const openAction = (
+    label: string,
+    forcedMode?: ActionSurfaceMode,
+    options?: { record?: string; entityKey?: string; details?: Record<string, string> },
+  ) => {
     const actionMode = forcedMode ?? inferActionSurfaceMode(label);
     const entity = label.replace(/[＋+]/g, '').trim() || title;
     const recordLabel = normalize(label).replace(/^(view|open|edit|delete|details for|actions for)\s+/, '');
     const selectedRecord = options?.record ?? (recordLabel ? records.find((record) => record.toLowerCase().includes(recordLabel)) : undefined);
     const entityKey = options?.entityKey ?? resolveEntityKey(route);
+    const cachedDetails = getAdminRecordDetails(selectedRecord) ?? getAdminRecordDetails(options?.record);
+    const actionDetails = options?.details ?? cachedDetails ?? undefined;
     setOverlay({
       type: actionMode === 'confirm' ? 'dialog' : 'drawer',
       mode: 'action',
@@ -227,6 +244,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       label,
       record: selectedRecord,
       entityKey,
+      details: actionDetails,
       title: actionMode === 'create' ? entity : label || t('admin.pageActions', { defaultMessage: 'Page actions' }),
       description: actionMode === 'confirm' ? t('admin.confirmDescription', { defaultMessage: 'Review the scope, permission and supporting notes before continuing.' }) : t('admin.workflowDescription', { defaultMessage: 'Complete the {entity} workflow for {title}.', vars: { entity: entity.toLowerCase(), title } }),
     });
@@ -334,9 +352,9 @@ export function AdminInteractionShell({ children, route, title, permission, scop
           return;
         }
       }
-      if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey });
-      else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey });
-      else if (action === 'delete') openAction(t('admin.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record } }), 'confirm', { record, entityKey });
+      if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey, details: getAdminRecordDetails(record) });
+      else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey, details: getAdminRecordDetails(record) });
+      else if (action === 'delete') openAction(t('admin.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record } }), 'confirm', { record, entityKey, details: getAdminRecordDetails(record) });
       return;
     }
 
@@ -541,7 +559,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><Link href="/admin/profile">Open Admin Profile</Link><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
         {overlay.mode === 'modules' && <div className="interaction-module-grid">{adminModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
         {overlay.mode === 'modules' && <div className="interaction-directory-link"><Link href="/admin/screens">Preview-only screen directory</Link></div>}
-        {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 
+        {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={overlay.details ?? details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 
       </section>
     </div>}
     {toast && <div className="interaction-toast" role="status" aria-live="polite">{toast}</div>}

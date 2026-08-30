@@ -734,7 +734,7 @@ export function opsRecordsToRows(
                     : column === 'Status'
                       ? item.published_at
                         ? 'Active'
-                        : 'Draft'
+                        : 'Unpublished'
                       : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'home-churches':

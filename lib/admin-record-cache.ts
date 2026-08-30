@@ -1,0 +1,91 @@
+/**
+ * In-memory cache of admin list records so View/Edit/Delete overlays can
+ * prefill from the selected row without a GET-by-id endpoint.
+ */
+
+const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i;
+
+const recordCache = new Map<string, Record<string, string>>();
+
+function asText(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return undefined;
+}
+
+/** Flatten an ops/API list item into form-friendly string details. */
+export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record<string, string> {
+  const details: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(item)) {
+    const text = asText(value);
+    if (text !== undefined) details[key] = text;
+  }
+
+  const id = asText(item.id) ?? asText(item.public_id);
+  if (id) details.id = id;
+
+  // SearchSelect companion labels (field_name_label).
+  const labelPairs: Array<[string, string]> = [
+    ['location_id', 'location_name'],
+    ['administrative_unit_id', 'administrative_unit_name'],
+    ['church_id', 'church_name'],
+    ['home_church_id', 'home_church_name'],
+    ['person_id', 'person_name'],
+    ['leader_person_id', 'leader_name'],
+    ['country_id', 'country_name'],
+    ['lecturer_person_id', 'lecturer_name'],
+    ['mentor_person_id', 'mentor_name'],
+    ['kca_module_id', 'module_title'],
+    ['kca_cohort_id', 'cohort_name'],
+    ['kca_enrollment_id', 'enrollment_label'],
+  ];
+  for (const [idKey, nameKey] of labelPairs) {
+    const idValue = asText(item[idKey]);
+    const labelValue = asText(item[nameKey]);
+    if (idValue) details[idKey] = idValue;
+    if (labelValue) details[`${idKey}_label`] = labelValue;
+  }
+
+  // Friendly preview fields.
+  if (asText(item.name)) details.Name = String(item.name);
+  if (asText(item.location_name)) details.Location = String(item.location_name);
+  if (asText(item.administrative_unit_name)) details.Region = String(item.administrative_unit_name);
+  if (asText(item.status)) details.Status = String(item.status);
+  else if ('published_at' in item) {
+    details.Status = item.published_at ? 'Active' : 'Unpublished';
+  }
+  if (asText(item.published_at)) details['Published at'] = String(item.published_at);
+
+  return details;
+}
+
+export function stashAdminRecords(items: Array<Record<string, unknown>>): void {
+  for (const item of items) {
+    const id = asText(item.id) ?? asText(item.public_id);
+    if (!id || !ULID_PATTERN.test(id)) continue;
+    recordCache.set(id, mapOpsRecordToFormDetails(item));
+  }
+}
+
+export function stashAdminRecordDetails(id: string, details: Record<string, string>): void {
+  if (!id || !ULID_PATTERN.test(id)) return;
+  recordCache.set(id, { ...recordCache.get(id), ...details, id });
+}
+
+export function getAdminRecordDetails(recordOrId?: string | null): Record<string, string> | undefined {
+  if (!recordOrId) return undefined;
+  const trimmed = recordOrId.trim();
+  if (ULID_PATTERN.test(trimmed)) return recordCache.get(trimmed);
+  const match = trimmed.match(/[0-7][0-9A-HJKMNP-TV-Z]{25}/i);
+  if (!match) return undefined;
+  return recordCache.get(match[0]);
+}
+
+export function clearAdminRecordCache(): void {
+  recordCache.clear();
+}

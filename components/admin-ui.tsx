@@ -89,6 +89,7 @@ import {
   type PastoralNeedRecord,
   type PrayerRequestRecord,
 } from '../lib/admin-operations-api';
+import { stashAdminRecords } from '../lib/admin-record-cache';
 import {
   countriesToSelectOptions,
   createLocation,
@@ -1030,6 +1031,7 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
     setMessage('Loading…');
     try {
       const result = await loadOpsDataset(dataset, { scope: defaultOpsScope(screen.scope), perPage: 25 });
+      stashAdminRecords(result.items as Array<Record<string, unknown>>);
       setRows(opsRecordsToRows(dataset, result.items, columns));
       setTotal(result.pagination.total);
       setMessage(

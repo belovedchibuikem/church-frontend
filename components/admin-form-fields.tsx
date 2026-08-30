@@ -10,7 +10,15 @@ function optionMessageKey(option: string): string {
   return `admin.option.${option.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
 }
 
-function FieldControl({ field, defaultValue }: { field: AdminFormField; defaultValue?: string }) {
+function FieldControl({
+  field,
+  defaultValue,
+  values = {},
+}: {
+  field: AdminFormField;
+  defaultValue?: string;
+  values?: Record<string, string>;
+}) {
   const { t } = useLocale();
   const required = field.required ?? false;
   const placeholder = field.placeholder
@@ -32,12 +40,17 @@ function FieldControl({ field, defaultValue }: { field: AdminFormField; defaultV
       field.catalog in catalogOptions
         ? catalogOptions[field.catalog as keyof typeof catalogOptions]
         : undefined;
+    const defaultLabel =
+      values[`${field.name}_label`] ||
+      values[`${field.name}_name`] ||
+      undefined;
     return (
       <SearchSelect
         name={field.name}
         catalog={field.catalog}
         options={fixtureOptions ?? []}
         defaultValue={defaultValue}
+        defaultLabel={defaultLabel}
         placeholder={placeholder}
         required={required}
       />
@@ -80,7 +93,7 @@ export function AdminFormFields({ fields, values = {}, className = 'kca-form-gri
             {t(`admin.field.${field.name}`, { defaultMessage: field.label })}
             {field.required && <b aria-hidden="true"> *</b>}
           </span>
-          <FieldControl field={field} defaultValue={defaultValueForField(field, values)} />
+          <FieldControl field={field} defaultValue={defaultValueForField(field, values)} values={values} />
           {field.helpText && <small className="field-help">{t(`admin.help.${field.name}`, { defaultMessage: field.helpText })}</small>}
         </label>
       ))}

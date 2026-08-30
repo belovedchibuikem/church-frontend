@@ -7,9 +7,13 @@ import { AdminFormFields } from './admin-form-fields';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
 import { adminFormSchemas, fieldsForEntity, normalizeDetailValues, type AdminFormField } from '../lib/admin-form-schemas';
-import { formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
+import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
 
 export type ActionSurfaceMode = 'create' | 'edit' | 'assign' | 'confirm' | 'file' | 'preview' | 'help' | 'actions' | 'ai';
+
+function extractUlidSafe(value?: string | null): string | undefined {
+  return extractUlid(value);
+}
 
 type Props = {
   mode: ActionSurfaceMode;
@@ -186,20 +190,90 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
 
   if (mode === 'ai') return <form className="interaction-action-form" onSubmit={save}><div className="interaction-form-heading"><span>{t('admin.missionAiWorkspace', { defaultMessage: 'Mission AI workspace' })}</span><h3>{t('admin.askMissionAi', { defaultMessage: 'Ask Mission AI' })}</h3><p>{t('admin.askMissionAiCopy', { defaultMessage: 'Frame a ministry operations question using the approved reporting context.' })}</p></div><div className="interaction-ai-suggestions">{[{ key: 'admin.aiSuggestionFollowUp', defaultMessage: 'Show follow-up gaps' }, { key: 'admin.aiSuggestionCrusade', defaultMessage: 'Summarize crusade outcomes' }, { key: 'admin.aiSuggestionAssignments', defaultMessage: 'Identify overdue assignments' }].map((suggestion) => { const text = t(suggestion.key, { defaultMessage: suggestion.defaultMessage }); return <button type="button" data-interaction-native="true" key={suggestion.key} onClick={(event)=>{const form=event.currentTarget.closest('form');const input=form?.querySelector<HTMLTextAreaElement>('textarea');if(input)input.value=text;}}>{text}</button>; })}</div><label>{t('admin.yourQuestion', { defaultMessage: 'Your question' })}<textarea name="prompt" required rows={5} placeholder={t('admin.yourQuestionPlaceholder', { defaultMessage: 'Ask about mission performance, follow-up or planning...' })}/></label>{errorNote ?? <div className="interaction-safety-note">{t('admin.aiSafetyNote', { defaultMessage: 'This submits to the Laravel advisory API. No fabricated AI response is shown on failure.' })}</div>}{footerButtons(submitLabel)}</form>;
 
-  if (mode === 'preview' || mode === 'actions') return <div className="interaction-record-preview">
-    <div className="interaction-context-grid"><span><small>{t('admin.page', { defaultMessage: 'Page' })}</small><strong>{pageTitle}</strong></span><span><small>{t('admin.scope', { defaultMessage: 'Scope' })}</small><strong>{scope}</strong></span><span><small>{t('admin.permission', { defaultMessage: 'Permission' })}</small><strong>{permission}</strong></span>{record && <span><small>{t('admin.record', { defaultMessage: 'Record' })}</small><strong>{record}</strong></span>}</div>
-    <h3>{mode === 'actions' ? t('admin.availableActions', { defaultMessage: 'Available actions' }) : t('admin.recordDetails', { defaultMessage: 'Record details' })}</h3>
-    {schema && mode === 'preview' ? (
-      <dl className="interaction-detail-list">{schema.fields.map((field) => {
-        const value = normalizedDetails[field.name] ?? '—';
-        return <div key={field.name}><dt>{t(`admin.field.${field.name}`, { defaultMessage: field.label })}</dt><dd>{value}</dd></div>;
-      })}</dl>
-    ) : (
-      <div className="interaction-preview-list">{records.slice(0, 5).map((entry, index) => <article key={`${entry}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{entry}</p></article>)}{records.length === 0 && items.slice(0, 6).map((item) => <article key={item}><span>•</span><p>{item}</p></article>)}</div>
-    )}
-    {errorNote}
-    <footer>{mode === 'actions' && <button type="button" data-interaction-native="true" disabled={submitting} onClick={() => { void (async () => { setFormError(''); try { await onSubmit({ pinnedPage: pageTitle }); } catch (error) { setFormError(formatAdminMutationError(error)); } })(); }}>{t('admin.pinPageShortcut', { defaultMessage: 'Pin page shortcut' })}</button>}<button type="button" data-interaction-native="true" onClick={onClose}>{closeLabel}</button></footer>
-  </div>;
+  if (mode === 'preview' || mode === 'actions') {
+    const idValue = normalizedDetails.id ?? extractUlidSafe(record);
+    return (
+      <div className="interaction-record-preview">
+        <div className="interaction-context-grid">
+          <span><small>{t('admin.page', { defaultMessage: 'Page' })}</small><strong>{pageTitle}</strong></span>
+          <span><small>{t('admin.scope', { defaultMessage: 'Scope' })}</small><strong>{scope}</strong></span>
+          <span><small>{t('admin.permission', { defaultMessage: 'Permission' })}</small><strong>{permission}</strong></span>
+          {(record || idValue) ? <span><small>{t('admin.record', { defaultMessage: 'Record' })}</small><strong>{record ?? idValue}</strong></span> : null}
+        </div>
+        <h3>{mode === 'actions' ? t('admin.availableActions', { defaultMessage: 'Available actions' }) : t('admin.recordDetails', { defaultMessage: 'Record details' })}</h3>
+        {mode === 'preview' ? (
+          <dl className="interaction-detail-list">
+            {(schema?.fields ?? []).map((field) => {
+              const value =
+                normalizedDetails[`${field.name}_label`] ||
+                normalizedDetails[field.name] ||
+                '—';
+              return (
+                <div key={field.name}>
+                  <dt>{t(`admin.field.${field.name}`, { defaultMessage: field.label })}</dt>
+                  <dd>{value}</dd>
+                </div>
+              );
+            })}
+            {!schema
+              ? Object.entries(normalizedDetails)
+                  .filter(([key, value]) => value && value !== '—' && !key.endsWith('_id') && !key.endsWith('_label') && key !== 'id' && !key.startsWith('__'))
+                  .map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{key}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))
+              : null}
+            {idValue ? (
+              <div>
+                <dt>{t('admin.recordId', { defaultMessage: 'Record ID' })}</dt>
+                <dd>{idValue}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : (
+          <div className="interaction-preview-list">
+            {records.slice(0, 5).map((entry, index) => (
+              <article key={`${entry}-${index}`}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <p>{entry}</p>
+              </article>
+            ))}
+            {records.length === 0 && items.slice(0, 6).map((item) => (
+              <article key={item}>
+                <span>•</span>
+                <p>{item}</p>
+              </article>
+            ))}
+          </div>
+        )}
+        {errorNote}
+        <footer>
+          {mode === 'actions' ? (
+            <button
+              type="button"
+              data-interaction-native="true"
+              disabled={submitting}
+              onClick={() => {
+                void (async () => {
+                  setFormError('');
+                  try {
+                    await onSubmit({ pinnedPage: pageTitle });
+                  } catch (error) {
+                    setFormError(formatAdminMutationError(error));
+                  }
+                })();
+              }}
+            >
+              {t('admin.pinPageShortcut', { defaultMessage: 'Pin page shortcut' })}
+            </button>
+          ) : null}
+          <button type="button" data-interaction-native="true" onClick={onClose}>{closeLabel}</button>
+        </footer>
+      </div>
+    );
+  }
 
   if (mode === 'file' && /download|print|receipt|pdf/i.test(label)) return <form className="interaction-action-form" onSubmit={save}><div className="interaction-file-summary"><span className="interaction-file-icon">▧</span><div><strong>{label}</strong><p>{t('admin.documentPreviewFor', { defaultMessage: 'Document preview for {title}', vars: { title: pageTitle } })}</p></div></div><div className="interaction-document-preview"><span>{t('admin.productNameUpper', { defaultMessage: 'FAMILY HOUSE CONNECT' })}</span><h3>{pageTitle}</h3><p>{t('admin.authorizedDocumentPreview', { defaultMessage: 'Authorized document preview' })}</p><dl><div><dt>{t('admin.scope', { defaultMessage: 'Scope' })}</dt><dd>{scope}</dd></div><div><dt>{t('admin.permission', { defaultMessage: 'Permission' })}</dt><dd>{permission}</dd></div><div><dt>{t('admin.format', { defaultMessage: 'Format' })}</dt><dd>{t('admin.pdfDocument', { defaultMessage: 'PDF document' })}</dd></div></dl></div><label>{t('admin.deliveryNote', { defaultMessage: 'Delivery note' })}<textarea name="note" rows={3} placeholder={t('admin.deliveryNotePlaceholder', { defaultMessage: 'Optional note for this document request' })}/></label>{errorNote ?? <div className="interaction-safety-note">{t('admin.documentSafetyNote', { defaultMessage: 'A downloadable file requires an authorized Laravel file operation. No fake document is generated.' })}</div>}{footerButtons(submitLabel)}</form>;
 
@@ -210,14 +284,52 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
     {footerButtons(submitLabel)}
   </form>;
 
-  if (mode === 'confirm') return <form className="interaction-action-form" onSubmit={save}>
-    <div className="interaction-confirm-summary"><span>!</span><div><strong>{t('admin.reviewAction', { defaultMessage: 'Review {action}', vars: { action: label.toLowerCase() } })}</strong><p>{t('admin.actionProtected', { defaultMessage: 'This action is protected by {permission} in {scope} scope.', vars: { permission, scope } })}</p></div></div>
-    <div className="interaction-context-grid">{Object.entries(details).slice(0, 4).map(([key, value]) => <span key={key}><small>{key}</small><strong>{value}</strong></span>)}</div>
-    <label>{t('admin.decisionNotes', { defaultMessage: 'Decision notes' })}<textarea name="notes" rows={4} placeholder={t('admin.decisionNotesPlaceholder', { defaultMessage: 'Record the reason and supporting context' })}/></label>
-    <label className="interaction-check"><input name="reviewed" type="checkbox" value="yes" required/> {t('admin.reviewedScope', { defaultMessage: 'I reviewed the displayed scope and action details.' })}</label>
-    {errorNote ?? <div className="interaction-safety-note">{t('admin.confirmSafetyNote', { defaultMessage: 'Confirm submits the matching Laravel admin operation. Failures are shown here; success is never simulated.' })}</div>}
-    {footerButtons(t('admin.confirm', { defaultMessage: 'Confirm' }))}
-  </form>;
+  if (mode === 'confirm') {
+    const confirmName =
+      normalizedDetails.name ||
+      normalizedDetails.Name ||
+      normalizedDetails.title ||
+      record ||
+      pageTitle;
+    const confirmId = normalizedDetails.id || extractUlidSafe(record);
+    return (
+      <form className="interaction-action-form" onSubmit={save}>
+        <div className="interaction-confirm-summary">
+          <span>!</span>
+          <div>
+            <strong>{t('admin.reviewAction', { defaultMessage: 'Review {action}', vars: { action: label.toLowerCase() } })}</strong>
+            <p>{t('admin.actionProtected', { defaultMessage: 'This action is protected by {permission} in {scope} scope.', vars: { permission, scope } })}</p>
+          </div>
+        </div>
+        <div className="interaction-context-grid">
+          <span><small>{t('admin.record', { defaultMessage: 'Record' })}</small><strong>{confirmName}</strong></span>
+          {confirmId ? <span><small>{t('admin.recordId', { defaultMessage: 'Record ID' })}</small><strong>{confirmId}</strong></span> : null}
+          <span><small>{t('admin.permission', { defaultMessage: 'Permission' })}</small><strong>{permission}</strong></span>
+          <span><small>{t('admin.scope', { defaultMessage: 'Scope' })}</small><strong>{scope}</strong></span>
+        </div>
+        <label>
+          {t('admin.decisionNotes', { defaultMessage: 'Decision notes' })}
+          <textarea name="notes" rows={4} placeholder={t('admin.decisionNotesPlaceholder', { defaultMessage: 'Record the reason and supporting context' })} />
+        </label>
+        <label className="interaction-check">
+          <input name="reviewed" type="checkbox" value="yes" required />{' '}
+          {/delete|remove/i.test(label)
+            ? t('admin.confirmDeleteCheck', { defaultMessage: 'I understand this will permanently delete the selected record (blocked if linked records still exist).' })
+            : t('admin.reviewedScope', { defaultMessage: 'I reviewed the displayed scope and action details.' })}
+        </label>
+        {errorNote ?? (
+          <div className="interaction-safety-note">
+            {t('admin.confirmSafetyNote', { defaultMessage: 'Confirm submits the matching Laravel admin operation. Failures are shown here; success is never simulated.' })}
+          </div>
+        )}
+        {footerButtons(
+          /delete|remove/i.test(label)
+            ? t('admin.confirmDelete', { defaultMessage: 'Confirm delete' })
+            : t('admin.confirm', { defaultMessage: 'Confirm' }),
+        )}
+      </form>
+    );
+  }
 
   const fields = mode === 'assign' ? [
     { label: 'Assign to', name: 'assignee_id', type: 'search-select' as const, catalog: 'person' as const, placeholder: 'Search people' },

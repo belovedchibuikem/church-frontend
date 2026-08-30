@@ -14,6 +14,7 @@ import {
   shouldUseCatalogLiveData,
 } from '../lib/admin-catalog-api';
 import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
+import { stashAdminRecords } from '../lib/admin-record-cache';
 import { executeAdminAction, extractUlid } from '../lib/admin-mutation-dispatcher';
 import { AdminFormFields } from './admin-form-fields';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
@@ -476,6 +477,7 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
       try {
         const result = await listCatalogDomain(dataset, { perPage: 25 });
         if (cancelled) return;
+        stashAdminRecords(result.items as Array<Record<string, unknown>>);
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[]);
         setTotal(result.pagination.total);
         setMessage(

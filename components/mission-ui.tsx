@@ -19,6 +19,7 @@ import {
   type CrusadeRecord,
   type SoulRecord,
 } from '../lib/admin-operations-api';
+import { stashAdminRecords } from '../lib/admin-record-cache';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { TableRowActions } from './table-row-actions';
@@ -386,6 +387,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
     setError(null);
     try {
       const result = await loadOpsDataset(dataset, { scope: defaultOpsScope(screen.scope), perPage: 25 });
+      stashAdminRecords(result.items as Array<Record<string, unknown>>);
       setRows(opsRecordsToRows(dataset, result.items, columns));
       if (dataset === 'souls') setSouls(result.items as SoulRecord[]);
       if (dataset === 'crusades') setCrusades(result.items as CrusadeRecord[]);

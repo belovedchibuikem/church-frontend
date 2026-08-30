@@ -21,6 +21,8 @@ type Props = {
   /** When set, options load from live catalog/ops/org APIs (fixtures only when design fixtures are on). */
   catalog?: LiveCatalogKey | string;
   defaultValue?: string;
+  /** Human label for defaultValue (used when editing with a ULID that is not in the first page). */
+  defaultLabel?: string;
   value?: string;
   placeholder?: string;
   required?: boolean;
@@ -48,6 +50,7 @@ export function SearchSelect({
   options: staticOptions,
   catalog,
   defaultValue = '',
+  defaultLabel = '',
   value: controlledValue,
   placeholder,
   required = false,
@@ -73,10 +76,11 @@ export function SearchSelect({
       option.value === (controlledValue ?? defaultValue) ||
       option.label === (controlledValue ?? defaultValue),
   );
+  const seedLabel = initial?.label || defaultLabel || '';
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState(initial?.label ?? '');
-  const [debouncedQuery, setDebouncedQuery] = useState(initial?.label ?? '');
-  const [value, setValue] = useState(initial?.value ?? controlledValue ?? '');
+  const [query, setQuery] = useState(seedLabel);
+  const [debouncedQuery, setDebouncedQuery] = useState(seedLabel);
+  const [value, setValue] = useState(initial?.value ?? controlledValue ?? defaultValue ?? '');
   const [remoteOptions, setRemoteOptions] = useState<SearchSelectOption[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -85,7 +89,7 @@ export function SearchSelect({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loading = loadingProp || loadingRemote;
-  const selectedLabelRef = useRef(initial?.label ?? '');
+  const selectedLabelRef = useRef(seedLabel);
 
   useEffect(() => {
     if (controlledValue === undefined) return;
