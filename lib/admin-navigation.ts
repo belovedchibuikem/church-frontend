@@ -4,6 +4,7 @@ export type AdminBreadcrumb = { label: string; route: string };
 
 const actionDestinations: Record<string, string> = {
   'notifications': '/admin/notifications',
+  'alert rules': '/admin/alerts/rules',
   'unread alerts': '/admin/alerts',
   'view review queue': '/admin/kca/review-queue',
   'create orientation batch': '/admin/kca/orientation',

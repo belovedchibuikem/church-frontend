@@ -773,10 +773,11 @@ export function resolveOpsDataset(screen: {
   if (route.includes('/workers') || nav === 'workers') return 'workers';
   if (route.includes('/leadership') || nav === 'leaders' || route.endsWith('/leaders')) return 'leaders';
   if (route.includes('/counselling')) return 'counselling-cases';
+  if (route === '/admin/security/pastoral-records') return 'counselling-cases';
   if (route.includes('/testimonies')) return 'testimonies';
   if (route.includes('/attendance')) return 'attendance';
   if (route.includes('/activities')) return 'announcements';
-  if (route.includes('/safeguarding')) return 'safeguarding-incidents';
+  if (route.includes('/safeguarding/cases') || route === '/admin/security/safeguarding') return 'safeguarding-incidents';
   return null;
 }
 
@@ -1135,7 +1136,9 @@ export function opsRecordsToRows(
               ? humanValue(item, 'person_name')
               : column === 'Counselor'
                 ? humanValue(item, 'counselor_name')
-                : column === 'Last Updated' || column === 'Date'
+                : column === 'Type'
+                  ? humanValue(item, 'case_type', 'type')
+                  : column === 'Last Updated' || column === 'Date' || column === 'Updated'
                   ? shortDate(get('updated_at') === '—' ? null : get('updated_at'))
                   : column === 'Status'
                     ? get('status')

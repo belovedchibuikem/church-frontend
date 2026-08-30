@@ -304,6 +304,30 @@ function splitPersonName(payload: Record<string, string>): { given_name?: string
   return { given_name: first, family_name: rest.join(' ') || undefined };
 }
 
+/** Next workflow status for Press publication stage screens / approve actions. */
+function nextPressPublicationStatus(route: string, label: string): string {
+  if (route.includes('/editorial-review')) return 'theological_review';
+  if (route.includes('/theological-review')) return 'copy_editing';
+  if (route.includes('/copy-editing')) return 'design';
+  if (route.includes('/design')) return 'isbn_assignment';
+  if (route.includes('/isbn')) return 'publication_approval';
+  if (route.includes('/approval') || labelIs(label, /publish|publication/)) return 'published';
+  if (labelIs(label, /continue|approv/)) return 'editorial_review';
+  return 'published';
+}
+
+function routeIncludesComposeChannel(route: string): boolean {
+  return [
+    '/admin/communications/email/',
+    '/admin/communications/sms/',
+    '/admin/communications/whatsapp/',
+    '/admin/communications/push/',
+    '/admin/communications/in-app/',
+    '/admin/communications/announcements/',
+    '/admin/communications/newsletters/',
+  ].some((prefix) => route.includes(prefix));
+}
+
 async function dispatch(ctx: Ctx): Promise<unknown> {
   const { route, label, payload, scope } = ctx;
   const opts = { scope };
@@ -771,6 +795,147 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
               : `admin/church/role-assignments/${id}`;
     return mutateMinistryRecord(path, 'DELETE', undefined, scope);
   }
+  if (route.includes('/evangelism') && labelIs(label, /add|create|save|submit|register/) && !labelIs(label, /edit|update|delete|remove/)) {
+    return mutateMinistryRecord('admin/church/evangelism-activities', 'POST', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      title: field(payload, 'title', 'name') ?? '',
+      activity_type: field(payload, 'activity_type') ?? 'outreach',
+      souls_reached: asInt(field(payload, 'souls_reached')),
+      decisions: asInt(field(payload, 'decisions')),
+      occurred_at: field(payload, 'occurred_at') ?? null,
+      status: field(payload, 'status') ?? 'completed',
+      notes: field(payload, 'notes') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/evangelism') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
+    return mutateMinistryRecord(`admin/church/evangelism-activities/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'activity'))}`, 'PUT', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      title: field(payload, 'title', 'name') ?? '',
+      activity_type: field(payload, 'activity_type') ?? 'outreach',
+      souls_reached: asInt(field(payload, 'souls_reached')),
+      decisions: asInt(field(payload, 'decisions')),
+      occurred_at: field(payload, 'occurred_at') ?? null,
+      status: field(payload, 'status') ?? 'completed',
+      notes: field(payload, 'notes') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/departments') && labelIs(label, /add|create|save|submit/) && !labelIs(label, /edit|update|delete|remove/)) {
+    return mutateMinistryRecord('admin/church/departments', 'POST', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      name: field(payload, 'name') ?? '',
+      description: field(payload, 'description') ?? null,
+      leader_person_id: firstUlid(payload.leader_person_id) ?? null,
+      status: field(payload, 'status') ?? 'active',
+    } as JsonObject, scope);
+  }
+  if (route.includes('/departments') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
+    return mutateMinistryRecord(`admin/church/departments/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'department'))}`, 'PUT', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      name: field(payload, 'name') ?? '',
+      description: field(payload, 'description') ?? null,
+      leader_person_id: firstUlid(payload.leader_person_id) ?? null,
+      status: field(payload, 'status') ?? 'active',
+    } as JsonObject, scope);
+  }
+  if ((route.includes('/workers') || route.includes('/leadership') || route.includes('/leaders') || route.includes('/disciples')) && labelIs(label, /add|create|save|submit|assign/) && !labelIs(label, /edit|update|delete|remove/)) {
+    const roleType = route.includes('/leaders') || route.includes('/leadership')
+      ? 'leader'
+      : route.includes('/disciples')
+        ? 'disciple'
+        : (field(payload, 'role_type') ?? 'worker');
+    return mutateMinistryRecord('admin/church/role-assignments', 'POST', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      person_id: requireId(firstUlid(payload.person_id), 'person'),
+      department_id: firstUlid(payload.department_id) ?? null,
+      role_type: roleType,
+      title: field(payload, 'title', 'name') ?? roleType,
+      status: field(payload, 'status') ?? 'active',
+      started_at: field(payload, 'started_at') ?? null,
+    } as JsonObject, scope);
+  }
+  if ((route.includes('/workers') || route.includes('/leadership') || route.includes('/leaders') || route.includes('/disciples')) && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
+    return mutateMinistryRecord(`admin/church/role-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'assignment'))}`, 'PUT', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      person_id: requireId(firstUlid(payload.person_id), 'person'),
+      department_id: firstUlid(payload.department_id) ?? null,
+      role_type: field(payload, 'role_type') ?? 'worker',
+      title: field(payload, 'title', 'name') ?? '',
+      status: field(payload, 'status') ?? 'active',
+      started_at: field(payload, 'started_at') ?? null,
+      ended_at: field(payload, 'ended_at') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/counselling') && labelIs(label, /add|create|save|submit|new/) && !labelIs(label, /edit|update|delete|remove/)) {
+    return mutateMinistryRecord('admin/church/counselling-cases', 'POST', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      client_person_id: requireId(firstUlid(payload.client_person_id, payload.person_id), 'client'),
+      counselor_person_id: firstUlid(payload.counselor_person_id) ?? null,
+      case_type: field(payload, 'case_type') ?? 'general',
+      status: field(payload, 'status') ?? 'open',
+      summary: field(payload, 'summary') ?? null,
+      opened_at: field(payload, 'opened_at') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/counselling') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create|new/)) {
+    return mutateMinistryRecord(`admin/church/counselling-cases/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'case'))}`, 'PUT', {
+      church_id: requireId(firstUlid(payload.church_id), 'church'),
+      client_person_id: requireId(firstUlid(payload.client_person_id, payload.person_id), 'client'),
+      counselor_person_id: firstUlid(payload.counselor_person_id) ?? null,
+      case_type: field(payload, 'case_type') ?? 'general',
+      status: field(payload, 'status') ?? 'open',
+      summary: field(payload, 'summary') ?? null,
+      opened_at: field(payload, 'opened_at') ?? null,
+      closed_at: field(payload, 'closed_at') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/testimonies') && labelIs(label, /add|create|save|submit/) && !labelIs(label, /edit|update|delete|remove/)) {
+    return mutateMinistryRecord('admin/church/testimonies', 'POST', {
+      person_id: requireId(firstUlid(payload.person_id), 'person'),
+      church_id: firstUlid(payload.church_id) ?? null,
+      title: field(payload, 'title', 'name') ?? '',
+      body: field(payload, 'body', 'summary') ?? '',
+      status: field(payload, 'status') ?? 'pending',
+      submitted_at: field(payload, 'submitted_at') ?? null,
+      published_at: field(payload, 'published_at') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/testimonies') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
+    return mutateMinistryRecord(`admin/church/testimonies/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'testimony'))}`, 'PUT', {
+      person_id: requireId(firstUlid(payload.person_id), 'person'),
+      church_id: firstUlid(payload.church_id) ?? null,
+      title: field(payload, 'title', 'name') ?? '',
+      body: field(payload, 'body', 'summary') ?? '',
+      status: field(payload, 'status') ?? 'pending',
+      submitted_at: field(payload, 'submitted_at') ?? null,
+      published_at: field(payload, 'published_at') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/attendance') && labelIs(label, /add|create|save|submit|record/) && !labelIs(label, /edit|update|delete|remove/)) {
+    return mutateMinistryRecord('admin/church/attendance', 'POST', {
+      home_church_id: requireId(firstUlid(payload.home_church_id), 'home church'),
+      service_date: field(payload, 'service_date') ?? new Date().toISOString().slice(0, 10),
+      adults: asInt(field(payload, 'adults')) ?? 0,
+      children: asInt(field(payload, 'children')) ?? 0,
+      first_timers: asInt(field(payload, 'first_timers')) ?? 0,
+      notes: field(payload, 'notes') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route.includes('/attendance') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
+    return mutateMinistryRecord(`admin/church/attendance/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'attendance'))}`, 'PUT', {
+      service_date: field(payload, 'service_date') ?? new Date().toISOString().slice(0, 10),
+      adults: asInt(field(payload, 'adults')) ?? 0,
+      children: asInt(field(payload, 'children')) ?? 0,
+      first_timers: asInt(field(payload, 'first_timers')) ?? 0,
+      notes: field(payload, 'notes') ?? null,
+    } as JsonObject, scope);
+  }
+  if (route === '/admin/people' && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove/)) {
+    return mutateMinistryRecord(`admin/church/people/${encodeURIComponent(requireId(pickRecord(ctx, 'id', 'person_id'), 'person'))}`, 'PUT', {
+      phone: field(payload, 'phone') ?? null,
+      given_name: field(payload, 'given_name') ?? null,
+      family_name: field(payload, 'family_name') ?? null,
+    } as JsonObject, scope);
+  }
   if (routeStarts(route, '/admin/people/follow-up', '/admin/churches') && labelIs(label, /complete follow|mark complete|complete task/) ) {
     return completeFollowUpTask(
       requireId(pickRecord(ctx, 'task_id', 'id'), 'follow-up task'),
@@ -999,18 +1164,22 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   }
 
   // --- Press ---
-  if (routeStarts(route, '/admin/press/publications') && labelIs(label, /create publication|add publication|save|submit/) && !route.includes('/translations')) {
+  if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts', '/admin/press/catalogue') && labelIs(label, /create publication|add publication|submit manuscript|save|submit/) && !route.includes('/translations')) {
     if (!labelIs(label, /isbn|contributor|translation|transition|approv|publish/)) {
       return mutate(
         'admin/press/publications',
         {
           title: field(payload, 'title', 'name') ?? '',
-          publisher_name: field(payload, 'publisher_name', 'owner_id') ?? '',
+          publisher_name: field(payload, 'publisher_name') ?? 'Kingdom Press',
           language_code: field(payload, 'language_code', 'language') ?? 'en',
           format: (field(payload, 'format') ?? 'print').toLowerCase(),
           subtitle: field(payload, 'subtitle') ?? null,
+          edition: field(payload, 'edition') ?? null,
+          publication_date: field(payload, 'publication_date') ?? null,
           category: field(payload, 'category') ?? null,
           description: field(payload, 'description') ?? null,
+          price_minor: asInt(field(payload, 'price_minor') ?? undefined) ?? null,
+          currency_code: field(payload, 'currency_code') ?? null,
         },
         { ...opts, idempotent: true },
       );
@@ -1026,21 +1195,21 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/press') && labelIs(label, /add contributor|assign contributor/)) {
+  if (routeStarts(route, '/admin/press') && labelIs(label, /add contributor|assign contributor|add author/)) {
     return mutate(
       `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/contributors`,
       {
         person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
-        role: field(payload, 'role') ?? 'author',
+        role: (field(payload, 'role') ?? 'author').toLowerCase(),
       },
       opts,
     );
   }
-  if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts') && labelIs(label, /approv|publish|transition|reject/)) {
+  if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts', '/admin/press/catalogue') && labelIs(label, /approv|publish|transition|continue/)) {
     return mutate(
       `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/transitions`,
       {
-        status: field(payload, 'status') ?? (labelIs(label, /reject/) ? 'rejected' : 'published'),
+        status: field(payload, 'status') ?? nextPressPublicationStatus(route, label),
         reason_code: reasonCode(payload, 'publication_reviewed') ?? 'publication_reviewed',
       },
       opts,
@@ -1120,8 +1289,29 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       { ...opts, idempotent: true },
     );
   }
-  if (routeStarts(route, '/admin/finance/refunds') && labelIs(label, /refund|process/)) {
-    const transactionId = requireId(pickRecord(ctx, 'transaction_id', 'id'), 'transaction');
+  if (routeStarts(route, '/admin/finance') && labelIs(label, /send receipt|issue receipt/)) {
+    const transactionId = requireId(
+      pickRecord(ctx, 'payment_transaction_id', 'transaction_id', 'id'),
+      'transaction',
+    );
+    return mutate(`admin/finance/payment-transactions/${encodeURIComponent(transactionId)}/receipts`, {}, opts);
+  }
+  if (routeStarts(route, '/admin/finance') && labelIs(label, /^reconcile$|reconcile transaction|mark reconciled/)) {
+    const transactionId = requireId(
+      pickRecord(ctx, 'payment_transaction_id', 'transaction_id', 'id'),
+      'transaction',
+    );
+    return mutate(
+      `admin/finance/payment-transactions/${encodeURIComponent(transactionId)}/reconciliations`,
+      { reason_code: reasonCode(payload, 'manual_admin_reconcile') ?? 'manual_admin_reconcile' },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/finance/refunds', '/admin/finance/transactions') && labelIs(label, /refund|process/)) {
+    const transactionId = requireId(
+      pickRecord(ctx, 'payment_transaction_id', 'transaction_id', 'id'),
+      'transaction',
+    );
     return mutate(
       `admin/finance/payment-transactions/${encodeURIComponent(transactionId)}/refunds`,
       {
@@ -1158,7 +1348,20 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/communications/broadcasts') && labelIs(label, /compose|prepare|create|save|submit|send/)) {
+  if (
+    (
+      routeStarts(route, '/admin/communications/broadcasts') ||
+      routeIncludesComposeChannel(route)
+    ) &&
+    labelIs(label, /compose|prepare|create|save|submit|send|publish|resolve broadcast/)
+  ) {
+    if (labelIs(label, /resolve broadcast/)) {
+      return mutate(
+        `admin/communications/broadcasts/${encodeURIComponent(requireId(pickRecord(ctx, 'broadcast_id', 'id'), 'broadcast'))}/resolve`,
+        undefined,
+        opts,
+      );
+    }
     return mutate(
       'admin/communications/broadcasts',
       {
@@ -1180,8 +1383,10 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     );
   }
   if (routeStarts(route, '/admin/communications/delivery-queue', '/admin/communications/failed') && labelIs(label, /deliver|retry|attempt/)) {
+    // Delivery catalog rows are attempts; the deliver API needs the recipient ULID.
+    const recipientId = requireId(firstUlid(payload.recipient_id), 'recipient');
     return mutate(
-      `admin/communications/recipients/${encodeURIComponent(requireId(pickRecord(ctx, 'recipient_id', 'id'), 'recipient'))}/deliveries`,
+      `admin/communications/recipients/${encodeURIComponent(recipientId)}/deliveries`,
       {},
       { ...opts, idempotent: true },
     );

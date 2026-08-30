@@ -127,6 +127,9 @@ export function formatRelativeTime(iso: string): string {
 
 export const SCREEN_DASHBOARD_MODULES: Record<string, AdminDashboardModule> = {
   'A-03': 'global',
+  'A-10': 'security',
+  'A-12': 'global',
+  'A-13': 'geography',
   'C-01': 'geography',
   'D-01': 'home-churches',
   'E-01': 'church',
@@ -134,9 +137,27 @@ export const SCREEN_DASHBOARD_MODULES: Record<string, AdminDashboardModule> = {
   'I-01': 'mission',
   'J-01': 'press',
   'K-01': 'finance',
+  'K-16': 'finance',
   'M-01': 'communications',
+  'M-16': 'communications',
   'N-01': 'reports',
+  'N-02': 'church',
+  'N-03': 'home-churches',
+  'N-04': 'church',
+  'N-05': 'church',
+  'N-06': 'church',
+  'N-07': 'mission',
+  'N-08': 'kca',
+  'N-09': 'kca',
+  'N-10': 'press',
+  'N-11': 'finance',
+  'N-12': 'geography',
+  'N-13': 'geography',
+  'N-14': 'reports',
+  'N-15': 'reports',
+  'N-16': 'press',
   'O-01': 'security',
+  'O-08': 'security',
 };
 
 export function dashboardModuleForScreen(screenId: string): AdminDashboardModule | null {

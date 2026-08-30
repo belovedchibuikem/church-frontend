@@ -7,6 +7,8 @@ type Props = {
   entityKey?: string;
   className?: string;
   reviewLabel?: string;
+  /** Opens confirm overlay and runs mutation dispatcher for this label. */
+  mutationLabel?: string;
   canEdit?: boolean;
   canDelete?: boolean;
 };
@@ -16,6 +18,7 @@ export function TableRowActions({
   entityKey,
   className = 'row-actions table-row-actions',
   reviewLabel,
+  mutationLabel,
   canEdit = true,
   canDelete = true,
 }: Props) {
@@ -26,6 +29,19 @@ export function TableRowActions({
   const shared = { 'data-record': record, ...(entityKey ? { 'data-entity': entityKey } : {}) };
   return (
     <div className={className}>
+      {mutationLabel ? (
+        <button
+          type="button"
+          className="table-action"
+          {...shared}
+          aria-label={t('common.actionNamed', {
+            defaultMessage: '{action} {record}',
+            vars: { action: mutationLabel, record },
+          })}
+        >
+          {mutationLabel}
+        </button>
+      ) : null}
       {reviewLabel ? (
         <button
           type="button"

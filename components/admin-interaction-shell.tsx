@@ -47,7 +47,7 @@ type Props = {
   items?: string[];
 };
 
-const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request/i;
+const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request|retry|resolve|deliver|attempt|prepare/i;
 const filePattern = /download|export|print|upload|preview pdf|send receipt/i;
 const emptyTabs: string[] = [];
 
@@ -259,11 +259,15 @@ export function AdminInteractionShell({ children, route, title, permission, scop
   const executeMutation = async (payload: Record<string, string>) => {
     const action = overlay?.label || overlay?.title || 'action';
     const recordId = extractUlid(overlay?.record) ?? extractUlid(payload.id);
+    const mergedPayload = {
+      ...(overlay?.details ?? {}),
+      ...payload,
+    };
     try {
       const result = await executeAdminAction({
         route,
         label: action,
-        payload,
+        payload: mergedPayload,
         recordId,
         scope,
       });
@@ -508,7 +512,11 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     }
 
     event.preventDefault();
-    openAction(label || 'Action', mutationPattern.test(clean) ? undefined : 'actions');
+    const record = button.dataset.record;
+    const entityKey = button.dataset.entity ?? resolveEntityKey(route);
+    openAction(label || 'Action', mutationPattern.test(clean) ? undefined : 'actions', record
+      ? { record, entityKey, details: getAdminRecordDetails(record) }
+      : { entityKey });
   };
 
   const handleInput = (event: FormEvent<HTMLDivElement>) => {

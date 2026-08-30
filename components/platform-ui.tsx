@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
 import {
@@ -7,6 +8,7 @@ import {
   catalogRecordsToRows,
   listCatalogDomain,
   resolveCatalogDataset,
+  resolveCatalogPurposeFilter,
   shouldUseCatalogLiveData,
 } from '../lib/admin-catalog-api';
 import {
@@ -14,6 +16,7 @@ import {
   formatTimestamp,
   listAdminAccessDecisions,
   listAdminAuditEvents,
+  listAdminSecuritySessions,
   shouldUseDesignFixtures,
   type AdminAccessDecision,
   type AdminAuditEvent,
@@ -54,6 +57,13 @@ import { MapsSettingsPanel } from './maps-settings-panel';
 import { PaymentsSettingsPanel } from './payments-settings-panel';
 import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { CommunicationsComposePanel } from './communications-compose-panel';
+import { CommunicationsAudienceCreatePanel } from './communications-audience-create-panel';
+import { FinanceTransactionDetail } from './finance-transaction-detail';
+import { SafeguardingCaseDetail } from './safeguarding-case-detail';
+import { DataClassificationPanel } from './data-classification-panel';
+import { ReportsAiPanel } from './reports-ai-panel';
+import { ChurchSettingsPanel } from './church-settings-panel';
+import { DomainSettingsLinksPanel, LanguagesSettingsPanel } from './domain-settings-panels';
 import { BrandingSettingsPanel } from './branding-settings-panel';
 import { PublicSiteCmsPanel } from './public-site-cms-panel';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
@@ -66,6 +76,15 @@ import {
   dashboardModuleForScreen,
 } from '../lib/admin-dashboard-api';
 import { useAdminDashboard } from '../lib/use-admin-dashboard';
+import {
+  defaultOpsScope,
+  loadOpsDataset,
+  operationsErrorMessage,
+  opsRecordsToRows,
+  resolveOpsDataset,
+  shouldUseOperationsLiveData,
+  type OpsDatasetKey,
+} from '../lib/admin-operations-api';
 
 function tone(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -118,7 +137,18 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
   const columns = screen.columns ?? [];
   const columnKey = columns.join('\0');
   const dataset = resolveCatalogDataset(screen);
+  const purpose = resolveCatalogPurposeFilter(screen.route);
   const entityKey = resolveEntityKey(screen.route, screen.id);
+  const mutationLabel =
+    screen.route === '/admin/communications/delivery-queue' || screen.route === '/admin/communications/failed'
+      ? 'Retry Delivery'
+      : screen.route === '/admin/communications/broadcasts'
+        ? 'Resolve Broadcast'
+        : screen.route === '/admin/alerts' ||
+            screen.route === '/admin/finance/alerts' ||
+            screen.route === '/admin/security/alerts'
+          ? 'Resolve Alert'
+          : undefined;
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
   const [message, setMessage] = useState(() => t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +161,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
       setError(null);
       setMessage(t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
       try {
-        const result = await listCatalogDomain(dataset, { perPage: 25 });
+        const result = await listCatalogDomain(dataset, { perPage: 25, purpose });
         if (cancelled) return;
         stashAdminRecords(result.items as Array<Record<string, unknown>>);
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns));
@@ -150,7 +180,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
     return () => {
       cancelled = true;
     };
-  }, [columnKey, dataset, t]);
+  }, [columnKey, dataset, purpose, t]);
 
   return (
     <article className="platform-card platform-table-card">
@@ -181,7 +211,13 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                         {columnIndex === 0 ? (
                           <span className="platform-leading">
                             <i>{value.slice(0, 2).toUpperCase()}</i>
-                            <b>{value}</b>
+                            {screen.route === '/admin/finance/transactions' && row.__id ? (
+                              <b><Link href={`/admin/finance/transactions/${row.__id}`}>{value}</Link></b>
+                            ) : screen.route === '/admin/security/safeguarding/cases' && row.__id ? (
+                              <b><Link href={`/admin/security/safeguarding/cases/${row.__id}`}>{value}</Link></b>
+                            ) : (
+                              <b>{value}</b>
+                            )}
                           </span>
                         ) : /status|priority/i.test(column) ? (
                           <Badge value={value} />
@@ -196,6 +232,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                       record={formatRowActionRecord(row[columns[0]], row.__id)}
                       entityKey={entityKey}
                       className="row-actions platform-row-actions"
+                      mutationLabel={mutationLabel}
                       {...rowActionCapabilities(screen.route)}
                     />
                   </td>
@@ -215,9 +252,11 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
 function IdentitySecurityLiveTable({
   screen,
   kind,
+  targetTypes,
 }: {
   screen: AdminScreen;
-  kind: 'audit' | 'access-decisions';
+  kind: 'audit' | 'access-decisions' | 'sessions';
+  targetTypes?: string;
 }) {
   const { t } = useLocale();
   const columns = screen.columns ?? [];
@@ -231,8 +270,32 @@ function IdentitySecurityLiveTable({
     void (async () => {
       setError(null);
       try {
-        if (kind === 'audit') {
-          const result = await listAdminAuditEvents({ scope: defaultAdminScope(), perPage: 25 });
+        if (kind === 'sessions') {
+          const result = await listAdminSecuritySessions({ scope: defaultAdminScope(), perPage: 25 });
+          if (cancelled) return;
+          setRows(
+            result.data.map((session) => {
+              const mapped: Record<string, string> = {};
+              for (const column of columns) {
+                if (column === 'Date & Time') mapped[column] = formatTimestamp(session.started_at ?? session.occurred_at);
+                else if (column === 'User') mapped[column] = session.user_name ?? session.actor_user_id ?? '—';
+                else if (column === 'Status') mapped[column] = session.status ?? '—';
+                else if (column === 'IP Address') mapped[column] = '—';
+                else if (column === 'Location') mapped[column] = '—';
+                else if (column === 'Device') mapped[column] = session.device ?? '—';
+                else mapped[column] = '—';
+              }
+              mapped.__id = session.id;
+              return mapped;
+            }),
+          );
+          setMessage(t('admin.showingSessions', { defaultMessage: 'Showing {shown} of {total} sessions', vars: { shown: result.data.length, total: result.pagination.total } }));
+        } else if (kind === 'audit') {
+          const result = await listAdminAuditEvents({
+            scope: defaultAdminScope(),
+            perPage: 25,
+            targetTypes,
+          });
           if (cancelled) return;
           setRows(
             result.data.map((event: AdminAuditEvent) => {
@@ -284,7 +347,7 @@ function IdentitySecurityLiveTable({
     return () => {
       cancelled = true;
     };
-  }, [columns, kind, t]);
+  }, [columns, kind, t, targetTypes]);
 
   return (
     <article className="platform-card platform-table-card">
@@ -352,11 +415,27 @@ function DenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns
     if (screen.route === '/admin/security/audit-logs') {
       return <IdentitySecurityLiveTable screen={screen} kind="audit" />;
     }
+    if (screen.route === '/admin/security/restricted-access') {
+      return (
+        <IdentitySecurityLiveTable
+          screen={screen}
+          kind="audit"
+          targetTypes="safeguarding_incident,guardian_relationship,data_subject_request"
+        />
+      );
+    }
     if (screen.route === '/admin/security/access-decisions') {
       return <IdentitySecurityLiveTable screen={screen} kind="access-decisions" />;
     }
+    if (screen.route === '/admin/security/login-history') {
+      return <IdentitySecurityLiveTable screen={screen} kind="sessions" />;
+    }
     if (shouldUseCatalogLiveData() && resolveCatalogDataset(screen)) {
       return <CatalogLiveTable screen={screen} />;
+    }
+    const opsDataset = resolveOpsDataset(screen);
+    if (opsDataset && shouldUseOperationsLiveData()) {
+      return <PlatformOpsLiveTable screen={screen} dataset={opsDataset} />;
     }
     return (
       <article className="platform-card platform-table-card">
@@ -379,6 +458,99 @@ function DenseTable({ screen, rows = screen.rows ?? [], columns = screen.columns
     );
   }
   return <FixtureDenseTable screen={screen} rows={rows} columns={columns} />;
+}
+
+function PlatformOpsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset: OpsDatasetKey }) {
+  const { t } = useLocale();
+  const columns = screen.columns ?? [];
+  const entityKey = resolveEntityKey(screen.route, screen.id);
+  const [rows, setRows] = useState<Array<Record<string, string>>>([]);
+  const [message, setMessage] = useState(() => t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const result = await loadOpsDataset(dataset, { scope: defaultOpsScope(screen.scope), perPage: 25 });
+        if (cancelled) return;
+        stashAdminRecords(result.items as Array<Record<string, unknown>>);
+        setRows(opsRecordsToRows(dataset, result.items, columns));
+        setMessage(
+          result.pagination.total === 0
+            ? t('admin.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
+            : t('admin.showingCatalogRecords', {
+              defaultMessage: 'Showing {shown} of {total} records',
+              vars: { shown: result.items.length, total: result.pagination.total },
+            }),
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setError(operationsErrorMessage(err, t('errors.loadOps', { defaultMessage: 'Unable to load operations records.' })));
+        setMessage(t('admin.catalogUnavailable', { defaultMessage: 'Live catalog unavailable' }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [columns, dataset, screen.scope, t]);
+
+  return (
+    <article className="platform-card platform-table-card">
+      <FilterBar screen={screen} />
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      <div className="platform-table-scroll">
+        <table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
+          <thead>
+            <tr>
+              {columns.map((column) => <th scope="col" key={column}>{column}</th>)}
+              <th scope="col">{t('admin.actions', { defaultMessage: 'Actions' })}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + 1}>{error ? t('errors.unableToLoadRecords', { defaultMessage: 'Unable to load records.' }) : message}</td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.__id}>
+                  {columns.map((column, columnIndex) => {
+                    const value = row[column] ?? '—';
+                    return (
+                      <td key={column}>
+                        {columnIndex === 0 ? (
+                          <span className="platform-leading">
+                            <i>{value.slice(0, 2).toUpperCase()}</i>
+                            <b>{value}</b>
+                          </span>
+                        ) : /status|priority/i.test(column) ? (
+                          <Badge value={value} />
+                        ) : (
+                          value
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td>
+                    <TableRowActions
+                      record={formatRowActionRecord(row[columns[0]], row.__id)}
+                      entityKey={entityKey}
+                      className="row-actions platform-row-actions"
+                      {...rowActionCapabilities(screen.route)}
+                    />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <footer><span>{message}</span></footer>
+    </article>
+  );
 }
 
 function Dashboard({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
@@ -417,6 +589,9 @@ function Dashboard({ screen, requestedScope }: { screen: AdminScreen; requestedS
 
 function Detail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  if (/^\/admin\/finance\/transactions\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
+    return <FinanceTransactionDetail screen={screen} />;
+  }
   const publication = screen.batch==='J';
   return <div className="platform-detail"><article className="platform-card platform-detail-hero">{publication&&<div className="publication-cover small"><span>{t('admin.walkingIn', { defaultMessage: 'WALKING IN' })}</span><strong>{t('admin.dominion', { defaultMessage: 'DOMINION' })}</strong></div>}<div><span className="platform-overline">{t(publication ? 'admin.publicationDetail' : 'admin.recordDetail', { defaultMessage: publication ? 'Publication detail' : 'Record detail' })}</span><h2>{screen.title}</h2><p>{screen.subtitle}</p><Badge value={screen.details?.Status??t('admin.statusActive', { defaultMessage: 'Active' })}/></div></article>{screen.tabs&&<PlatformTabs tabs={screen.tabs}/>}<div className="platform-detail-grid"><article className="platform-card platform-definition"><h3>{t('admin.information', { defaultMessage: 'Information' })}</h3><dl>{Object.entries(screen.details??{}).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{key==='Status'?<Badge value={value}/>:value}</dd></div>)}</dl></article><article className="platform-card platform-detail-chart"><h3>{t('admin.summary', { defaultMessage: 'Summary' })}</h3>{screen.metrics&&<Metrics metrics={screen.metrics}/>}<Bars compact/><button className="platform-primary" type="button">{screen.action??t('admin.viewReport', { defaultMessage: 'View Report' })}</button></article></div></div>;
 }
@@ -1205,14 +1380,53 @@ function Settings({ screen }: { screen: AdminScreen }) {
   if (!fixtures) {
     if (route.includes('/settings/maps')) return <MapsSettingsPanel />;
     if (route.includes('/settings/payments') || route.includes('/finance/providers')) return <PaymentsSettingsPanel />;
-    if (route.includes('/communications/settings')) return <CommunicationsSettingsPanel />;
+    if (route.includes('/communications/settings') || route.includes('/settings/notifications')) {
+      return <CommunicationsSettingsPanel />;
+    }
     if (route.includes('/settings/branding')) return <BrandingSettingsPanel />;
     if (route.includes('/settings/kca')) return <KcaSettingsPanel />;
-    if (route.includes('/settings/platform')) {
+    if (route.includes('/settings/church')) return <ChurchSettingsPanel />;
+    if (route.includes('/settings/languages')) return <LanguagesSettingsPanel screen={screen} />;
+    if (
+      route.includes('/settings/ministry')
+      || route.includes('/settings/home-church-rules')
+      || route.includes('/settings/mission')
+      || route.includes('/settings/press')
+    ) {
+      return <DomainSettingsLinksPanel screen={screen} />;
+    }
+    if (route.includes('/settings/translation-governance')) {
       return (
         <>
-          <BrandingSettingsPanel />
-          <DemoDatasetPanel />
+          <p className="maps-settings-lead" role="status">
+            Translation governance is the Press translation workflow — not a separate settings CRUD API. Live queue below.
+          </p>
+          <DenseTable
+            screen={{
+              ...screen,
+              kind: 'table',
+              columns: screen.columns?.length ? screen.columns : ['Name', 'Type', 'Status', 'Updated'],
+            }}
+            columns={screen.columns?.length ? screen.columns : ['Name', 'Type', 'Status', 'Updated']}
+          />
+        </>
+      );
+    }
+    if (route.includes('/settings/platform') || route.includes('/security/configuration') || route.includes('/settings/ai-api')) {
+      return (
+        <>
+          {route.includes('/settings/platform') ? <BrandingSettingsPanel /> : null}
+          {route.includes('/settings/platform') ? <DemoDatasetPanel /> : null}
+          {route.includes('/settings/ai-api') ? (
+            <p className="maps-settings-lead" role="status">
+              Advisory AI uses `POST admin/platform/advisory/requests`. Provider keys and related flags live in platform configurations below.
+            </p>
+          ) : null}
+          {route.includes('/security/configuration') ? (
+            <p className="maps-settings-lead" role="status">
+              Authentication and protection settings are stored as platform configurations (no separate security-settings CRUD API).
+            </p>
+          ) : null}
           <ConfigurationsSettingsPanel />
         </>
       );
@@ -1221,6 +1435,41 @@ function Settings({ screen }: { screen: AdminScreen }) {
     if (route.includes('/settings/media')) return <MediaLibraryPanel />;
     if (route.includes('/settings/uploads')) return <ObjectStorageSettingsPanel />;
     if (route.includes('/settings/public-site') || route.includes('/content/public-site')) return <PublicSiteCmsPanel />;
+    if (route.includes('/settings/system-information')) {
+      return (
+        <article className="platform-card platform-settings-body">
+          <h2>System Information</h2>
+          <p className="maps-settings-lead" role="status">
+            Runtime details below are from the admin browser session. Server build metadata requires a dedicated health endpoint (not invented here).
+          </p>
+          <dl className="platform-detail-grid">
+            <div><dt>Admin UI</dt><dd>Family House Connect</dd></div>
+            <div><dt>User Agent</dt><dd>{typeof navigator !== 'undefined' ? navigator.userAgent : '—'}</dd></div>
+            <div><dt>Locale</dt><dd>{typeof navigator !== 'undefined' ? navigator.language : '—'}</dd></div>
+            <div><dt>Time Zone</dt><dd>{Intl.DateTimeFormat().resolvedOptions().timeZone}</dd></div>
+            <div><dt>API Base</dt><dd>{process.env.NEXT_PUBLIC_FHC_API_URL || 'Not configured'}</dd></div>
+          </dl>
+        </article>
+      );
+    }
+    if (route.includes('/settings/events')) {
+      return (
+        <>
+          <p className="maps-settings-lead" role="status">
+            Event settings list the live events catalog. Create uses `POST admin/events` — there is no separate event-preferences API.
+          </p>
+          <DenseTable
+            screen={{
+              ...screen,
+              kind: 'table',
+              action: '+ Create Event',
+              columns: screen.columns?.length ? screen.columns : ['Name', 'Type', 'Status', 'Updated'],
+            }}
+            columns={screen.columns?.length ? screen.columns : ['Name', 'Type', 'Status', 'Updated']}
+          />
+        </>
+      );
+    }
     if (shouldUseCatalogLiveData() && resolveCatalogDataset(screen)) {
       const columns = screen.columns?.length ? screen.columns : CATALOG_NAME_COLUMNS;
       return <DenseTable screen={{ ...screen, columns }} columns={columns} />;
@@ -1229,7 +1478,7 @@ function Settings({ screen }: { screen: AdminScreen }) {
       <div className="platform-settings">
         <article className="platform-card platform-settings-body">
           <p className="maps-settings-lead" role="status">
-            No live platform settings API for this screen. Maps, configurations, feature flags, and object storage are wired; other settings remain unavailable without inventing endpoints.
+            No live platform settings API for this screen. Remaining gaps require new backend endpoints.
           </p>
           <footer>
             <button className="platform-primary" type="button" disabled title="No live settings API for this screen">
@@ -1264,11 +1513,12 @@ function Operations({ screen }: { screen: AdminScreen }) {
 }
 
 function Analytics({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  if (screen.nav === 'report-ai') {
+    return <ReportsAiPanel screen={screen} requestedScope={requestedScope} />;
+  }
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
   const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
   const listItems = dashboard.live ? breakdownToItems(dashboard.data?.breakdown) : (screen.items ?? []);
-  const ai=screen.nav==='report-ai';
-  if(ai) return <div className="platform-ai"><article className="platform-card platform-ai-sidebar"><span className="platform-ai-orb">✦</span><h2>{screen.title}</h2><p>AI-assisted insights grounded in ministry reporting data.</p>{['Overview','Content AI','Performance AI','Ask AI'].map((item,index)=><button className={index===0?'active':''} type="button" key={item}>{item}</button>)}</article><article className="platform-card platform-ai-body"><h2>Insights</h2><div className="platform-ai-grid">{(screen.items??[]).map((item,index)=><article key={item}><span>{['◎','◇','▤','✦'][index]}</span><h3>{item.split(' — ')[0]}</h3><strong>{['56','18','81%','2,345'][index]}</strong><p>Updated from the latest approved analytics data.</p><button type="button">{item.split(' — ')[1]}</button></article>)}</div><label><input aria-label={`Ask ${screen.title}`} placeholder={`Ask ${screen.title}...`}/><button type="button">↑</button></label></article></div>;
   return <div className="platform-analytics">
     {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
     {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
@@ -1276,6 +1526,9 @@ function Analytics({ screen, requestedScope }: { screen: AdminScreen; requestedS
 }
 
 function Restricted({ screen }: { screen: AdminScreen }) {
+  if (!shouldUseDesignFixtures() && /\/admin\/security\/safeguarding\/cases\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
+    return <SafeguardingCaseDetail screen={screen} />;
+  }
   return <div className="platform-restricted"><div className="platform-restricted-banner"><span>🔒</span><div><strong>Restricted information</strong><p>Access is audited and limited to explicitly authorized personnel.</p></div></div>{screen.rows?<DenseTable screen={screen}/>:<Detail screen={screen}/>}</div>;
 }
 
@@ -1283,11 +1536,19 @@ export function PlatformScreenContent({ screen, requestedScope }: { screen: Admi
   let content;
   switch(screen.kind){
     case 'dashboard': content=<Dashboard screen={screen} requestedScope={requestedScope} />; break;
-    case 'table': content=<><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>; break;
+    case 'table':
+      if (screen.route === '/admin/security/data-classification' && !shouldUseDesignFixtures()) {
+        content = <DataClassificationPanel screen={screen} />;
+      } else {
+        content = <><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>;
+      }
+      break;
     case 'detail': case 'profile': return <Detail screen={screen}/>;
     case 'workflow': case 'approval': content=<Workflow screen={screen}/>; break;
     case 'form': case 'wizard':
-      if (screen.route.startsWith('/admin/communications/') && !screen.route.includes('/settings')) {
+      if (screen.route === '/admin/communications/audiences/create') {
+        content = <CommunicationsAudienceCreatePanel screen={screen} />;
+      } else if (screen.route.startsWith('/admin/communications/') && !screen.route.includes('/settings')) {
         content = <CommunicationsComposePanel screen={screen} />;
       } else {
         content = <Form screen={screen} />;

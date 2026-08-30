@@ -478,12 +478,25 @@ export function listAdminScopeAssignments(options: {
   });
 }
 
+export type AdminSecuritySession = {
+  id: string;
+  actor_user_id?: string | null;
+  user_name?: string | null;
+  status?: string | null;
+  device?: string | null;
+  started_at?: string | null;
+  last_seen_at?: string | null;
+  occurred_at?: string | null;
+};
+
 export function listAdminAuditEvents(options: {
   scope?: AdminScopeHeaders;
   page?: number;
   perPage?: number;
   actorId?: string;
   action?: string;
+  targetType?: string;
+  targetTypes?: string;
   from?: string;
   to?: string;
 } = {}): Promise<AdminListResult<AdminAuditEvent>> {
@@ -494,6 +507,28 @@ export function listAdminAuditEvents(options: {
     filter: {
       actor_id: options.actorId,
       action: options.action,
+      target_type: options.targetType,
+      target_types: options.targetTypes,
+      from: options.from,
+      to: options.to,
+    },
+  });
+}
+
+export function listAdminSecuritySessions(options: {
+  scope?: AdminScopeHeaders;
+  page?: number;
+  perPage?: number;
+  actorId?: string;
+  from?: string;
+  to?: string;
+} = {}): Promise<AdminListResult<AdminSecuritySession>> {
+  return listResource<AdminSecuritySession>('admin/security/sessions', {
+    scope: options.scope ?? DEFAULT_SCOPE,
+    page: options.page,
+    perPage: options.perPage,
+    filter: {
+      actor_id: options.actorId,
       from: options.from,
       to: options.to,
     },

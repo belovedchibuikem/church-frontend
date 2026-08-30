@@ -119,6 +119,7 @@ export const adminScreens: AdminScreen[] = [
   { id: 'A-05', batch: 'A', route: '/admin/command', title: 'Command Centre', subtitle: 'Find anything. Take action. Get answers.', kind: 'command', permission: 'admin.command.use', scope: 'assigned', nav: 'command', items: ['Approve Home Church', 'Export Member List', 'View Country Report', 'Export Mentor List', 'Create Announcement', 'Generate Audit Report'] },
   { id: 'A-06', batch: 'A', route: '/admin/approvals', title: 'Approval Inbox', subtitle: 'Review requests awaiting a decision.', kind: 'feed', permission: 'approval.queue.view', scope: 'assigned', nav: 'approvals', tabs: ['All (24)', 'Churches (6)', 'Memberships (4)', 'Events (8)', 'Content (2)', 'Other (4)'], rows: feed(['Home Church Application', 'Mission Crusade Request', 'Membership Registration', 'Event Registration Approval']) },
   { id: 'A-07', batch: 'A', route: '/admin/alerts', title: 'Alerts Centre', subtitle: 'Operational and security issues requiring attention.', kind: 'feed', permission: 'alerts.view', scope: 'assigned', nav: 'alerts', tabs: ['All', 'Critical (3)', 'Warning (8)', 'Info (15)'], rows: feed(['Payment Failure Spike', 'Server Performance Warning', 'Unusual Login Activity', 'Large Withdrawal Request', 'Church Verification Pending']) },
+  { id: 'A-07b', batch: 'A', route: '/admin/alerts/rules', title: 'Alert Rules', subtitle: 'Configure thresholds and routing for operational alerts.', kind: 'table', permission: 'reporting.alert_rules.view', scope: 'global', nav: 'alerts', action: '+ Create Alert Rule', columns: ['Name', 'Type', 'Status', 'Updated'], rows: [{ Name: 'Payment Failure Spike', Type: 'threshold', Status: 'Active', Updated: 'May 31, 2024' }, { Name: 'Unusual Login Activity', Type: 'anomaly', Status: 'Active', Updated: 'May 30, 2024' }] },
   { id: 'A-08', batch: 'A', route: '/admin/notifications', title: 'Notifications', subtitle: 'Your latest platform updates.', kind: 'feed', permission: 'notifications.view', scope: 'self', nav: 'notifications', tabs: ['All', 'Unread (8)', 'Announcements', 'System', 'Messages'], rows: feed(['New member registered', 'New prayer request submitted', 'Home Church approved', 'New giving received', 'System maintenance scheduled', 'New message from Pastor Daniel']) },
   { id: 'A-09', batch: 'A', route: '/admin/activity', title: 'Recent Activity', subtitle: 'See what’s happening across the platform.', kind: 'feed', permission: 'activity.view', scope: 'assigned', nav: 'activity', rows: feed(['Pastor John Doe approved a home church', 'Admin Mary updated church profile', 'New member registered', 'Payment of $800 received', 'Crusade request submitted', 'New event created']) },
   { id: 'A-10', batch: 'A', route: '/admin/audit', title: 'Audit Summary', subtitle: 'Overview of system audit and compliance.', kind: 'kpi', permission: 'security.audit.view', scope: 'global', nav: 'audit', metrics: [{ label: 'Total Audit Logs', value: '256,832' }, { label: 'Admin Actions', value: '18,542' }, { label: 'Data Changes', value: '12,371' }, { label: 'Login Events', value: '225,919' }], items: ['Church Approvals — 3,254', 'Member Approvals — 2,031', 'Content Management — 1,994', 'User Management — 1,732', 'Financial Actions — 1,421'] },
@@ -240,6 +241,46 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     const template = adminScreens.find((screen) => screen.id === 'D-04');
     if (!template) return undefined;
     return { ...template, route, kind: 'workflow' };
+  }
+
+  const financeTransactionDetail = route.match(/^\/admin\/finance\/transactions\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/i);
+  if (financeTransactionDetail) {
+    const template = adminScreens.find((screen) => screen.id === 'K-03') ?? adminScreens.find((screen) => screen.route === '/admin/finance/transactions');
+    if (!template) return undefined;
+    return {
+      ...template,
+      id: 'K-03',
+      route,
+      kind: 'detail',
+      title: 'Transaction Detail',
+      subtitle: financeTransactionDetail[1],
+      action: 'Send Receipt',
+      details: {
+        'Transaction ID': financeTransactionDetail[1],
+        Status: 'Loading',
+      },
+    };
+  }
+
+  const safeguardingCaseDetail = route.match(/^\/admin\/security\/safeguarding\/cases\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/i);
+  if (safeguardingCaseDetail) {
+    const template = adminScreens.find((screen) => screen.id === 'O-10')
+      ?? adminScreens.find((screen) => screen.route === '/admin/security/safeguarding/cases');
+    if (!template) return undefined;
+    return {
+      ...template,
+      id: 'O-10',
+      route,
+      kind: 'restricted',
+      title: 'Safeguarding Case',
+      subtitle: safeguardingCaseDetail[1],
+      rows: undefined,
+      details: {
+        Type: 'Loading',
+        Status: 'Loading',
+        'Reference Code': safeguardingCaseDetail[1],
+      },
+    };
   }
 
   return undefined;

@@ -78,7 +78,7 @@ export function CommunicationsComposePanel({ screen }: { screen: AdminScreen }) 
     try {
       await executeAdminAction({
         route: screen.route,
-        label: screen.action ?? 'Publish Message',
+        label: 'Prepare Broadcast',
         payload: {
           audience_id: audienceId,
           template_id: templateId,
@@ -116,6 +116,12 @@ export function CommunicationsComposePanel({ screen }: { screen: AdminScreen }) 
         <header>
           <h2>{screen.title}</h2>
           <p>{screen.subtitle}</p>
+          <p className="maps-settings-lead">
+            {t('admin.sharedBroadcastComposerNote', {
+              defaultMessage: 'Channel screens share the broadcast composer. Selected channel: {channel}.',
+              vars: { channel },
+            })}
+          </p>
         </header>
         {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
         {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}

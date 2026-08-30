@@ -21,6 +21,7 @@ import {
 } from '../lib/admin-operations-api';
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { stashAdminRecords } from '../lib/admin-record-cache';
+import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { TableRowActions } from './table-row-actions';
@@ -362,21 +363,24 @@ function RecordFollowUpForm({
 
 function MissionTable({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const fixtures = shouldUseDesignFixtures();
   const fixtureRows = screen.rows ?? [];
   const columns = screen.columns ?? Object.keys(fixtureRows[0] ?? {});
   const entityKey = resolveEntityKey(screen.route, screen.id);
   const dataset = resolveOpsDataset(screen);
   const live = shouldUseOperationsLiveData() && dataset !== null;
   const [rows, setRows] = useState<Array<Record<string, string>>>(
-    live ? [] : (fixtureRows as Array<Record<string, string>>),
+    live ? [] : fixtures ? (fixtureRows as Array<Record<string, string>>) : [],
   );
   const [message, setMessage] = useState(
     live
       ? t('common.loading', { defaultMessage: 'Loading…' })
-      : t('common.showingRange', {
-          defaultMessage: 'Showing 1 to {to} of {total} records',
-          vars: { to: fixtureRows.length, total: Math.max(fixtureRows.length, 24) },
-        }),
+      : fixtures
+        ? t('common.showingRange', {
+            defaultMessage: 'Showing 1 to {to} of {total} records',
+            vars: { to: fixtureRows.length, total: Math.max(fixtureRows.length, 24) },
+          })
+        : t('errors.noLiveListApiWired', { defaultMessage: 'No live list API is wired for this screen. Design fixtures are disabled.' }),
   );
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -1101,6 +1105,17 @@ function GenericDetail({ screen }: { screen: AdminScreen }) {
 }
 
 export function MissionScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const stubIds = new Set(['I-07', 'I-09', 'I-12', 'I-15', 'I-17', 'I-19', 'I-20']);
+  if (!shouldUseDesignFixtures() && stubIds.has(screen.id)) {
+    return (
+      <article className="mission-panel">
+        <h2>{screen.title}</h2>
+        <p className="maps-settings-lead" role="status">
+          No live list or settings API for this mission screen. Use Crusades, Souls, Invitations, and Follow-up for operational work.
+        </p>
+      </article>
+    );
+  }
   switch (screen.id) {
     case 'I-01': return <MissionDashboard screen={screen} requestedScope={requestedScope} />;
     case 'I-03': return <CrusadeDetail screen={screen}/>;

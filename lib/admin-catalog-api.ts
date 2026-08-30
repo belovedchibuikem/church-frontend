@@ -31,6 +31,7 @@ export const CATALOG_PATHS = {
   'kca.certificates': 'kca/certificates',
   'press.publications': 'press/publications',
   'press.translations': 'press/translations',
+  'press.contributors': 'press/contributors',
   'events.events': 'events/events',
   'events.registrations': 'events/registrations',
   'finance.payment_intents': 'finance/payment-intents',
@@ -48,6 +49,8 @@ export const CATALOG_PATHS = {
   'reporting.alert_occurrences': 'reporting/alert-occurrences',
   'privacy.data_subject_requests': 'privacy/data-subject-requests',
   'platform.files': 'platform/files',
+  'safeguarding.incidents': 'safeguarding/incidents',
+  'safeguarding.guardians': 'safeguarding/guardian-relationships',
 } as const;
 
 export type CatalogDomainKey = keyof typeof CATALOG_PATHS;
@@ -55,6 +58,7 @@ export type CatalogDomainKey = keyof typeof CATALOG_PATHS;
 export type CatalogListQuery = {
   search?: string;
   status?: string;
+  purpose?: string;
   page?: number;
   perPage?: number;
   scope?: AdminScope;
@@ -140,6 +144,7 @@ export async function listCatalogDomain<T = Record<string, unknown>>(
     const search = new URLSearchParams();
     if (params.search) search.set('filter[search]', params.search);
     if (params.status) search.set('filter[status]', params.status);
+    if (params.purpose) search.set('filter[purpose]', params.purpose);
     if (params.page) search.set('page', String(params.page));
     search.set('per_page', String(params.perPage ?? 25));
     const qs = search.toString();
@@ -219,6 +224,7 @@ export const FORM_TO_DOMAIN_CATALOG: Partial<Record<string, CatalogDomainKey>> =
   // Domain catalogs are used for remaining modules; church/org selects use operations/org APIs.
   pressPublication: 'press.publications',
   pressTranslation: 'press.translations',
+  pressContributor: 'press.contributors',
   event: 'events.events',
   communicationTemplate: 'communications.templates',
   communicationAudience: 'communications.audiences',
@@ -242,19 +248,31 @@ export function resolveCatalogDataset(screen: {
   nav?: string;
 }): CatalogDomainKey | null {
   const route = screen.route;
-  if (route === '/admin/press/publications') return 'press.publications';
-  if (route === '/admin/press/translations') return 'press.translations';
+  if (
+    route === '/admin/press/publications' ||
+    route === '/admin/press/manuscripts' ||
+    route === '/admin/press/catalogue'
+  ) {
+    return 'press.publications';
+  }
+  if (route === '/admin/press/authors') return 'press.contributors';
+  if (route === '/admin/press/translations' || route === '/admin/settings/translation-governance') {
+    return 'press.translations';
+  }
+  if (route === '/admin/press/sales') return 'finance.payment_intents';
   if (route === '/admin/communications/templates') return 'communications.templates';
-  if (route === '/admin/communications/audiences' || route.startsWith('/admin/communications/audiences/')) {
-    return 'communications.audiences';
+  if (route === '/admin/communications/audiences' || route === '/admin/communications/audiences/create' || route.startsWith('/admin/communications/audiences/')) {
+    return route === '/admin/communications/audiences' ? 'communications.audiences' : null;
   }
   if (route === '/admin/communications/broadcasts' || route.startsWith('/admin/communications/broadcasts/')) {
-    return 'communications.broadcasts';
+    return route === '/admin/communications/broadcasts' ? 'communications.broadcasts' : null;
   }
   if (route === '/admin/communications/delivery-queue' || route === '/admin/communications/failed') {
     return 'communications.deliveries';
   }
-  if (route === '/admin/communications/notifications') return 'communications.notifications';
+  if (route === '/admin/communications/notifications' || route === '/admin/notifications') {
+    return 'communications.notifications';
+  }
   if (route === '/admin/finance/transactions') return 'finance.payment_transactions';
   if (
     route === '/admin/finance/tithes' ||
@@ -274,7 +292,7 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/alerts' || route === '/admin/finance/alerts' || route === '/admin/security/alerts') {
     return 'reporting.alert_occurrences';
   }
-  // `reporting.alert_rules` has no dedicated list route in adminScreens.
+  if (route === '/admin/alerts/rules') return 'reporting.alert_rules';
   if (route === '/admin/settings/events' || route === '/admin/events' || route.startsWith('/admin/events/')) {
     return route.includes('registration') ? 'events.registrations' : 'events.events';
   }
@@ -284,6 +302,10 @@ export function resolveCatalogDataset(screen: {
     route === '/admin/security/data-deletion-requests'
   ) {
     return 'privacy.data_subject_requests';
+  }
+  if (route === '/admin/security/safeguarding/cases') return 'safeguarding.incidents';
+  if (route === '/admin/security/guardian-consent' || route === '/admin/security/child-profiles') {
+    return 'safeguarding.guardians';
   }
   if (route === '/admin/press/assets' || route === '/admin/settings/uploads') return 'platform.files';
   if (route === '/admin/kca/applications' || route === '/admin/kca/review-queue') return 'kca.applications';
@@ -297,6 +319,18 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/lecturers') return 'kca.lecturer_assignments';
   if (route === '/admin/kca/mentors') return 'kca.mentor_assignments';
   return null;
+}
+
+/** Purpose code for finance category screens (`filter[purpose]`). */
+export function resolveCatalogPurposeFilter(route: string): string | undefined {
+  if (route === '/admin/finance/tithes') return 'tithe';
+  if (route === '/admin/finance/offerings') return 'offering';
+  if (route === '/admin/finance/projects') return 'projects';
+  if (route === '/admin/finance/donations') return 'donation';
+  if (route === '/admin/finance/event-payments') return 'event_payment';
+  if (route === '/admin/finance/kca-payments') return 'kca';
+  if (route === '/admin/finance/publication-payments' || route === '/admin/press/sales') return 'publication';
+  return undefined;
 }
 
 /** Project catalog records onto existing platform table column labels. */
@@ -320,6 +354,9 @@ export function catalogRecordsToRows(
           'title',
           'translated_title',
           'name',
+          'subject_name',
+          'child_name',
+          'guardian_name',
           'person_name',
           'subject',
           'message',
@@ -332,14 +369,16 @@ export function catalogRecordsToRows(
         mapped[column] = get('status');
       } else if (key.includes('author') || key.includes('donor') || key.includes('user') || key === 'by') {
         mapped[column] = get(
+          'author_name',
           'person_name',
           'payer_name',
           'submitted_by_name',
           'reviewer_name',
           'owner_name',
-          'author_name',
           'donor_name',
         );
+      } else if (key.includes('stage')) {
+        mapped[column] = get('status', 'stage');
       } else if (key.includes('category') || key.includes('channel') || key.includes('type') || key.includes('reason')) {
         mapped[column] = get(
           'category',
@@ -349,6 +388,8 @@ export function catalogRecordsToRows(
           'kind',
           'format',
           'type',
+          'concern_type',
+          'relationship_type',
           'request_type',
           'condition_type',
         );
@@ -380,8 +421,12 @@ export function catalogRecordsToRows(
         );
       } else if (key.includes('amount')) {
         mapped[column] = get('amount', 'amount_minor');
+      } else if (key === 'code') {
+        mapped[column] = get('code');
       } else if (key.includes('audience')) {
-        mapped[column] = get('audience_id', 'audience');
+        mapped[column] = get('audience', 'audience_id', 'name');
+      } else if (key.includes('variance') || key.includes('expected') || key.includes('received')) {
+        mapped[column] = get('amount', 'status', 'reason_code');
       } else if (key.includes('progress')) {
         mapped[column] = get('progress', 'status');
       } else if (key.includes('lecturer') || key.includes('mentor')) {

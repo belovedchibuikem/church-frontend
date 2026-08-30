@@ -46,6 +46,7 @@ import {
 import { KcaScreenContent } from './kca-ui';
 import { MissionScreenContent } from './mission-ui';
 import { PlatformScreenContent, DemoDatasetBanner } from './platform-ui';
+import { ApprovalsInboxPanel } from './approvals-inbox-panel';
 import {
   breakdownToItems,
   dashboardModuleForScreen,
@@ -279,7 +280,8 @@ const navByBatch = {
   M: [
     ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '♙', 'People', '/admin/people'], ['churches', '▣', 'Churches', '/admin/churches'],
     ['communications', '◉', 'Communications', '/admin/communications'], ['communications', '▤', 'Notifications', '/admin/communications/notifications'],
-    ['communications', '✉', 'Broadcast', '/admin/communications/broadcasts/create'], ['communications', '◎', 'Audience', '/admin/communications/audiences/create'],
+    ['communications', '✉', 'Broadcasts', '/admin/communications/broadcasts'], ['communications', '◎', 'Audiences', '/admin/communications/audiences'],
+    ['communications', '✉', 'Compose', '/admin/communications/broadcasts/create'], ['communications', '◎', 'New Audience', '/admin/communications/audiences/create'],
     ['communications', '◇', 'Announcements', '/admin/communications/announcements/create'], ['communications', '▤', 'Newsletter', '/admin/communications/newsletters/may-update'],
     ['communications', '@', 'Email', '/admin/communications/email/create'], ['communications', '◌', 'SMS', '/admin/communications/sms/create'],
     ['communications', '◉', 'WhatsApp', '/admin/communications/whatsapp/create'], ['communications', '↗', 'Push', '/admin/communications/push/create'],
@@ -1481,6 +1483,16 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
   const columnKey = columns.join('\0');
   const dataset = resolveCatalogDataset(screen);
   const entityKey = resolveEntityKey(screen.route, screen.id);
+  const mutationLabel =
+    screen.route === '/admin/communications/delivery-queue' || screen.route === '/admin/communications/failed'
+      ? 'Retry Delivery'
+      : screen.route === '/admin/communications/broadcasts'
+        ? 'Resolve Broadcast'
+        : screen.route === '/admin/alerts' ||
+            screen.route === '/admin/finance/alerts' ||
+            screen.route === '/admin/security/alerts'
+          ? 'Resolve Alert'
+          : undefined;
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
   const [message, setMessage] = useState('Loading catalog…');
   const [error, setError] = useState<string | null>(null);
@@ -1549,6 +1561,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                     <TableRowActions
                       record={formatRowActionRecord(row[columns[0]], row.__id)}
                       entityKey={entityKey}
+                      mutationLabel={mutationLabel}
                       {...rowActionCapabilities(screen.route)}
                     />
                   </td>
@@ -1563,9 +1576,67 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
   );
 }
 
+function CountryPerformanceLiveTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
+  const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id) ?? 'geography', requestedScope);
+  const columns = screen.columns ?? ['Country', 'Members', 'New Churches', 'Giving (USD)', 'Growth'];
+  const rows = breakdownToItems(dashboard.data?.breakdown).map((item) => {
+    const [country, value] = item.split(' — ');
+    const mapped: Record<string, string> = {};
+    for (const column of columns) {
+      if (column === 'Country') mapped[column] = country ?? '—';
+      else if (column === 'Growth' || column === 'Members' || column === 'New Churches' || column === 'Giving (USD)') {
+        mapped[column] = value ?? '—';
+      } else mapped[column] = '—';
+    }
+    return mapped;
+  });
+
+  return (
+    <>
+      <DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} />
+      <p className="maps-settings-lead" role="status">
+        {t('admin.countryPerformanceLead', {
+          defaultMessage: 'Country performance uses the live geography dashboard breakdown. Column-level metrics beyond that require a dedicated report API.',
+        })}
+      </p>
+      <MetricCards metrics={dashboard.live ? dashboard.metrics : screen.metrics} />
+      <div className="card table-card">
+        <table>
+          <thead>
+            <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length}>
+                  {dashboard.error
+                    ? t('errors.loadDashboard', { defaultMessage: 'Unable to load dashboard.' })
+                    : t('admin.noCountryBreakdown', { defaultMessage: 'No country breakdown available.' })}
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr key={`${row.Country}-${index}`}>
+                  {columns.map((column) => (
+                    <td key={column}>{column === 'Growth' ? <StatusBadge value={row[column] ?? '—'} /> : row[column]}</td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const { t } = useLocale();
   if (!shouldUseDesignFixtures()) {
+    if (screen.route === '/admin/reports/country-performance' || screen.id === 'A-13') {
+      return <CountryPerformanceLiveTable screen={screen} requestedScope={requestedScope} />;
+    }
     if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.route === '/admin/roles') return <IdentityRolesTable requestedScope={requestedScope} />;
     if (screen.route === '/admin/access/history') return <IdentityAccessDecisionsTable requestedScope={requestedScope} />;
@@ -1611,6 +1682,19 @@ function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedS
 
 function FeedView({ screen }: { screen: AdminScreen }) {
   if (!shouldUseDesignFixtures()) {
+    if (screen.route === '/admin/approvals') {
+      return <ApprovalsInboxPanel screen={screen} />;
+    }
+    if (screen.route === '/admin/activity') {
+      return (
+        <>
+          <p className="maps-settings-lead" role="status">
+            Recent activity uses live audit events. There is no separate activity-feed API.
+          </p>
+          <IdentityAuditEventsPanel />
+        </>
+      );
+    }
     if (shouldUseCatalogLiveData() && resolveCatalogDataset(screen)) {
       const columns = screen.columns?.length ? screen.columns : CATALOG_FEED_COLUMNS;
       return <CatalogLiveTable screen={{ ...screen, columns }} />;
@@ -2897,22 +2981,68 @@ function ActivationView({ screen }: { screen: AdminScreen }) {
 
 function OperationsView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const opsDataset = resolveOpsDataset(screen);
-  if (opsDataset && shouldUseOperationsLiveData() && screen.route.includes('small-groups')) {
-    return (
-      <OperationsLiveTable
-        screen={{
-          ...screen,
-          columns: ['Home Church', 'Leader', 'Location', 'Members', 'Status'],
-        }}
-        dataset={opsDataset}
-      />
-    );
+  if (!shouldUseDesignFixtures() && opsDataset && shouldUseOperationsLiveData()) {
+    if (screen.route.includes('small-groups') || opsDataset === 'groups') {
+      return (
+        <OperationsLiveTable
+          screen={{
+            ...screen,
+            columns: ['Home Church', 'Leader', 'Location', 'Members', 'Status'],
+          }}
+          dataset={opsDataset}
+        />
+      );
+    }
+    if (screen.route.includes('/attendance') || opsDataset === 'attendance') {
+      return (
+        <>
+          <MetricCards metrics={screen.metrics} />
+          <OperationsLiveTable
+            screen={{
+              ...screen,
+              columns: ['Home Church', 'Date', 'Adults', 'Children', 'First Timers', 'Total'],
+            }}
+            dataset={opsDataset}
+          />
+        </>
+      );
+    }
+    if (screen.route.includes('/activities') || opsDataset === 'announcements') {
+      return (
+        <>
+          <MetricCards metrics={screen.metrics} />
+          <OperationsLiveTable
+            screen={{
+              ...screen,
+              columns: ['Title', 'Church', 'Date', 'Status'],
+            }}
+            dataset={opsDataset}
+          />
+        </>
+      );
+    }
   }
   const activityMode = screen.id === 'D-11';
   return <><MetricCards metrics={screen.metrics}/>{activityMode ? <div className="card activity-stack">{(screen.items ?? []).map((item,index)=>{const parts=item.split(' — ');return <article key={item}><time><b>{['May 25','May 19','May 12','May 5','Apr 28'][index]}</b></time><div><strong>{parts[0]}</strong><span>{parts[1]}</span></div><b>♙ {parts[2]}</b><StatusBadge value="Completed"/></article>})}<button className="ghost-button">View all activities</button></div> : <div className="operations-grid"><ChartCard title="Attendance Trend"/><article className="card dashboard-donut"><h2 className="card-title">Attendance by Service</h2><DonutVisual value={screen.id === 'D-10' ? '22' : '726'} label="Total"/></article><article className="card list-card operation-ranking"><h2 className="card-title">Top Services by Attendance</h2>{(screen.items ?? []).map(item=><div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</article></div>}</>;
 }
 
 function JourneyView({ screen }: { screen: AdminScreen }) {
+  if (!shouldUseDesignFixtures()) {
+    return (
+      <article className="card journey-card">
+        <p className="maps-settings-lead" role="status">
+          Journey screens have no dedicated admin API. Use People, Workers, and Leadership live tables for operational records.
+        </p>
+        <header>
+          <div className="portrait">{screen.title.split(' ').map((part) => part[0]).slice(0, 2).join('')}</div>
+          <div>
+            <h2>{screen.title}</h2>
+            <p>{screen.subtitle}</p>
+          </div>
+        </header>
+      </article>
+    );
+  }
   const details = screen.details ?? {};
   return <><div className="journey-rail">{(screen.items ?? []).map((item,index)=><div className={index<2?'complete':index===2?'active':''} key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b></div>)}</div><article className="card journey-card"><header><div className="portrait">{details.Name?.split(' ').map(part=>part[0]).slice(0,2).join('')}</div><div><h2>{details.Name}</h2><p>Current {details.Stage}</p></div><strong>{details.Progress}</strong></header><div className="progress-track"><i style={{width:details.Progress}}/></div><div className="journey-list">{(screen.items ?? []).map((item,index)=><div key={item}><span className={index<2?'done':index===2?'doing':''}>{index<2?'✓':'●'}</span><b>{item.split(' — ')[0]}</b><StatusBadge value={item.split(' — ')[1]}/></div>)}</div><button className="primary-button">View Journey Details</button></article></>;
 }
