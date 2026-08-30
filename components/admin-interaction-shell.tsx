@@ -252,6 +252,9 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       });
       setOverlay(null);
       setToast(formatAdminActionSuccess(result));
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
       if (error instanceof UnregisteredAdminActionError) {
         window.localStorage.setItem(

@@ -1,5 +1,7 @@
 /** Public world geography for searchable Country → State → City/LGA selects. */
 
+import { resolveApiV1BaseUrl } from '@/lib/api-config';
+
 export const DEFAULT_COUNTRY_CODE = 'NG';
 
 export type GeoCountry = {
@@ -35,6 +37,11 @@ function statesUrl(): string {
 
 function citiesUrl(): string {
   return isBrowserRuntime() ? `${GEOGRAPHY_PROXY}/cities` : COUNTRIES_NOW_CITIES_UPSTREAM;
+}
+
+function laravelGeographyBase(): string | null {
+  const base = resolveApiV1BaseUrl();
+  return base ? `${base.replace(/\/$/, '')}/geography` : null;
 }
 
 /** Used immediately so the control is usable before (or if) the live country list fails. */
@@ -134,6 +141,12 @@ type RestCountry = {
 export async function fetchCountries(signal?: AbortSignal): Promise<GeoCountry[]> {
   if (countryCache) return countryCache;
 
+  const fromLaravel = await fetchLaravelCountries(signal);
+  if (fromLaravel && fromLaravel.length > 0) {
+    countryCache = fromLaravel;
+    return fromLaravel;
+  }
+
   try {
     const payload = await fetchJson<RestCountry[]>(countriesUrl(), { signal });
     const next = payload
@@ -166,6 +179,15 @@ export async function fetchStates(countryName: string, signal?: AbortSignal): Pr
   const cached = statesCache.get(key);
   if (cached) return cached;
 
+  const iso = await isoForCountryName(name, signal);
+  if (iso) {
+    const fromLaravel = await fetchLaravelStates(iso, signal);
+    if (fromLaravel && fromLaravel.length > 0) {
+      statesCache.set(key, fromLaravel);
+      return fromLaravel;
+    }
+  }
+
   const payload = await fetchJson<StatesResponse>(
     statesUrl(),
     {
@@ -197,6 +219,15 @@ export async function fetchCities(countryName: string, stateName: string, signal
   const cached = citiesCache.get(key);
   if (cached) return cached;
 
+  const iso = await isoForCountryName(country, signal);
+  if (iso) {
+    const fromLaravel = await fetchLaravelLocalities(iso, state, signal);
+    if (fromLaravel && fromLaravel.length > 0) {
+      citiesCache.set(key, fromLaravel);
+      return fromLaravel;
+    }
+  }
+
   const payload = await fetchJson<CitiesResponse>(
     citiesUrl(),
     {
@@ -213,4 +244,77 @@ export async function fetchCities(countryName: string, stateName: string, signal
     .sort((a, b) => a.localeCompare(b));
   citiesCache.set(key, names);
   return names;
+}
+
+async function isoForCountryName(countryName: string, signal?: AbortSignal): Promise<string | null> {
+  const countries = await fetchCountries(signal);
+  const needle = countryName.trim().toLowerCase();
+  const match = countries.find(
+    (country) => country.name.toLowerCase() === needle || country.code.toLowerCase() === needle,
+  );
+  return match?.code ?? null;
+}
+
+type LaravelEnvelope<T> = { data?: T };
+
+async function fetchLaravelCountries(signal?: AbortSignal): Promise<GeoCountry[] | null> {
+  const base = laravelGeographyBase();
+  if (!base) return null;
+  try {
+    const payload = await fetchJson<LaravelEnvelope<Array<{ code?: string; name?: string }>>>(
+      `${base}/countries`,
+      { signal },
+    );
+    const next = (payload.data ?? [])
+      .map((item) => ({
+        code: (item.code ?? '').trim().toUpperCase(),
+        name: (item.name ?? '').trim(),
+      }))
+      .filter((item) => item.code.length === 2 && item.name.length > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return next.length > 0 ? next : null;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
+}
+
+async function fetchLaravelStates(iso: string, signal?: AbortSignal): Promise<string[] | null> {
+  const base = laravelGeographyBase();
+  if (!base) return null;
+  try {
+    const payload = await fetchJson<LaravelEnvelope<Array<{ name?: string }>>>(
+      `${base}/countries/${encodeURIComponent(iso)}/states`,
+      { signal },
+    );
+    const names = (payload.data ?? [])
+      .map((item) => (item.name ?? '').trim())
+      .filter(Boolean);
+    return names.length > 0 ? names : null;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
+}
+
+async function fetchLaravelLocalities(
+  iso: string,
+  state: string,
+  signal?: AbortSignal,
+): Promise<string[] | null> {
+  const base = laravelGeographyBase();
+  if (!base) return null;
+  try {
+    const payload = await fetchJson<LaravelEnvelope<Array<{ name?: string }>>>(
+      `${base}/countries/${encodeURIComponent(iso)}/states/${encodeURIComponent(state)}/localities`,
+      { signal },
+    );
+    const names = (payload.data ?? [])
+      .map((item) => (item.name ?? '').trim())
+      .filter(Boolean);
+    return names.length > 0 ? names : null;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return null;
+  }
 }

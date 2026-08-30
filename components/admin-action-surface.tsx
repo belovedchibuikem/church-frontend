@@ -51,7 +51,9 @@ function optionMessageKey(option: string): string {
 
 function fieldsFor(label: string, pageTitle: string): Field[] {
   const entity = `${label} ${pageTitle}`.toLowerCase();
-  if (/member|student|mentor|lecturer|leader|worker|author|user|child|convert|soul|alumni/.test(entity)) return [
+  if (/lecturer/.test(entity)) return fieldsForEntity('kca_lecturer_assignment');
+  if (/mentor/.test(entity) && !/assignment/.test(entity)) return fieldsForEntity('kca_mentor_assignment');
+  if (/member|student|leader|worker|author|user|child|convert|soul|alumni/.test(entity)) return [
     { label: 'Full name', name: 'fullName', placeholder: 'Enter full name' },
     { label: 'Email address', name: 'email', type: 'email', placeholder: 'name@example.org' },
     { label: 'Phone number', name: 'phone', placeholder: '+234' },
@@ -80,7 +82,10 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
     { label: 'Meeting day', name: 'meeting_day', type: 'select', options: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] },
     { label: 'Meeting time', name: 'meeting_time', placeholder: '18:00' },
   ];
-  if (/church|cohort|group|department|team|ministry|crusade|orientation/.test(entity)) return [
+  if (/^add church|create church|edit church|church/.test(entity) && !/home church|small group/.test(entity)) {
+    return fieldsForEntity('church');
+  }
+  if (/cohort|group|department|team|ministry|crusade|orientation/.test(entity)) return [
     { label: 'Name', name: 'name', placeholder: `Enter ${entityName(label, pageTitle).toLowerCase()} name` },
     { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
     { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },

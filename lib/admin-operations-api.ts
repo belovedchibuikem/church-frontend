@@ -363,6 +363,28 @@ export function createChurch(input: CreateChurchInput, scope?: AdminScope): Prom
   return opsMutate<ChurchRecord>('admin/church/churches', 'POST', input as unknown as JsonObject, { scope });
 }
 
+export function updateChurch(
+  churchId: string,
+  input: CreateChurchInput,
+  scope?: AdminScope,
+): Promise<ChurchRecord> {
+  return opsMutate<ChurchRecord>(
+    `admin/church/churches/${encodeURIComponent(churchId)}`,
+    'PUT',
+    input as unknown as JsonObject,
+    { scope },
+  );
+}
+
+export function deleteChurch(churchId: string, scope?: AdminScope): Promise<{ id: string; deleted: boolean }> {
+  return opsMutate<{ id: string; deleted: boolean }>(
+    `admin/church/churches/${encodeURIComponent(churchId)}`,
+    'DELETE',
+    undefined,
+    { scope },
+  );
+}
+
 export function listHomeChurches(params: ListQuery = {}): Promise<OpsListResult<HomeChurchRecord>> {
   return opsGetList<HomeChurchRecord>('admin/church/home-churches', params);
 }
@@ -392,6 +414,28 @@ export function listFirstTimers(params: ListQuery = {}): Promise<OpsListResult<F
 
 export function listMemberships(params: ListQuery = {}): Promise<OpsListResult<MembershipRecord>> {
   return opsGetList<MembershipRecord>('admin/church/memberships', params);
+}
+
+export type UpsertLivestreamInput = {
+  title: string;
+  youtube_url: string;
+  subtitle?: string;
+  host_name?: string;
+  status?: 'scheduled' | 'live' | 'ended';
+  starts_at?: string;
+  church_id?: string;
+  viewer_count?: number;
+  reaction_count?: number;
+};
+
+/** PUT /admin/livestreams/current — publish or update the YouTube live service. */
+export function upsertCurrentLivestream(
+  input: UpsertLivestreamInput,
+  scope?: AdminScope,
+): Promise<JsonObject> {
+  return opsMutate<JsonObject>('admin/livestreams/current', 'PUT', input as unknown as JsonObject, {
+    scope,
+  });
 }
 
 export function registerFirstTimer(

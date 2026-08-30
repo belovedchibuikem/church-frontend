@@ -25,6 +25,10 @@ export type CurrentUser = {
     middle_name: string | null;
     family_name: string | null;
     preferred_name: string | null;
+    country?: string | null;
+    region?: string | null;
+    locality?: string | null;
+    avatar_file_id?: string | null;
   };
   preferences?: UserPreferences | null;
 };
@@ -60,6 +64,7 @@ export type UpdateProfileInput = {
   middle_name?: string | null;
   family_name: string;
   preferred_name?: string | null;
+  avatar_file_asset_id?: string | null;
 };
 
 export type UserSecuritySession = {
@@ -342,7 +347,9 @@ export type UserMembership = {
   public_id?: string;
   person_id?: string | null;
   church_id?: string | null;
+  church_name?: string | null;
   home_church_id?: string | null;
+  home_church_name?: string | null;
   status?: string | null;
   joined_at?: string | null;
   ended_at?: string | null;
@@ -429,6 +436,9 @@ export async function updateUserProfile(input: UpdateProfileInput): Promise<Curr
       middle_name: input.middle_name ?? null,
       family_name: input.family_name,
       preferred_name: input.preferred_name ?? null,
+      ...(input.avatar_file_asset_id !== undefined
+        ? { avatar_file_asset_id: input.avatar_file_asset_id }
+        : {}),
     }),
   });
 }

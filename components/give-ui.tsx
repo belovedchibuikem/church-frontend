@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
+import { useAuth } from '@/components/auth-provider';
 import { useLocale } from '@/components/locale-provider';
 import type { TranslateOptions } from '@/lib/i18n/types.ts';
 import type { SiteRoute } from '@/lib/site-routes';
@@ -23,7 +24,6 @@ import {
   completeGivingIntent,
   createGivingIntent,
   displayNameFromUser,
-  fetchCurrentUser,
   fetchUserPaymentIntent,
   fetchUserPaymentReceipt,
   formatMoneyMinor,
@@ -85,26 +85,7 @@ function givingStatusLabel(t: TranslateFn, status: string): string {
 }
 
 function useSignedInUser() {
-  const [user, setUser] = useState<CurrentUser | null>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchCurrentUser()
-      .then((me) => {
-        if (!cancelled) setUser(me);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      })
-      .finally(() => {
-        if (!cancelled) setReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  const { user, ready } = useAuth();
   return { user, ready };
 }
 

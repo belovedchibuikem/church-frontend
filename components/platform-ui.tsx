@@ -56,6 +56,7 @@ import { PaymentsSettingsPanel } from './payments-settings-panel';
 import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { CommunicationsComposePanel } from './communications-compose-panel';
 import { BrandingSettingsPanel } from './branding-settings-panel';
+import { PublicSiteCmsPanel } from './public-site-cms-panel';
 import { TableRowActions } from './table-row-actions';
 import { useLocale } from '@/components/locale-provider';
 import {
@@ -1218,6 +1219,7 @@ function Settings({ screen }: { screen: AdminScreen }) {
     if (route.includes('/settings/feature-flags')) return <FeatureFlagsSettingsPanel />;
     if (route.includes('/settings/media')) return <MediaLibraryPanel />;
     if (route.includes('/settings/uploads')) return <ObjectStorageSettingsPanel />;
+    if (route.includes('/settings/public-site') || route.includes('/content/public-site')) return <PublicSiteCmsPanel />;
     if (shouldUseCatalogLiveData() && resolveCatalogDataset(screen)) {
       const columns = screen.columns?.length ? screen.columns : CATALOG_NAME_COLUMNS;
       return <DenseTable screen={{ ...screen, columns }} columns={columns} />;
@@ -1243,6 +1245,9 @@ function Settings({ screen }: { screen: AdminScreen }) {
   }
   if (fixtures && route.includes('/settings/branding')) {
     return <BrandingSettingsPanel />;
+  }
+  if (fixtures && (route.includes('/settings/public-site') || route.includes('/content/public-site'))) {
+    return <PublicSiteCmsPanel />;
   }
 
   return <FixtureSettings screen={screen} />;

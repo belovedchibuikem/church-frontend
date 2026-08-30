@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useAuth } from '@/components/auth-provider';
 import { hasAdministratorCapabilities, type AccessDecision } from '../lib/access-control';
 import {
   challengeMfa,
@@ -90,6 +91,7 @@ import {
 } from '../lib/admin-operations-api';
 import {
   countriesToSelectOptions,
+  createLocation,
   listCountries,
   listUnits,
   organizationErrorMessage,
@@ -357,6 +359,7 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
   { id: 'settings', icon: '⚙', label: 'Settings', items: [
     { icon: '◆', label: 'Platform', href: '/admin/settings/platform' },
     { icon: '▣', label: 'Branding', href: '/admin/settings/branding' },
+    { icon: '▤', label: 'Public Site CMS', href: '/admin/settings/public-site' },
     { icon: '⌂', label: 'Home Church Rules', href: '/admin/home-churches/grace-home-church/status' },
     { icon: '▣', label: 'Church Settings', href: '/admin/churches/the-covenant-place/settings' },
     { icon: '◇', label: 'KCA Settings', href: '/admin/settings/kca' },
@@ -1641,20 +1644,20 @@ function FormFields() {
 function WizardView({ screen }: { screen: AdminScreen }) {
   const churchFields = [
     { label: 'Church Name *', name: 'name', type: 'text' as const },
-    { label: 'Short Name', name: 'shortName', type: 'text' as const },
-    { label: 'Church Type', name: 'churchType', type: 'select' as const, options: churchTypeOptions },
-    { label: 'Denomination (Optional)', name: 'denomination', type: 'text' as const },
-    { label: 'Established Date', name: 'establishedDate', type: 'date' as const },
-    { label: 'Country', name: 'country', type: 'search-select' as const, catalog: 'country' as const },
-    { label: 'Administrative Unit', name: 'administrative_unit_id', type: 'search-select' as const, catalog: 'administrativeUnit' as const },
-    { label: 'Location', name: 'location_id', type: 'search-select' as const, catalog: 'location' as const },
-    { label: 'Status', name: 'status', type: 'select' as const, options: statusOptions },
+    { label: 'Country *', name: 'country_id', type: 'search-select' as const, catalog: 'country' as const },
+    { label: 'Administrative Unit *', name: 'administrative_unit_id', type: 'search-select' as const, catalog: 'administrativeUnit' as const },
+    { label: 'Existing Location', name: 'location_id', type: 'search-select' as const, catalog: 'location' as const },
+    { label: 'New Location Name', name: 'location_name', type: 'text' as const },
+    { label: 'Address Line 1', name: 'address_line_one', type: 'text' as const },
+    { label: 'Address Line 2', name: 'address_line_two', type: 'text' as const },
+    { label: 'Locality / City', name: 'locality', type: 'text' as const },
+    { label: 'Postal Code', name: 'postal_code', type: 'text' as const },
+    { label: 'Timezone *', name: 'timezone', type: 'text' as const },
   ];
   const contactFields = [
-    { label: 'Phone *', name: 'phone', type: 'text' as const },
-    { label: 'Email *', name: 'email', type: 'email' as const },
+    { label: 'Phone', name: 'phone', type: 'text' as const },
+    { label: 'Email', name: 'email', type: 'email' as const },
     { label: 'Website', name: 'website', type: 'text' as const },
-    { label: 'Meeting address', name: 'address', type: 'textarea' as const },
   ];
   const steps = screen.tabs ?? ['Details'];
   const wizard = useAdminWizardStep(steps);
@@ -1668,15 +1671,34 @@ function WizardView({ screen }: { screen: AdminScreen }) {
     if (!liveChurchCreate) return;
     const form = new FormData(event.currentTarget);
     const name = String(form.get('name') ?? '').trim();
-    const locationId = String(form.get('location_id') ?? '').trim();
+    const countryId = String(form.get('country_id') ?? '').trim();
     const unitId = String(form.get('administrative_unit_id') ?? '').trim();
-    if (!name || !locationId || !unitId) {
-      setCreateMessage('Name, location, and administrative unit are required.');
+    let locationId = String(form.get('location_id') ?? '').trim();
+    const timezone = String(form.get('timezone') ?? '').trim() || 'Africa/Lagos';
+    if (!name || !unitId) {
+      setCreateMessage('Name and administrative unit are required.');
+      return;
+    }
+    if (!locationId && !countryId) {
+      setCreateMessage('Country is required when creating a new location for the church.');
       return;
     }
     setCreateBusy(true);
     setCreateMessage(null);
     try {
+      if (!locationId) {
+        const location = await createLocation({
+          country_id: countryId,
+          name: String(form.get('location_name') ?? '').trim() || `${name} location`,
+          timezone,
+          administrative_unit_id: unitId,
+          address_line_one: String(form.get('address_line_one') ?? '').trim() || null,
+          address_line_two: String(form.get('address_line_two') ?? '').trim() || null,
+          locality: String(form.get('locality') ?? '').trim() || null,
+          postal_code: String(form.get('postal_code') ?? '').trim() || null,
+        }, { scope: defaultOpsScope(screen.scope) });
+        locationId = location.id;
+      }
       const church = await createChurch(
         { name, location_id: locationId, administrative_unit_id: unitId },
         defaultOpsScope(screen.scope),
@@ -2822,6 +2844,7 @@ function adminReturnDestination(returnTo?: string): string {
 function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string }) {
   const router = useRouter();
   const { t } = useLocale();
+  const { setSessionUser, clearSession, refresh } = useAuth();
   const apiReady = isAuthApiConfigured();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2841,19 +2864,22 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
     setBusy(true);
     setError(null);
     try {
-      const { meta } = await loginBrowserUser({ email, password, remember });
+      const { user, meta } = await loginBrowserUser({ email, password, remember });
       if (meta.email_verification_required) {
+        setSessionUser(user);
         router.push('/verify-email');
         return;
       }
       const capabilities = await fetchUserCapabilities();
       if (!hasAdministratorCapabilities(capabilities)) {
         await logoutBrowserUser().catch(() => undefined);
+        clearSession();
         setError(t('errors.notAdministrator', {
           defaultMessage: 'This account is not an administrator. Use member sign-in at /login, or sign in with an admin user.',
         }));
         return;
       }
+      setSessionUser(user);
       router.push(dest);
       router.refresh();
     } catch (err) {
@@ -2873,6 +2899,7 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
     setError(null);
     try {
       await challengeMfa({ code: otp.join('') });
+      await refresh();
       router.push(dest);
       router.refresh();
     } catch (err) {

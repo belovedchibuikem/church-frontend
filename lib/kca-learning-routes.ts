@@ -96,7 +96,7 @@ export const kcaLearningScreens: AdminScreen[] = [
   {
     id: 'H-05', batch: 'H', route: '/admin/kca/mentors', title: 'Mentors',
     subtitle: 'Manage mentors and their assignments.', kind: 'table', permission: 'kca.mentor.view', scope: 'assigned', nav: 'kca-mentors', action: '+ Add Mentor',
-    columns: ['Mentor', 'Region', 'Cohorts', 'Students', 'Status'], rows: mentorRows,
+    columns: ['Mentor', 'Students', 'Status'], rows: mentorRows,
   },
   {
     id: 'H-06', batch: 'H', route: '/admin/kca/mentors/mary-okoro', title: 'Mary Okoro',
@@ -108,7 +108,7 @@ export const kcaLearningScreens: AdminScreen[] = [
   {
     id: 'H-07', batch: 'H', route: '/admin/kca/lecturers', title: 'Lecturers',
     subtitle: 'Manage lecturers and their subjects.', kind: 'table', permission: 'kca.lecturer.view', scope: 'assigned', nav: 'kca-lecturers', action: '+ Add Lecturer',
-    columns: ['Lecturer', 'Specialization', 'Modules', 'Status'], rows: lecturerRows,
+    columns: ['Lecturer', 'Modules', 'Status'], rows: lecturerRows,
   },
   {
     id: 'H-08', batch: 'H', route: '/admin/kca/lecturers/dr-john-samuel', title: 'Dr. John Samuel',

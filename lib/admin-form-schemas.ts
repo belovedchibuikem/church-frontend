@@ -66,10 +66,34 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     entity: 'Church',
     fields: [
       { label: 'Name', name: 'name', type: 'text', required: true, placeholder: 'Enter church name' },
-      { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
-      { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
-      { label: 'Church type', name: 'church_type', type: 'select', options: ['Conventional', 'Home', 'Online', 'Mission'] },
-      { label: 'Status', name: 'status', type: 'select', options: ['Active', 'Pending', 'Suspended', 'Closed'] },
+      { label: 'Country', name: 'country_id', type: 'search-select', catalog: 'country', placeholder: 'Search country', helpText: 'Required when creating a new location (not selecting an existing one).' },
+      { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', required: true, placeholder: 'Search unit' },
+      { label: 'Existing location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location (or create below)' },
+      { label: 'New location name', name: 'location_name', type: 'text', placeholder: 'e.g. Ikeja Campus', helpText: 'Required when no existing location is selected.' },
+      { label: 'Address line 1', name: 'address_line_one', type: 'text', placeholder: 'Street address', wide: true },
+      { label: 'Address line 2', name: 'address_line_two', type: 'text', placeholder: 'Suite, landmark (optional)', wide: true },
+      { label: 'Locality / city', name: 'locality', type: 'text', placeholder: 'City or town' },
+      { label: 'Postal code', name: 'postal_code', type: 'text', placeholder: 'Postal code' },
+      { label: 'Timezone', name: 'timezone', type: 'text', placeholder: 'Africa/Lagos', helpText: 'Defaults to Africa/Lagos when creating a location.' },
+    ],
+  },
+  kca_lecturer_assignment: {
+    entity: 'Lecturer assignment',
+    fields: [
+      { label: 'Lecturer', name: 'lecturer_person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search lecturer person' },
+      { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
+      { label: 'Cohort', name: 'kca_cohort_id', type: 'search-select', catalog: 'kcaCohort', required: true, placeholder: 'Search cohort' },
+      { label: 'Starts at', name: 'starts_at', type: 'date', required: true },
+      { label: 'Ends at', name: 'ends_at', type: 'date' },
+    ],
+  },
+  kca_mentor_assignment: {
+    entity: 'Mentor assignment',
+    fields: [
+      { label: 'Mentor', name: 'mentor_person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search mentor person' },
+      { label: 'Enrollment', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', required: true, placeholder: 'Search student enrollment' },
+      { label: 'Starts at', name: 'starts_at', type: 'date', required: true },
+      { label: 'Ends at', name: 'ends_at', type: 'date' },
     ],
   },
   person: {
@@ -89,6 +113,8 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
   { pattern: /\/admin\/kca\/modules/, entity: 'kca_module' },
   { pattern: /\/admin\/kca\/lessons/, entity: 'kca_lesson' },
   { pattern: /\/admin\/kca\/cohorts/, entity: 'kca_cohort' },
+  { pattern: /\/admin\/kca\/lecturers/, entity: 'kca_lecturer_assignment' },
+  { pattern: /\/admin\/kca\/mentors/, entity: 'kca_mentor_assignment' },
   { pattern: /\/admin\/home-churches/, entity: 'home_church' },
   { pattern: /\/admin\/churches/, entity: 'church' },
   { pattern: /\/admin\/(members|people|users)/, entity: 'person' },
@@ -99,6 +125,8 @@ const screenEntityMap: Record<string, string> = {
   'H-10': 'kca_module',
   'H-12': 'kca_lesson',
   'H-03': 'kca_cohort',
+  'H-05': 'kca_mentor_assignment',
+  'H-07': 'kca_lecturer_assignment',
 };
 
 export function resolveEntityKey(route: string, screenId?: string): string | undefined {

@@ -122,19 +122,21 @@ type ChurchRow = {
 async function loadMembershipRows(memberships: UserMembership[], t: TranslateFn): Promise<ChurchRow[]> {
   return Promise.all(
     memberships.map(async (membership) => {
-      const churchId = membership.church_id ?? '';
-      let churchName = churchId
-        ? `${t('nav.church', { defaultMessage: 'Church' })} ${churchId.slice(0, 8)}`
-        : t('member.familyHouseChurch', { defaultMessage: 'Family House Church' });
-      let churchHref = churchId ? `/churches/${churchId}` : '/find-church';
-      if (churchId) {
+      const churchId = membership.church_id ?? null;
+      let churchName =
+        membership.church_name?.trim() ||
+        (churchId ? t('member.church', { defaultMessage: 'Church' }) : t('member.unknownChurch', { defaultMessage: 'Unknown church' }));
+      const churchHref = churchId ? `/churches/${churchId}` : '/find-church';
+      if (churchId && !membership.church_name) {
         try {
           const church = await loadChurch(churchId);
-          churchName = church.data.title;
-          churchHref = church.data.href || churchHref;
+          if (church.data.title) churchName = church.data.title;
         } catch {
-          /* keep fallback label */
+          /* keep fallback name */
         }
+      }
+      if (membership.home_church_name) {
+        churchName = `${churchName}`;
       }
       return { membership, churchName, churchHref };
     }),
@@ -210,7 +212,12 @@ export function LiveMyChurchPage({ route }: { route: SiteRoute }) {
                   <b>{row.churchName}</b>
                   <small>
                     {t('member.joinedOn', { defaultMessage: 'Joined {when}', vars: { when: formatWhen(row.membership.joined_at) } })}
-                    {row.membership.home_church_id ? t('member.linkedHomeChurch', { defaultMessage: ' · Linked home church' }) : ''}
+                    {row.membership.home_church_id
+                      ? t('member.linkedHomeChurchNamed', {
+                          defaultMessage: ' · Home church: {name}',
+                          vars: { name: row.membership.home_church_name ?? row.membership.home_church_id },
+                        })
+                      : ''}
                     {row.membership.ended_at
                       ? t('member.endedOn', { defaultMessage: ' · Ended {when}', vars: { when: formatWhen(row.membership.ended_at) } })
                       : ''}

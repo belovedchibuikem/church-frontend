@@ -22,6 +22,7 @@ import {
   LiveTestimoniesPage,
   MemberHomePage,
 } from '@/components/member-pages';
+import { useAuth } from '@/components/auth-provider';
 import { AuthScreen, MemberLogoutButton } from '@/components/auth-ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { useLocale } from '@/components/locale-provider';
@@ -49,7 +50,7 @@ import {
   designFixturesEnabled,
   draftToHomeChurchPayload,
   loadAboutPage,
-  loadCmsHeroImage,
+  loadCmsPageMeta,
   loadCmsPageCards,
   loadChurch,
   loadChurches,
@@ -84,6 +85,7 @@ import {
   DATA_SUBJECT_REQUEST_TYPES,
   displayNameFromUser,
   downloadPressPublication,
+  downloadUserFile,
   EVENT_TICKET_UNAVAILABLE_MESSAGE,
   fetchCurrentUser,
   fetchEventTicket,
@@ -150,7 +152,8 @@ import {
   type UserSyncChange,
 } from '@/lib/user-api';
 import { flowNext, successHref, heroPrimaryHref, kcaApplySteps, homeChurchSteps } from '@/lib/site-flow';
-import { InteractiveMap, type MapMarker } from '@/components/interactive-map';
+import { LiveWatchExperience } from '@/components/live-watch';
+import { fetchCurrentLivestream } from '@/lib/livestream-api';
 import { SearchSelect } from '@/components/search-select';
 import { GeographySelect } from '@/components/geography-select';
 
@@ -325,23 +328,8 @@ function Header() {
   const pathname = usePathname();
   const fixtures = useFixtures();
   const { t } = useLocale();
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const { user, ready } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (fixtures) return;
-    let cancelled = false;
-    void fetchCurrentUser()
-      .then((me) => {
-        if (!cancelled) setUser(me);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fixtures]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -375,7 +363,7 @@ function Header() {
           ⌕
         </Link>
         <LocaleSwitcher />
-        {signedIn ? (
+        {!ready && !fixtures ? null : signedIn ? (
           <Link className="avatar" href="/account" aria-label={`${user ? displayNameFromUser(user) : t('nav.account', { defaultMessage: 'Account' })}`}>
             {initials}
           </Link>
@@ -398,22 +386,7 @@ function Sidebar() {
   const pathname = usePathname();
   const fixtures = useFixtures();
   const { t } = useLocale();
-  const [user, setUser] = useState<CurrentUser | null>(null);
-
-  useEffect(() => {
-    if (fixtures) return;
-    let cancelled = false;
-    void fetchCurrentUser()
-      .then((me) => {
-        if (!cancelled) setUser(me);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fixtures]);
+  const { user } = useAuth();
 
   const name = fixtures ? 'John Doe' : displayNameFromUser(user);
   const initials = fixtures ? 'JD' : initialsFromUser(user);
@@ -557,32 +530,40 @@ function cmsSlugForRoute(route: SiteRoute): string | null {
     Giving: 'giving',
     Online: 'online-church',
     Press: 'press',
-    Events: 'home',
+    Events: 'events',
   };
   return slugs[route.section] ?? null;
 }
 
-function useCmsHeroImage(slug: string | null) {
+function useCmsPageMeta(slug: string | null) {
   const fixtures = useFixtures();
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{ title: string | null; summary: string | null; imageUrl: string | null }>({
+    title: null,
+    summary: null,
+    imageUrl: null,
+  });
   useEffect(() => {
     if (fixtures || !slug) {
-      setImageUrl(null);
+      setMeta({ title: null, summary: null, imageUrl: null });
       return;
     }
     let cancelled = false;
-    void loadCmsHeroImage(slug)
-      .then((url) => {
-        if (!cancelled) setImageUrl(url);
+    void loadCmsPageMeta(slug)
+      .then((next) => {
+        if (!cancelled) setMeta(next);
       })
       .catch(() => {
-        if (!cancelled) setImageUrl(null);
+        if (!cancelled) setMeta({ title: null, summary: null, imageUrl: null });
       });
     return () => {
       cancelled = true;
     };
   }, [fixtures, slug]);
-  return imageUrl;
+  return meta;
+}
+
+function useCmsHeroImage(slug: string | null) {
+  return useCmsPageMeta(slug).imageUrl;
 }
 
 function DetailArt({ image, icon }: { image?: string; icon?: string }) {
@@ -634,7 +615,17 @@ function BannerCta({ title, body, action, href }: { title: string; body: string;
   );
 }
 
-function Hero({ route, imageUrl }: { route: SiteRoute; imageUrl?: string | null }) {
+function Hero({
+  route,
+  imageUrl,
+  title,
+  subtitle,
+}: {
+  route: SiteRoute;
+  imageUrl?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+}) {
   const { t } = useLocale();
   const secondaryHref =
     route.section === 'KCA'
@@ -665,8 +656,8 @@ function Hero({ route, imageUrl }: { route: SiteRoute; imageUrl?: string | null 
     <section className={`site-hero hero-${route.section.toLowerCase()}`}>
       <div>
         <span className="eyebrow"><BrandName /></span>
-        <h1>{t(`routes.${route.path}`, { defaultMessage: route.title })}</h1>
-        <p>{t(`sections.${route.section}`, { defaultMessage: route.subtitle })}</p>
+        <h1>{title || t(`routes.${route.path}`, { defaultMessage: route.title })}</h1>
+        <p>{subtitle || t(`sections.${route.section}`, { defaultMessage: route.subtitle })}</p>
         <div className="hero-actions">
           <Link className="site-button" href={primaryHref}>
             {route.action ? t(`routes.action.${route.path}`, { defaultMessage: route.action }) : t('landing.exploreFamilyHouse', { defaultMessage: 'Explore Family House' })}
@@ -698,6 +689,10 @@ function HomeLanding({ route }: { route: SiteRoute }) {
   const [pillarsCards, setPillars] = useState<ContentCard[]>(fixtures ? pillars : []);
   const [actionCards, setActions] = useState<ContentCard[]>(fixtures ? sectionCards.Home : []);
   const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [heroTitle, setHeroTitle] = useState<string | null>(null);
+  const [heroSummary, setHeroSummary] = useState<string | null>(null);
+  const [pillarHeading, setPillarHeading] = useState<{ eyebrow: string; title: string } | null>(null);
+  const [actionHeading, setActionHeading] = useState<{ eyebrow: string; title: string } | null>(null);
 
   useEffect(() => {
     if (fixtures) {
@@ -714,6 +709,10 @@ function HomeLanding({ route }: { route: SiteRoute }) {
         setPillars(result.pillars);
         setActions(result.actions.length ? result.actions : result.pillars);
         setHeroImage(result.heroImage ?? null);
+        setHeroTitle(result.title ?? null);
+        setHeroSummary(result.summary ?? null);
+        setPillarHeading(result.pillarHeading ?? null);
+        setActionHeading(result.actionHeading ?? null);
         if (!result.metrics.length && !result.pillars.length && !result.actions.length) {
           setState({ status: 'empty', message: 'Home content is not published yet.' });
         } else {
@@ -731,7 +730,7 @@ function HomeLanding({ route }: { route: SiteRoute }) {
 
   return (
     <>
-      <Hero route={route} imageUrl={heroImage} />
+      <Hero route={route} imageUrl={heroImage} title={heroTitle} subtitle={heroSummary} />
       {state.status === 'loading' || state.status === 'error' || state.status === 'empty' ? (
         <DataStatus state={state} emptyLabel={t('landing.homeNotPublished', { defaultMessage: 'Home content is not published yet.' })} />
       ) : null}
@@ -740,15 +739,15 @@ function HomeLanding({ route }: { route: SiteRoute }) {
           <Metrics items={metrics} />
           <div className="section-block">
             <div className="section-heading">
-              <span className="eyebrow">{t('landing.fourPillars', { defaultMessage: 'Our Four Pillars' })}</span>
-              <h2>{t('landing.pillarsHeading', { defaultMessage: 'Everything you need to belong, grow, and multiply' })}</h2>
+              <span className="eyebrow">{pillarHeading?.eyebrow || t('landing.fourPillars', { defaultMessage: 'Our Four Pillars' })}</span>
+              <h2>{pillarHeading?.title || t('landing.pillarsHeading', { defaultMessage: 'Everything you need to belong, grow, and multiply' })}</h2>
             </div>
             {pillarsCards.length ? <CardGrid cards={pillarsCards} /> : <p className="panel">{t('landing.noPillarCards', { defaultMessage: 'No pillar cards published yet.' })}</p>}
           </div>
           <div className="section-block">
             <div className="section-heading">
-              <span className="eyebrow">{t('landing.getStarted', { defaultMessage: 'Get Started' })}</span>
-              <h2>{t('landing.nextKingdomStep', { defaultMessage: 'Take your next Kingdom step' })}</h2>
+              <span className="eyebrow">{actionHeading?.eyebrow || t('landing.getStarted', { defaultMessage: 'Get Started' })}</span>
+              <h2>{actionHeading?.title || t('landing.nextKingdomStep', { defaultMessage: 'Take your next Kingdom step' })}</h2>
             </div>
             {actionCards.length ? <CardGrid cards={actionCards} /> : <p className="panel">{t('landing.noGetStartedCards', { defaultMessage: 'No get-started cards published yet.' })}</p>}
           </div>
@@ -768,6 +767,8 @@ function AboutLanding({ route }: { route: SiteRoute }) {
   const { t } = useLocale();
   const fixtures = useFixtures();
   const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [heroTitle, setHeroTitle] = useState<string | null>(null);
+  const [heroSubtitle, setHeroSubtitle] = useState<string | null>(null);
   const [state, setState] = useState<AsyncListState<ContentCard>>(
     fixtures ? { status: 'ready', items: [] } : { status: 'loading' },
   );
@@ -797,6 +798,8 @@ function AboutLanding({ route }: { route: SiteRoute }) {
         const body = result.data?.body || result.data?.summary || '';
         setSummary(body);
         setHeroImage(result.data?.image_url ?? null);
+        setHeroTitle(result.data?.title ?? null);
+        setHeroSubtitle(result.data?.summary ?? null);
         setCards(result.cards);
         if (!body && !result.cards.length) setState({ status: 'empty', message: 'About content is not published yet.' });
         else setState({ status: 'ready', items: result.cards });
@@ -812,7 +815,7 @@ function AboutLanding({ route }: { route: SiteRoute }) {
 
   return (
     <>
-      <Hero route={route} imageUrl={heroImage} />
+      <Hero route={route} imageUrl={heroImage} title={heroTitle} subtitle={heroSubtitle} />
       <DataStatus state={state.status === 'ready' ? { status: 'ready', items: cards } : state} emptyLabel={t('landing.aboutNotPublished', { defaultMessage: 'About content is not published yet.' })} />
       {state.status === 'ready' || fixtures ? (
         <>
@@ -854,7 +857,7 @@ function AboutLanding({ route }: { route: SiteRoute }) {
 
 function VisionLanding({ route }: { route: SiteRoute }) {
   const fixtures = useFixtures();
-  const heroImage = useCmsHeroImage('vision');
+  const cms = useCmsPageMeta('vision');
   const [summary, setSummary] = useState(
     fixtures
       ? 'A world where every household can encounter Christ, belong to a Family House, and multiply Kingdom impact.'
@@ -889,7 +892,7 @@ function VisionLanding({ route }: { route: SiteRoute }) {
 
   return (
     <>
-      <Hero route={route} imageUrl={heroImage} />
+      <Hero route={route} imageUrl={cms.imageUrl} title={cms.title} subtitle={cms.summary} />
       <div className="split-panel">
         <section className="panel">
           <h3>Our Vision</h3>
@@ -1257,7 +1260,7 @@ function eventActionHref(item: EventItem) {
 }
 
 function EventsHub({ route }: { route: SiteRoute }) {
-  const heroImage = useCmsHeroImage('home');
+  const cms = useCmsPageMeta('events');
   const [tab, setTab] = useState<'upcoming' | 'mine' | 'past'>('upcoming');
   const eventsState = useAsyncList(() => loadEvents({ per_page: 50 }), []);
   const catalog = eventsState.status === 'ready' ? eventsState.items : [];
@@ -1269,7 +1272,7 @@ function EventsHub({ route }: { route: SiteRoute }) {
 
   return (
     <>
-      <Hero route={route} imageUrl={heroImage} />
+      <Hero route={route} imageUrl={cms.imageUrl} title={cms.title} subtitle={cms.summary} />
       {eventsState.status !== 'ready' ? <DataStatus state={eventsState} emptyLabel="No events published yet." /> : null}
       {featured ? (
         <Link className="panel detail-hero" href={featured.href}>
@@ -3462,16 +3465,46 @@ function formatTimestamp(value?: string | null): string {
 function LiveProfilePanel({ user }: { user: CurrentUser }) {
   const { t } = useLocale();
   const name = displayNameFromUser(user);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fileId = user.profile.avatar_file_id?.trim();
+    if (!fileId) {
+      setAvatarUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    void downloadUserFile(fileId)
+      .then(async (response) => {
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setAvatarUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setAvatarUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [user.profile.avatar_file_id]);
+
   return (
     <aside className="panel profile-card">
-      <span className="avatar huge">{initialsFromUser(user)}</span>
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="avatar huge" src={avatarUrl} alt="" style={{ objectFit: 'cover' }} />
+      ) : (
+        <span className="avatar huge" data-profile-avatar="initials">{initialsFromUser(user)}</span>
+      )}
       <h3>{name}</h3>
       <p>{user.email}</p>
       <span className="status">{user.email_verified_at ? 'Verified' : 'Unverified'}</span>
       <dl style={{ marginTop: '1rem', textAlign: 'left' }}>
         <div>
           <dt>{t('account.givenName')}</dt>
-          <dd>{user.profile.given_name ?? '—'}</dd>
+          <dd>{user.profile.given_name ?? '-'}</dd>
         </div>
         <div>
           <dt>{t('account.familyName')}</dt>
@@ -3490,11 +3523,120 @@ function LiveProfilePanel({ user }: { user: CurrentUser }) {
   );
 }
 
-function LiveProfileForm({ user }: { user: CurrentUser }) {
+function LiveHelpSupport({ title }: { title: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void loadFaqs()
+      .then((result) => {
+        if (cancelled) return;
+        setFaqs(result.data);
+        setError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(publicErrorMessage(err));
+        setFaqs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="settings-panel">
+      <section className="panel">
+        <h3>{title}</h3>
+        <p>
+          Answers from the published Family House FAQ, plus ways to reach your church and support team.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem' }}>
+          <Link href="/contact" className="site-button">
+            Contact us
+          </Link>
+          <Link href="/messages" className="site-button">
+            Messages
+          </Link>
+          <Link href="/account/settings/privacy" className="site-button">
+            Privacy &amp; security
+          </Link>
+        </div>
+      </section>
+      <section className="panel">
+        <h3>Frequently asked questions</h3>
+        {loading ? <p>Loading FAQ…</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
+        {!loading && faqs.length === 0 ? (
+          <p>No FAQ items are published yet. Use Contact us for direct support.</p>
+        ) : null}
+        <div className="faq-list">
+          {faqs.map((item) => (
+            <details key={item.q} className="faq-item">
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* profile avatar preview helper kept next to edit form */
+function LiveProfileForm({
+  user,
+  onUpdated,
+}: {
+  user: CurrentUser;
+  onUpdated?: (next: CurrentUser) => void;
+}) {
   const { t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photo) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  useEffect(() => {
+    const fileId = user.profile.avatar_file_id?.trim();
+    if (!fileId) {
+      setAvatarUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    void downloadUserFile(fileId)
+      .then(async (response) => {
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setAvatarUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setAvatarUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [user.profile.avatar_file_id]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3503,17 +3645,29 @@ function LiveProfileForm({ user }: { user: CurrentUser }) {
     setError(null);
     setMessage(null);
     try {
-      await updateUserProfile({
+      let avatarId = user.profile.avatar_file_id ?? null;
+      if (photo) {
+        const formData = new FormData();
+        formData.set('file', photo);
+        formData.set('purpose', 'profile.avatar');
+        formData.set('classification', 'internal');
+        const asset = await storeUserFile(formData);
+        avatarId = asset.id ?? asset.public_id ?? null;
+      }
+      const updated = await updateUserProfile({
         given_name: String(values.get('given_name') ?? '').trim(),
         middle_name: String(values.get('middle_name') ?? '').trim() || null,
         family_name: String(values.get('family_name') ?? '').trim(),
         preferred_name: String(values.get('preferred_name') ?? '').trim() || null,
+        ...(avatarId ? { avatar_file_asset_id: avatarId } : {}),
       });
+      setPhoto(null);
       setMessage('Your profile has been updated.');
+      onUpdated?.(updated);
     } catch (requestError) {
       setError(
         isRecentMfaRequiredError(requestError)
-          ? 'Recent multi-factor authentication is required before changing your profile.'
+          ? 'Recent multi-factor authentication is required before changing your profile or photo.'
           : formatUserApiError(requestError, 'Unable to update your profile.'),
       );
     } finally {
@@ -3521,26 +3675,53 @@ function LiveProfileForm({ user }: { user: CurrentUser }) {
     }
   };
 
+  const shownPhoto = previewUrl ?? avatarUrl;
+
   return (
     <form className="panel site-form" onSubmit={(event) => void submit(event)}>
       <h3>Edit profile</h3>
-      <p>Profile changes require recent multi-factor authentication.</p>
+      <p>Update your name and photo. Profile and photo changes require recent multi-factor authentication.</p>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+        {shownPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={shownPhoto}
+            alt=""
+            width={88}
+            height={88}
+            style={{ borderRadius: '999px', objectFit: 'cover', border: '2px solid #e5e7eb' }}
+          />
+        ) : (
+          <span className="avatar huge" data-profile-avatar="initials">{initialsFromUser(user)}</span>
+        )}
+        <label className="site-button" style={{ cursor: 'pointer' }}>
+          {shownPhoto ? 'Replace photo' : 'Upload photo'}
+          <input
+            accept="image/*"
+            type="file"
+            hidden
+            onChange={(event) => {
+              setPhoto(event.target.files?.[0] ?? null);
+            }}
+          />
+        </label>
+      </div>
       <div className="form-grid">
         <label>
           {t('account.givenName')}
-          <input defaultValue={user.profile.given_name ?? ''} name="given_name" required />
+          <input defaultValue={user.profile.given_name ?? ''} name="given_name" required key={`given-${user.profile.given_name}`} />
         </label>
         <label>
           {t('account.middleName')}
-          <input defaultValue={user.profile.middle_name ?? ''} name="middle_name" />
+          <input defaultValue={user.profile.middle_name ?? ''} name="middle_name" key={`middle-${user.profile.middle_name}`} />
         </label>
         <label>
           {t('account.familyName')}
-          <input defaultValue={user.profile.family_name ?? ''} name="family_name" required />
+          <input defaultValue={user.profile.family_name ?? ''} name="family_name" required key={`family-${user.profile.family_name}`} />
         </label>
         <label>
           {t('account.preferredName')}
-          <input defaultValue={user.profile.preferred_name ?? ''} name="preferred_name" />
+          <input defaultValue={user.profile.preferred_name ?? ''} name="preferred_name" key={`preferred-${user.profile.preferred_name}`} />
         </label>
       </div>
       {error ? <p role="alert">{error}</p> : null}
@@ -4290,12 +4471,7 @@ function LiveAccountSettings({ route }: { route: SiteRoute }) {
   }
 
   if (path === '/account/help') {
-    return (
-      <SettingsGap
-        title={route.title}
-        detail="Help content is not served from /user APIs. Use published support pages or contact your church administrators."
-      />
-    );
+    return <LiveHelpSupport title={route.title} />;
   }
 
   if (loading) return <p className="panel">Loading your profile…</p>;
@@ -4334,7 +4510,7 @@ function LiveAccountSettings({ route }: { route: SiteRoute }) {
               <p>No preference record yet — save preferences from Account Settings.</p>
             )}
           </section>
-          <LiveProfileForm user={user} />
+          <LiveProfileForm user={user} onUpdated={setUser} />
         </>
       ) : null}
       {showPreferences ? (
@@ -4365,6 +4541,10 @@ function Media({ route }: { route: SiteRoute }) {
   const [onlineLoading, setOnlineLoading] = useState(!fixtures);
   const [onlineError, setOnlineError] = useState<string | null>(null);
   const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [heroTitle, setHeroTitle] = useState<string | null>(null);
+  const [heroSummary, setHeroSummary] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  const [liveTitle, setLiveTitle] = useState<string | null>(null);
   const [scheduleRows, setScheduleRows] = useState<Array<[string, string, string, string]>>(
     fixtures ? (schedule as Array<[string, string, string, string]>) : [],
   );
@@ -4372,25 +4552,42 @@ function Media({ route }: { route: SiteRoute }) {
   const sermonsState = useAsyncList(() => loadSermons(), [route.path]);
   const tabs = [
     ['Overview', '/online-church'],
+    ['Live', '/online-church/live'],
     ['Schedule', '/online-church/schedule'],
     ['Sermons', '/online-church/sermons'],
-    ['Bible Study', '/online-church/bible-study'],
   ] as const;
 
   useEffect(() => {
     if (fixtures) return;
     let cancelled = false;
     setOnlineLoading(true);
-    void loadOnlineChurchContent()
-      .then((result) => {
+    void Promise.allSettled([loadOnlineChurchContent(), fetchCurrentLivestream()])
+      .then(([contentResult, liveResult]) => {
         if (cancelled) return;
-        setScheduleRows(result.schedule);
-        setOverviewCards(result.data.filter((item) => !item.href.includes('/sermons/')));
-        setHeroImage(result.page?.image_url ?? null);
-        setOnlineError(null);
-      })
-      .catch((error) => {
-        if (!cancelled) setOnlineError(publicErrorMessage(error));
+        if (contentResult.status === 'fulfilled') {
+          const result = contentResult.value;
+          setScheduleRows(result.schedule);
+          setOverviewCards(result.data.filter((item) => !(item.href ?? '').includes('/sermons/')));
+          setHeroImage(result.page?.image_url ?? null);
+          setHeroTitle(result.page?.title ?? null);
+          setHeroSummary(result.page?.summary ?? null);
+          setOnlineError(null);
+        } else {
+          setOnlineError(publicErrorMessage(contentResult.reason));
+        }
+        if (liveResult.status === 'fulfilled' && liveResult.value) {
+          setLiveStatus(liveResult.value.status ?? null);
+          setLiveTitle(liveResult.value.title ?? null);
+          if (liveResult.value.thumbnail_url) setHeroImage(liveResult.value.thumbnail_url);
+          if (liveResult.value.title) setHeroTitle(liveResult.value.title);
+          if (liveResult.value.subtitle || liveResult.value.host_name) {
+            setHeroSummary(
+              [liveResult.value.church_name ?? liveResult.value.subtitle, liveResult.value.host_name]
+                .filter(Boolean)
+                .join(' · '),
+            );
+          }
+        }
       })
       .finally(() => {
         if (!cancelled) setOnlineLoading(false);
@@ -4400,7 +4597,23 @@ function Media({ route }: { route: SiteRoute }) {
     };
   }, [fixtures, route.path]);
 
+  if (pathname.includes('/online-church/live')) {
+    return (
+      <>
+        <div className="media-tabs tab-bar">
+          {tabs.map(([label, href]) => (
+            <Link className={pathname === href || (href !== '/online-church' && pathname.startsWith(href)) ? 'active' : ''} href={href} key={href}>
+              {label}
+            </Link>
+          ))}
+        </div>
+        <LiveWatchExperience />
+      </>
+    );
+  }
+
   const sermonCards = fixtures ? sermons : sermonsState.status === 'ready' ? sermonsState.items : [];
+  const isLive = (liveStatus ?? '').toLowerCase() === 'live';
 
   return (
     <>
@@ -4410,12 +4623,12 @@ function Media({ route }: { route: SiteRoute }) {
       >
         <div className="play">▶</div>
         <div>
-          <span className="live">● LIVE</span>
-          <h2>{route.title}</h2>
-          <p>Join the Family House Connect global family live and on demand.</p>
+          {isLive ? <span className="live">● LIVE</span> : <span className="live">{liveStatus ? liveStatus.toUpperCase() : 'ONLINE'}</span>}
+          <h2>{liveTitle || heroTitle || route.title}</h2>
+          <p>{heroSummary || 'Join the Family House Connect global family live and on demand.'}</p>
           <div className="hero-actions">
             <Link className="site-button" href="/online-church/live">
-              {route.action ?? 'Watch Live'}
+              {isLive ? 'Watch Live' : (route.action ?? 'Open Live')}
             </Link>
             <Link className="site-button secondary" href="/give">
               Give
@@ -4791,10 +5004,10 @@ function SectionLandingCards({ section }: { section: string }) {
 }
 
 function KcaGateLanding({ route }: { route: SiteRoute }) {
-  const heroImage = useCmsHeroImage('kca');
+  const cms = useCmsPageMeta('kca');
   return (
     <>
-      <Hero route={route} imageUrl={heroImage} />
+      <Hero route={route} imageUrl={cms.imageUrl} title={cms.title} subtitle={cms.summary} />
       <KcaGate />
     </>
   );
@@ -4814,10 +5027,10 @@ function Landing({ route }: { route: SiteRoute }) {
 }
 
 function SectionHeroLanding({ route }: { route: SiteRoute }) {
-  const heroImage = useCmsHeroImage(cmsSlugForRoute(route));
+  const cms = useCmsPageMeta(cmsSlugForRoute(route));
   return (
     <>
-      <Hero route={route} imageUrl={heroImage} />
+      <Hero route={route} imageUrl={cms.imageUrl} title={cms.title} subtitle={cms.summary} />
       <Metrics />
       {route.section === 'Press' ? (
         <PressLandingExtras />

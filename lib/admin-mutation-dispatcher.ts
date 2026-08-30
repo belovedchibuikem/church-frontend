@@ -28,6 +28,8 @@ import {
   completeFollowUpTask,
   completeSoulFollowUp,
   createChurch,
+  updateChurch,
+  deleteChurch,
   defaultOpsScope,
   GLOBAL_ADMIN_SCOPE,
   operationsErrorMessage,
@@ -524,19 +526,113 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   }
 
   // --- Church / mission (existing wrappers + remaining POSTs) ---
-  if ((routeStarts(route, '/admin/churches') || labelIs(label, /add church|create church/)) && labelIs(label, /add church|create church|save|submit|register/)) {
+  if ((routeStarts(route, '/admin/churches') || labelIs(label, /add church|create church/)) && labelIs(label, /add church|create church|save|submit|register/) && !labelIs(label, /edit|update|delete|remove/)) {
     if (route.includes('/first-timers')) {
       /* handled below */
     } else if (!route.includes('/members') && !route.includes('/home-churches')) {
+      const unitId = requireId(firstUlid(payload.administrative_unit_id), 'administrative unit');
+      let locationId = firstUlid(payload.location_id);
+      if (!locationId) {
+        const countryId = requireId(firstUlid(payload.country_id), 'country');
+        const locationName =
+          field(payload, 'location_name', 'address_line_one', 'name') ??
+          `${field(payload, 'name') ?? 'Church'} location`;
+        const createdLocation = await createLocation(
+          {
+            country_id: countryId,
+            name: locationName,
+            timezone: field(payload, 'timezone') ?? 'Africa/Lagos',
+            administrative_unit_id: unitId,
+            address_line_one: field(payload, 'address_line_one', 'address') ?? null,
+            address_line_two: field(payload, 'address_line_two') ?? null,
+            locality: field(payload, 'locality') ?? null,
+            postal_code: field(payload, 'postal_code') ?? null,
+          },
+          { scope },
+        );
+        locationId = createdLocation.id;
+      }
       return createChurch(
         {
           name: field(payload, 'name') ?? '',
-          location_id: requireId(firstUlid(payload.location_id), 'location'),
-          administrative_unit_id: requireId(firstUlid(payload.administrative_unit_id), 'administrative unit'),
+          location_id: requireId(locationId, 'location'),
+          administrative_unit_id: unitId,
         },
         scope,
       );
     }
+  }
+  if (routeStarts(route, '/admin/churches') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add church|create church/)) {
+    const unitId = requireId(firstUlid(payload.administrative_unit_id), 'administrative unit');
+    let locationId = firstUlid(payload.location_id);
+    if (!locationId) {
+      const countryId = requireId(firstUlid(payload.country_id), 'country');
+      const createdLocation = await createLocation(
+        {
+          country_id: countryId,
+          name: field(payload, 'location_name', 'address_line_one') ?? field(payload, 'name') ?? 'Church location',
+          timezone: field(payload, 'timezone') ?? 'Africa/Lagos',
+          administrative_unit_id: unitId,
+          address_line_one: field(payload, 'address_line_one', 'address') ?? null,
+          address_line_two: field(payload, 'address_line_two') ?? null,
+          locality: field(payload, 'locality') ?? null,
+          postal_code: field(payload, 'postal_code') ?? null,
+        },
+        { scope },
+      );
+      locationId = createdLocation.id;
+    }
+    return updateChurch(
+      requireId(pickRecord(ctx, 'church_id', 'id'), 'church'),
+      {
+        name: field(payload, 'name') ?? '',
+        location_id: requireId(locationId, 'location'),
+        administrative_unit_id: unitId,
+      },
+      scope,
+    );
+  }
+  if (routeStarts(route, '/admin/churches') && labelIs(label, /delete|remove/)) {
+    return deleteChurch(requireId(pickRecord(ctx, 'church_id', 'id'), 'church'), scope);
+  }
+  if (routeStarts(route, '/admin/kca/lecturers') && labelIs(label, /add lecturer|create lecturer|save|submit/) && !labelIs(label, /delete|remove|edit/)) {
+    return mutate(
+      'admin/kca/lecturer-assignments',
+      {
+        lecturer_person_id: requireId(firstUlid(payload.lecturer_person_id, payload.person_id), 'lecturer'),
+        kca_module_id: requireId(firstUlid(payload.kca_module_id, payload.module_id), 'module'),
+        kca_cohort_id: requireId(firstUlid(payload.kca_cohort_id, payload.cohort_id), 'cohort'),
+        starts_at: field(payload, 'starts_at', 'startDate') ?? new Date().toISOString(),
+        ends_at: field(payload, 'ends_at', 'endDate') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/lecturers') && labelIs(label, /delete|remove/)) {
+    return mutate(
+      `admin/kca/lecturer-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'lecturer assignment'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/mentors') && labelIs(label, /add mentor|create mentor|save|submit/) && !labelIs(label, /delete|remove|edit/)) {
+    return mutate(
+      'admin/kca/mentor-assignments',
+      {
+        mentor_person_id: requireId(firstUlid(payload.mentor_person_id, payload.person_id), 'mentor'),
+        kca_enrollment_id: requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id), 'enrollment'),
+        starts_at: field(payload, 'starts_at', 'startDate') ?? new Date().toISOString(),
+        ends_at: field(payload, 'ends_at', 'endDate') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/mentors') && labelIs(label, /delete|remove/)) {
+    return mutate(
+      `admin/kca/mentor-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'mentor assignment'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
+    );
   }
   if (routeStarts(route, '/admin/home-churches/applications') && labelIs(label, /new application|create application|submit application|add application/)) {
     return mutate(
@@ -1195,6 +1291,31 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         published_at: field(payload, 'published_at') ?? null,
       }),
       opts,
+    );
+  }
+  if (labelIs(label, /update (page |content )?item|save (page )?item/)) {
+    const pageId = requireId(pickRecord(ctx, 'page_id', 'id'), 'page');
+    const itemId = requireId(pickRecord(ctx, 'item_id') ?? ctx.recordId, 'item');
+    return mutate(
+      `admin/content/pages/${encodeURIComponent(pageId)}/items/${encodeURIComponent(itemId)}`,
+      jsonBody({
+        kind: field(payload, 'kind', 'category'),
+        title: field(payload, 'title', 'name'),
+        body: field(payload, 'body', 'description', 'notes'),
+        href: field(payload, 'href') ?? null,
+        sort_order: asInt(field(payload, 'sort_order', 'sequence')),
+        published_at: field(payload, 'published_at') ?? null,
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (labelIs(label, /delete (page |content )?item|remove (page )?item/)) {
+    const pageId = requireId(pickRecord(ctx, 'page_id', 'id'), 'page');
+    const itemId = requireId(pickRecord(ctx, 'item_id') ?? ctx.recordId, 'item');
+    return mutate(
+      `admin/content/pages/${encodeURIComponent(pageId)}/items/${encodeURIComponent(itemId)}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
     );
   }
 

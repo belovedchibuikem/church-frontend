@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppBrand } from '@/components/app-brand';
+import { useAuth } from '@/components/auth-provider';
 import { GeographySelect } from '@/components/geography-select';
 import { SearchSelect } from '@/components/search-select';
 import { formatLocationLine } from '@/lib/geography';
@@ -383,6 +384,7 @@ function ApiConfigMissing() {
 export function LogoutScreen() {
   const router = useRouter();
   const { t } = useLocale();
+  const { clearSession } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const apiReady = isAuthApiConfigured();
@@ -398,6 +400,7 @@ export function LogoutScreen() {
         await logoutBrowserUser();
         clearPendingAuthEmail();
         clearRegisterDraft();
+        clearSession();
         if (!cancelled) router.replace('/login');
       } catch (err) {
         if (!cancelled) {
@@ -409,7 +412,7 @@ export function LogoutScreen() {
     return () => {
       cancelled = true;
     };
-  }, [router, apiReady]);
+  }, [router, apiReady, clearSession]);
 
   const displayError = !apiReady
     ? t('errors.authNotConfigured', { defaultMessage: 'Authentication API is not configured.' })
@@ -465,6 +468,7 @@ export function MemberLogoutButton({ className = 'logout' }: { className?: strin
 export function AuthScreen({ route }: { route: SiteRoute }) {
   const router = useRouter();
   const { locale, setLocale, t } = useLocale();
+  const { setSessionUser } = useAuth();
   const [busy, setBusy] = useState(false);
   const [resetToken, setResetToken] = useState('');
   const [resetEmail, setResetEmail] = useState('');
@@ -604,6 +608,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
           try {
             const { user, meta } = await loginBrowserUser({ email, password, remember });
             setPendingAuthEmail(user.email);
+            setSessionUser(user);
             setDone(true);
             const returnTo =
               typeof window !== 'undefined'
@@ -729,6 +734,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               });
               clearRegisterDraft();
               setPendingAuthEmail(user.email);
+              setSessionUser(user);
               setDone(true);
               setSuccess(
                 t('auth.accountCreatedSentEmail', {

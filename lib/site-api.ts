@@ -19,11 +19,13 @@ import {
   cardsFromPage,
   faqsFromPage,
   isContentPageNotFound,
+  itemsOfKind,
   loadContentPage,
   loadContentPages,
   metricsFromPage,
   scheduleRowsFromPage,
   type ContentPage,
+  type ContentPageItem,
   type ContentPageSummary,
 } from '@/lib/content-api';
 import { isPublicApiConfigured, publicRequest, PublicApiError } from '@/lib/public-api';
@@ -669,6 +671,38 @@ async function loadCmsPageOrThrow(slug: string): Promise<ContentPage> {
   return result.data;
 }
 
+function headingCopy(page: ContentPage | null | undefined, section: string, index: number): { eyebrow: string; title: string } | null {
+  const items = itemsOfKind(page, 'heading');
+  const match = items.find((item) => {
+    const meta = item.meta;
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
+    return String((meta as Record<string, unknown>).section ?? '') === section;
+  });
+  const item: ContentPageItem | undefined = match ?? items[index];
+  if (!item) return null;
+  const eyebrow = (item.title ?? '').trim();
+  const title = (item.body ?? '').trim();
+  if (!eyebrow && !title) return null;
+  return { eyebrow, title };
+}
+
+export async function loadCmsPageMeta(slug: string): Promise<{ title: string | null; summary: string | null; imageUrl: string | null }> {
+  if (designFixturesEnabled() || !isPublicApiConfigured()) {
+    return { title: null, summary: null, imageUrl: null };
+  }
+  try {
+    const page = await loadCmsPageOrThrow(slug);
+    return {
+      title: page.title?.trim() || null,
+      summary: page.summary?.trim() || null,
+      imageUrl: page.image_url ?? null,
+    };
+  } catch (error) {
+    if (isContentPageNotFound(error)) return { title: null, summary: null, imageUrl: null };
+    throw error;
+  }
+}
+
 /** Single-fetch CMS cards for a published page slug. */
 export async function loadCmsPageCards(
   slug: string,
@@ -727,6 +761,10 @@ export async function loadHomeMarketing(): Promise<{
   pillars: ContentCard[];
   actions: ContentCard[];
   heroImage?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  pillarHeading?: { eyebrow: string; title: string } | null;
+  actionHeading?: { eyebrow: string; title: string } | null;
   source: 'api' | 'fixtures';
 }> {
   if (!isPublicApiConfigured()) {
@@ -741,17 +779,24 @@ export async function loadHomeMarketing(): Promise<{
     const pillars = cardsFromPage(page, ['pillar']);
     const actions = cardsFromPage(page, ['card']);
     const heroImage = page.image_url ?? null;
-    // If seeder only uses `card`, split: first 4 pillars, rest actions.
+    const title = page.title?.trim() || null;
+    const summary = page.summary?.trim() || null;
+    const pillarHeading = headingCopy(page, 'pillars', 0);
+    const actionHeading = headingCopy(page, 'actions', 1);
     if (!pillars.length && actions.length) {
       return {
         metrics,
         pillars: actions.slice(0, 4),
         actions: actions.slice(4),
         heroImage,
+        title,
+        summary,
+        pillarHeading,
+        actionHeading,
         source: 'api',
       };
     }
-    return { metrics, pillars, actions, heroImage, source: 'api' };
+    return { metrics, pillars, actions, heroImage, title, summary, pillarHeading, actionHeading, source: 'api' };
   } catch (error) {
     if (designFixturesEnabled()) {
       return { metrics: fixtureMetrics, pillars: fixturePillars, actions: fixtureHomeActions, heroImage: null, source: 'fixtures' };
@@ -858,6 +903,7 @@ const SECTION_CMS_SLUG: Record<string, string> = {
   Giving: 'giving',
   Online: 'online-church',
   Press: 'press',
+  Events: 'events',
 };
 
 export async function loadCmsHeroImage(slug: string): Promise<string | null> {

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { AuthProvider } from '../components/auth-provider';
 import { BrandingProvider } from '../components/branding-provider';
 import { LocaleProvider } from '../components/locale-provider';
 import { DEFAULT_APP_NAME, loadPublicBranding } from '../lib/branding';
@@ -33,7 +34,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang={locale} dir={localeDirection(locale)}>
       <body>
         <BrandingProvider initial={branding}>
-          <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+          <LocaleProvider initialLocale={locale}>
+            <AuthProvider>{children}</AuthProvider>
+          </LocaleProvider>
         </BrandingProvider>
       </body>
     </html>

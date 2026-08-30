@@ -3,9 +3,9 @@ import test from 'node:test';
 import { adminScreens } from '../lib/admin-routes.ts';
 import { localeDirection, supportedLocales } from '../lib/i18n.ts';
 
-test('the approved contact sheets map to 260 unique reference screens', () => {
-  assert.equal(adminScreens.length, 260);
-  assert.equal(new Set(adminScreens.map((screen) => screen.route)).size, 260);
+test('the approved contact sheets map to 261 unique reference screens', () => {
+  assert.equal(adminScreens.length, 261);
+  assert.equal(new Set(adminScreens.map((screen) => screen.route)).size, 261);
   for (const batch of ['A', 'B', 'C']) assert.equal(adminScreens.filter((screen) => screen.batch === batch).length, 16);
   assert.equal(adminScreens.filter((screen) => screen.batch === 'D').length, 14);
   for (const batch of ['E', 'F']) assert.equal(adminScreens.filter((screen) => screen.batch === batch).length, 16);
@@ -14,7 +14,7 @@ test('the approved contact sheets map to 260 unique reference screens', () => {
   assert.equal(adminScreens.filter((screen) => screen.batch === 'I').length, 21);
   assert.equal(adminScreens.filter((screen) => screen.batch === 'J').length, 20);
   assert.equal(adminScreens.filter((screen) => screen.batch === 'K').length, 17);
-  assert.equal(adminScreens.filter((screen) => screen.batch === 'L').length, 19);
+  assert.equal(adminScreens.filter((screen) => screen.batch === 'L').length, 20);
   assert.equal(adminScreens.filter((screen) => screen.batch === 'M').length, 16);
   assert.equal(adminScreens.filter((screen) => screen.batch === 'N').length, 16);
   assert.equal(adminScreens.filter((screen) => screen.batch === 'O').length, 19);
@@ -25,6 +25,7 @@ test('the approved contact sheets map to 260 unique reference screens', () => {
   assert.ok(adminScreens.some((screen) => screen.batch === 'J' && screen.route === '/admin/press'));
   assert.ok(adminScreens.some((screen) => screen.batch === 'K' && screen.route === '/admin/finance'));
   assert.ok(adminScreens.some((screen) => screen.batch === 'L' && screen.route === '/admin/settings/platform'));
+  assert.ok(adminScreens.some((screen) => screen.route === '/admin/settings/public-site'));
   assert.ok(adminScreens.some((screen) => screen.route === '/admin/settings/branding'));
   assert.ok(adminScreens.some((screen) => screen.batch === 'M' && screen.route === '/admin/communications'));
   assert.ok(adminScreens.some((screen) => screen.batch === 'N' && screen.route === '/admin/reports'));

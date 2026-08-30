@@ -23,6 +23,9 @@ export const CATALOG_PATHS = {
   'kca.enrollments': 'kca/enrollments',
   'kca.years': 'kca/years',
   'kca.cohorts': 'kca/cohorts',
+  'kca.modules': 'kca/modules',
+  'kca.lecturer_assignments': 'kca/lecturer-assignments',
+  'kca.mentor_assignments': 'kca/mentor-assignments',
   'kca.evidence': 'kca/evidence-submissions',
   'kca.assessments': 'kca/assessment-results',
   'kca.certificates': 'kca/certificates',
@@ -164,6 +167,9 @@ const LABEL_FIELDS = [
   'title',
   'translated_title',
   'name',
+  'person_name',
+  'lecturer_name',
+  'mentor_name',
   'code',
   'assessment_code',
   'result_code',
@@ -220,6 +226,8 @@ export const FORM_TO_DOMAIN_CATALOG: Partial<Record<string, CatalogDomainKey>> =
   kcaApplication: 'kca.applications',
   kcaYear: 'kca.years',
   kcaCohort: 'kca.cohorts',
+  kcaModule: 'kca.modules',
+  kcaEnrollment: 'kca.enrollments',
   kcaCertificate: 'kca.certificates',
   platformFile: 'platform.files',
 };
@@ -285,6 +293,9 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/certificates') return 'kca.certificates';
   if (route === '/admin/kca/cohorts') return 'kca.cohorts';
   if (route === '/admin/kca/years') return 'kca.years';
+  if (route === '/admin/kca/modules') return 'kca.modules';
+  if (route === '/admin/kca/lecturers') return 'kca.lecturer_assignments';
+  if (route === '/admin/kca/mentors') return 'kca.mentor_assignments';
   return null;
 }
 
@@ -366,10 +377,18 @@ export function catalogRecordsToRows(
         mapped[column] = get('audience_id', 'audience');
       } else if (key.includes('progress')) {
         mapped[column] = get('progress', 'status');
+      } else if (key.includes('lecturer') || key.includes('mentor')) {
+        mapped[column] = get('lecturer_name', 'mentor_name', 'person_name');
+      } else if (key.includes('specialization') || key.includes('module')) {
+        mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
+      } else if (key.includes('student')) {
+        mapped[column] = get('student_name', 'person_name', 'enrollment_id');
+      } else if (key.includes('region')) {
+        mapped[column] = get('cohort_name', 'region', 'locality');
       } else if (key.includes('translator')) {
         mapped[column] = get('translator_name', 'person_name');
       } else if (key.includes('cohort')) {
-        mapped[column] = get('name', 'cohort_id', 'cohort');
+        mapped[column] = get('cohort_name', 'name', 'cohort_id', 'cohort');
       } else if (key.includes('year')) {
         mapped[column] = get('year_name', 'name', 'code', 'year_id', 'starts_on');
       } else if (key.includes('detail') || key.includes('severity')) {

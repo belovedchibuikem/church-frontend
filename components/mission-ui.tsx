@@ -69,12 +69,39 @@ function MissionMetrics({ metrics = [] }: { metrics?: Metric[] }) {
   </article>)}</div>;
 }
 
-function MissionTabs({ tabs = [], active = 0 }: { tabs?: string[]; active?: number }) {
+function MissionTabs({
+  tabs = [],
+  active = 0,
+  onChange,
+}: {
+  tabs?: string[];
+  active?: number;
+  onChange?: (index: number) => void;
+}) {
   const { t } = useLocale();
+  const [current, setCurrent] = useState(active);
+
+  useEffect(() => {
+    setCurrent(active);
+  }, [active]);
+
   return (
     <nav className="mission-tabs" aria-label={t('common.screenSections', { defaultMessage: 'Screen sections' })} role="tablist">
       {tabs.map((tab, index) => (
-        <button className={index === active ? 'active' : ''} type="button" role="tab" aria-selected={index === active} tabIndex={index === active ? 0 : -1} key={tab}>{tab}</button>
+        <button
+          className={index === current ? 'active' : ''}
+          type="button"
+          role="tab"
+          aria-selected={index === current}
+          tabIndex={index === current ? 0 : -1}
+          key={tab}
+          onClick={() => {
+            setCurrent(index);
+            onChange?.(index);
+          }}
+        >
+          {tab}
+        </button>
       ))}
     </nav>
   );
@@ -635,7 +662,22 @@ function MissionDashboard({ screen, requestedScope }: { screen: AdminScreen; req
 }
 
 function MissionDetailHero({ screen, badge }: { screen: AdminScreen; badge?: string }) {
-  return <><section className="mission-detail-hero"><div className="mission-detail-mark">{screen.title.slice(0, 1)}</div><div><div className="mission-title-line"><h2>{screen.title}</h2><MissionStatus value={badge ?? 'Active'}/></div><p>{screen.subtitle}</p></div></section>{screen.tabs && <MissionTabs tabs={screen.tabs}/>}</>;
+  const [tab, setTab] = useState(0);
+  return (
+    <>
+      <section className="mission-detail-hero">
+        <div className="mission-detail-mark">{screen.title.slice(0, 1)}</div>
+        <div>
+          <div className="mission-title-line">
+            <h2>{screen.title}</h2>
+            <MissionStatus value={badge ?? 'Active'} />
+          </div>
+          <p>{screen.subtitle}</p>
+        </div>
+      </section>
+      {screen.tabs ? <MissionTabs tabs={screen.tabs} active={tab} onChange={setTab} /> : null}
+    </>
+  );
 }
 
 function MissionDefinitionList({ details = {} }: { details?: Row }) {
@@ -739,9 +781,10 @@ function InvitationReview({ screen }: { screen: AdminScreen }) {
 function PlanningView({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const details = Object.entries(screen.details ?? {});
+  const [tab, setTab] = useState(0);
   return (
     <div className="mission-planning">
-      <MissionTabs tabs={screen.tabs}/>
+      <MissionTabs tabs={screen.tabs} active={tab} onChange={setTab} />
       <div className="mission-planning-grid">
         <article className="mission-panel mission-planning-summary">
           <span className="mission-progress-ring" role="progressbar" aria-label={t('mission.planningCompletion', { defaultMessage: 'Planning completion' })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={100}>100%</span>
@@ -750,7 +793,7 @@ function PlanningView({ screen }: { screen: AdminScreen }) {
           {(screen.items ?? []).map(item => <div key={item}><i aria-hidden="true">✓</i><span>{item.split(' — ')[0]}</span><MissionStatus value={item.split(' — ')[1]}/></div>)}
         </article>
         <article className="mission-panel mission-planning-details">
-          <h3>{t('mission.generalPlan', { defaultMessage: 'General Plan' })}</h3>
+          <h3>{(screen.tabs?.[tab] ?? t('mission.generalPlan', { defaultMessage: 'General Plan' }))}</h3>
           {details.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
         </article>
       </div>
