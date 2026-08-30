@@ -15,11 +15,12 @@ import {
 } from '../lib/admin-catalog-api';
 import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
 import { stashAdminRecords } from '../lib/admin-record-cache';
+import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid } from '../lib/admin-mutation-dispatcher';
+import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
-import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { TableRowActions } from './table-row-actions';
 import {
   breakdownToItems,
@@ -115,7 +116,7 @@ function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?
             const isStatus = /status|priority|progress|issued/i.test(column);
             return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
           })}
-          {showAction && <td><TableRowActions record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} /></td>}
+          {showAction && <td><TableRowActions record={formatRowActionRecord(row[columns[0]], row.__id)} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} {...rowActionCapabilities(screen.route)} /></td>}
         </tr>)}</tbody>
       </table>
     </div>

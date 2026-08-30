@@ -59,7 +59,7 @@ import {
 export { GLOBAL_ADMIN_SCOPE };
 
 export const UNREGISTERED_ADMIN_ACTION_MESSAGE =
-  'No Laravel operation is registered for this action';
+  'This action is not wired to a Laravel mutation for this screen yet. Use View to inspect the selected record; Edit/Delete only work where an API endpoint exists.';
 
 export class UnregisteredAdminActionError extends Error {
   constructor(message = UNREGISTERED_ADMIN_ACTION_MESSAGE) {

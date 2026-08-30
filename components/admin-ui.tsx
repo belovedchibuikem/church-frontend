@@ -69,6 +69,7 @@ import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { getAdminModuleForRoute } from '../lib/admin-modules';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
 import { catalogOptions, churchTypeOptions, statusOptions } from '../lib/form-catalogs';
+import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import {
   assignPrayerRequest,
   completeFollowUpTask,
@@ -1221,9 +1222,10 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
                   <td className="actions-cell">
                     <div className="row-actions">
                       <TableRowActions
-                        record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                        record={formatRowActionRecord(row[columns[0]], row.__id)}
                         entityKey={entityKey}
                         reviewLabel={reviewLabel}
+                        {...rowActionCapabilities(screen.route)}
                       />
                       {dataset === 'prayer-requests' && row.__id && row.__id !== '—' ? (
                         <Link href={`/admin/people/prayer-requests/${row.__id}/assign`} className="table-action">
@@ -1294,12 +1296,14 @@ function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
         if (isCountries) {
           const next = await listCountries();
           if (cancelled) return;
+          stashAdminRecords(next as unknown as Array<Record<string, unknown>>);
           setCountries(next);
           setUnits([]);
           setMessage(next.length === 0 ? 'No countries yet. Open Hierarchy Tree to create one.' : `Showing ${next.length} countries`);
         } else {
           const next = await listUnits();
           if (cancelled) return;
+          stashAdminRecords(next as unknown as Array<Record<string, unknown>>);
           setUnits(next);
           setCountries([]);
           setMessage(next.length === 0 ? 'No administrative units yet. Open Hierarchy Tree to create one.' : `Showing ${next.length} units`);
@@ -1329,12 +1333,13 @@ function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
                 <th>Code</th>
                 <th>Id</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {countries.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>{error ? 'Countries unavailable.' : 'No countries returned.'}</td>
+                  <td colSpan={5}>{error ? 'Countries unavailable.' : 'No countries returned.'}</td>
                 </tr>
               ) : (
                 countries.map((country) => (
@@ -1345,6 +1350,13 @@ function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
                       <code>{country.id}</code>
                     </td>
                     <td>{country.created_at ?? '—'}</td>
+                    <td className="actions-cell">
+                      <TableRowActions
+                        record={formatRowActionRecord(country.name, country.id)}
+                        canEdit={false}
+                        canDelete={false}
+                      />
+                    </td>
                   </tr>
                 ))
               )}
@@ -1359,12 +1371,13 @@ function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
                 <th>Code</th>
                 <th>Parent</th>
                 <th>Country</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {units.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>{error ? 'Units unavailable.' : 'No units returned.'}</td>
+                  <td colSpan={6}>{error ? 'Units unavailable.' : 'No units returned.'}</td>
                 </tr>
               ) : (
                 units.map((unit) => (
@@ -1374,6 +1387,13 @@ function OrganizationCatalogTable({ screen }: { screen: AdminScreen }) {
                     <td>{unit.reference_code ?? '—'}</td>
                     <td>{unit.parent?.name ?? '—'}</td>
                     <td>{unit.country?.name ?? '—'}</td>
+                    <td className="actions-cell">
+                      <TableRowActions
+                        record={formatRowActionRecord(unit.name, unit.id)}
+                        canEdit={false}
+                        canDelete={false}
+                      />
+                    </td>
                   </tr>
                 ))
               )}
@@ -1408,6 +1428,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
       try {
         const result = await listCatalogDomain(dataset, { perPage: 25 });
         if (cancelled) return;
+        stashAdminRecords(result.items as Array<Record<string, unknown>>);
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns));
         setMessage(
           result.pagination.total === 0
@@ -1459,10 +1480,9 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                   ))}
                   <td className="actions-cell">
                     <TableRowActions
-                      record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                      record={formatRowActionRecord(row[columns[0]], row.__id)}
                       entityKey={entityKey}
-                      canEdit={false}
-                      canDelete={false}
+                      {...rowActionCapabilities(screen.route)}
                     />
                   </td>
                 </tr>

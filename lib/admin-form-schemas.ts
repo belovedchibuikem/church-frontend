@@ -106,6 +106,130 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Gender', name: 'gender', type: 'select', options: ['Male', 'Female', 'Prefer not to say'] },
     ],
   },
+  first_timer: {
+    entity: 'First timer',
+    fields: [
+      { label: 'Person', name: 'person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search person' },
+      { label: 'Church', name: 'church_id', type: 'search-select', catalog: 'church', required: true, placeholder: 'Search church' },
+      { label: 'Home church', name: 'home_church_id', type: 'search-select', catalog: 'homeChurch', placeholder: 'Search home church' },
+      { label: 'Registered at', name: 'registered_at', type: 'date' },
+      { label: 'Person name', name: 'person_name', type: 'text', placeholder: 'Display name' },
+      { label: 'Church name', name: 'church_name', type: 'text', placeholder: 'Church' },
+    ],
+  },
+  follow_up_task: {
+    entity: 'Follow-up task',
+    fields: [
+      { label: 'Person', name: 'person_name', type: 'text' },
+      { label: 'Type', name: 'type', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Due at', name: 'due_at', type: 'text' },
+      { label: 'Assignee', name: 'assigned_to_name', type: 'text' },
+    ],
+  },
+  prayer_request: {
+    entity: 'Prayer request',
+    fields: [
+      { label: 'Person', name: 'person_name', type: 'text' },
+      { label: 'Summary', name: 'summary', type: 'textarea', wide: true },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Category', name: 'category', type: 'text' },
+    ],
+  },
+  pastoral_need: {
+    entity: 'Pastoral need',
+    fields: [
+      { label: 'Person', name: 'person_name', type: 'text' },
+      { label: 'Summary', name: 'summary', type: 'textarea', wide: true },
+      { label: 'Category', name: 'category', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+    ],
+  },
+  crusade: {
+    entity: 'Crusade',
+    fields: [
+      { label: 'Name', name: 'name', type: 'text', required: true },
+      { label: 'Location', name: 'location_name', type: 'text' },
+      { label: 'Starts at', name: 'starts_at', type: 'text' },
+      { label: 'Ends at', name: 'ends_at', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+    ],
+  },
+  soul: {
+    entity: 'Soul journey',
+    fields: [
+      { label: 'Person', name: 'person_name', type: 'text' },
+      { label: 'Crusade', name: 'crusade_name', type: 'text' },
+      { label: 'Connected church', name: 'connected_church_name', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Captured at', name: 'captured_at', type: 'text' },
+    ],
+  },
+  mission_invitation: {
+    entity: 'Mission invitation',
+    fields: [
+      { label: 'Crusade', name: 'crusade_name', type: 'text' },
+      { label: 'Invitee', name: 'person_name', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+    ],
+  },
+  home_church_application: {
+    entity: 'Home church application',
+    fields: [
+      { label: 'Proposed name', name: 'proposed_name', type: 'text' },
+      { label: 'Applicant', name: 'applicant_name', type: 'text' },
+      { label: 'Church', name: 'church_name', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+    ],
+  },
+  kca_enrollment: {
+    entity: 'KCA enrollment',
+    fields: [
+      { label: 'Student', name: 'person_name', type: 'text' },
+      { label: 'Cohort', name: 'cohort_name', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+    ],
+  },
+  kca_application: {
+    entity: 'KCA application',
+    fields: [
+      { label: 'Applicant', name: 'person_name', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Submitted at', name: 'submitted_at', type: 'text' },
+    ],
+  },
+  kca_certificate: {
+    entity: 'KCA certificate',
+    fields: [
+      { label: 'Student', name: 'person_name', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Issued at', name: 'issued_at', type: 'text' },
+    ],
+  },
+  event: {
+    entity: 'Event',
+    fields: [
+      { label: 'Title', name: 'title', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Starts at', name: 'starts_at', type: 'text' },
+    ],
+  },
+  press_item: {
+    entity: 'Press item',
+    fields: [
+      { label: 'Title', name: 'title', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Language', name: 'language_code', type: 'text' },
+    ],
+  },
+  communication: {
+    entity: 'Communication',
+    fields: [
+      { label: 'Title', name: 'title', type: 'text' },
+      { label: 'Channel', name: 'channel', type: 'text' },
+      { label: 'Status', name: 'status', type: 'text' },
+    ],
+  },
 };
 
 const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
@@ -113,11 +237,26 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
   { pattern: /\/admin\/kca\/modules/, entity: 'kca_module' },
   { pattern: /\/admin\/kca\/lessons/, entity: 'kca_lesson' },
   { pattern: /\/admin\/kca\/cohorts/, entity: 'kca_cohort' },
+  { pattern: /\/admin\/kca\/years/, entity: 'kca_cohort' },
   { pattern: /\/admin\/kca\/lecturers/, entity: 'kca_lecturer_assignment' },
   { pattern: /\/admin\/kca\/mentors/, entity: 'kca_mentor_assignment' },
+  { pattern: /\/admin\/kca\/students/, entity: 'kca_enrollment' },
+  { pattern: /\/admin\/kca\/applications/, entity: 'kca_application' },
+  { pattern: /\/admin\/kca\/certificates/, entity: 'kca_certificate' },
+  { pattern: /\/admin\/home-churches\/applications/, entity: 'home_church_application' },
   { pattern: /\/admin\/home-churches/, entity: 'home_church' },
   { pattern: /\/admin\/churches/, entity: 'church' },
+  { pattern: /\/admin\/people\/first-timers|\/first-timers/, entity: 'first_timer' },
+  { pattern: /\/admin\/people\/follow-up|\/disciples/, entity: 'follow_up_task' },
+  { pattern: /\/admin\/people\/prayer-requests/, entity: 'prayer_request' },
+  { pattern: /\/admin\/people\/needs/, entity: 'pastoral_need' },
+  { pattern: /\/admin\/mission\/crusades/, entity: 'crusade' },
+  { pattern: /\/admin\/mission\/souls|\/mentor-assignments/, entity: 'soul' },
+  { pattern: /\/admin\/mission\/invitations/, entity: 'mission_invitation' },
   { pattern: /\/admin\/(members|people|users)/, entity: 'person' },
+  { pattern: /\/admin\/events/, entity: 'event' },
+  { pattern: /\/admin\/press/, entity: 'press_item' },
+  { pattern: /\/admin\/communications/, entity: 'communication' },
 ];
 
 const screenEntityMap: Record<string, string> = {
@@ -127,6 +266,18 @@ const screenEntityMap: Record<string, string> = {
   'H-03': 'kca_cohort',
   'H-05': 'kca_mentor_assignment',
   'H-07': 'kca_lecturer_assignment',
+  'E-02': 'church',
+  'D-07': 'home_church',
+  'D-02': 'home_church_application',
+  'E-07': 'first_timer',
+  'F-02': 'first_timer',
+  'F-04': 'follow_up_task',
+  'F-10': 'prayer_request',
+  'F-11': 'pastoral_need',
+  'I-02': 'crusade',
+  'I-10': 'soul',
+  'I-13': 'soul',
+  'I-05': 'mission_invitation',
 };
 
 export function resolveEntityKey(route: string, screenId?: string): string | undefined {

@@ -7,6 +7,7 @@ import { AdminFormFields } from './admin-form-fields';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
 import { adminFormSchemas, fieldsForEntity, normalizeDetailValues, type AdminFormField } from '../lib/admin-form-schemas';
+import { fieldsFromRecordDetails } from '../lib/admin-row-actions';
 import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
 
 export type ActionSurfaceMode = 'create' | 'edit' | 'assign' | 'confirm' | 'file' | 'preview' | 'help' | 'actions' | 'ai';
@@ -335,9 +336,11 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
     { label: 'Assign to', name: 'assignee_id', type: 'search-select' as const, catalog: 'person' as const, placeholder: 'Search people' },
     { label: 'Due date', name: 'dueDate', type: 'date' as const },
     { label: 'Instructions', name: 'instructions', type: 'textarea' as const, placeholder: 'Add clear handoff instructions' },
-  ] : schema?.fields ?? fieldsFor(label, pageTitle);
+  ] : schema?.fields ?? (mode === 'edit' || mode === 'create'
+    ? (fieldsFromRecordDetails(normalizedDetails) as AdminFormField[])
+    : fieldsFor(label, pageTitle));
 
-  if (schema) {
+  if (schema || ((mode === 'edit' || mode === 'create') && fields.length > 0)) {
     return <form className="interaction-action-form" onSubmit={save}>
       <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{record ? `${entity}: ${record}` : entity}</h3><p>{t('admin.fieldsMatchColumns', { defaultMessage: 'Fields match the database columns for this record type.' })}</p></div>
       <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' ? normalizedDetails : {}} className="interaction-form-grid" />

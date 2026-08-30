@@ -19,6 +19,7 @@ import {
   type CrusadeRecord,
   type SoulRecord,
 } from '../lib/admin-operations-api';
+import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { stashAdminRecords } from '../lib/admin-record-cache';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
@@ -515,9 +516,10 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                   <td>
                     <div className="row-actions mission-row-actions">
                       <TableRowActions
-                        record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                        record={formatRowActionRecord(row[columns[0]], row.__id)}
                         entityKey={entityKey}
                         className="row-actions mission-row-actions"
+                        {...rowActionCapabilities(screen.route)}
                       />
                       {live && dataset === 'souls' ? (
                         <>

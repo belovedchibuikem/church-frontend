@@ -48,7 +48,6 @@ import {
   type KcaGovernanceStatus,
 } from '../lib/admin-platform-api.ts';
 import type { JsonValue } from '../lib/api-types.ts';
-import { resolveEntityKey } from '../lib/admin-form-schemas';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { MapsSettingsPanel } from './maps-settings-panel';
@@ -57,6 +56,9 @@ import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { CommunicationsComposePanel } from './communications-compose-panel';
 import { BrandingSettingsPanel } from './branding-settings-panel';
 import { PublicSiteCmsPanel } from './public-site-cms-panel';
+import { resolveEntityKey } from '../lib/admin-form-schemas';
+import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
+import { stashAdminRecords } from '../lib/admin-record-cache';
 import { TableRowActions } from './table-row-actions';
 import { useLocale } from '@/components/locale-provider';
 import {
@@ -131,6 +133,7 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
       try {
         const result = await listCatalogDomain(dataset, { perPage: 25 });
         if (cancelled) return;
+        stashAdminRecords(result.items as Array<Record<string, unknown>>);
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns));
         setMessage(
           result.pagination.total === 0
@@ -190,11 +193,10 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                   })}
                   <td>
                     <TableRowActions
-                      record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                      record={formatRowActionRecord(row[columns[0]], row.__id)}
                       entityKey={entityKey}
                       className="row-actions platform-row-actions"
-                      canEdit={false}
-                      canDelete={false}
+                      {...rowActionCapabilities(screen.route)}
                     />
                   </td>
                 </tr>
@@ -325,11 +327,10 @@ function IdentitySecurityLiveTable({
                   })}
                   <td>
                     <TableRowActions
-                      record={`${row[columns[0]] ?? ''} ${row.__id ?? ''}`.trim()}
+                      record={formatRowActionRecord(row[columns[0]], row.__id)}
                       entityKey={entityKey}
                       className="row-actions platform-row-actions"
-                      canEdit={false}
-                      canDelete={false}
+                      {...rowActionCapabilities(screen.route)}
                     />
                   </td>
                 </tr>
