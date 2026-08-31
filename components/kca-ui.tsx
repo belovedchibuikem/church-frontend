@@ -16,7 +16,7 @@ import {
 import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
 import { stashAdminRecords } from '../lib/admin-record-cache';
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
-import { executeAdminAction, extractUlid } from '../lib/admin-mutation-dispatcher';
+import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
@@ -360,6 +360,12 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
 
   async function submitDecision(status: string, label: string) {
     if (!applicationId) return;
+    const current = String(application?.status ?? '').toLowerCase();
+    if (current === status) {
+      setError(null);
+      setMessage(`This application is already ${status.replaceAll('_', ' ')}.`);
+      return;
+    }
     setBusy(true);
     setMessage(null);
     setError(null);
@@ -375,7 +381,7 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
       const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
       setApplication((result.items.find((item) => String(item.id) === applicationId) as Record<string, unknown>) ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Decision submission failed.');
+      setError(formatAdminMutationError(err));
     } finally {
       setBusy(false);
     }

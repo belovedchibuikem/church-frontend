@@ -187,6 +187,51 @@ test('executeAdminAction maps KCA application Edit onto POST /admin/kca/applicat
   assert.equal((result.data as { status?: string }).status, 'accepted');
 });
 
+test('executeAdminAction maps Admit on the KCA decision page onto transitions', async () => {
+  const applicationId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  installFetch((call) => {
+    assert.match(call.url, new RegExp(`/admin/kca/applications/${applicationId}/transitions$`));
+    assert.equal(call.method, 'POST');
+    const payload = JSON.parse(call.body ?? '{}') as Record<string, string | null>;
+    assert.equal(payload.status, 'accepted');
+    return jsonResponse({ id: applicationId, status: 'accepted' });
+  });
+
+  const result = await executeAdminAction({
+    route: `/admin/kca/applications/${applicationId}/decision`,
+    label: 'Admit',
+    recordId: applicationId,
+    payload: { status: 'accepted', reason_code: 'accepted_by_admin' },
+  });
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(result.status, 'accepted');
+});
+
+test('executeAdminAction maps Request Information and Interview labels onto transitions', async () => {
+  const applicationId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  const expected: Record<string, string> = {
+    'Request Information': 'information_required',
+    Interview: 'interview',
+  };
+
+  for (const [label, status] of Object.entries(expected)) {
+    installFetch((call) => {
+      assert.match(call.url, new RegExp(`/admin/kca/applications/${applicationId}/transitions$`));
+      const payload = JSON.parse(call.body ?? '{}') as Record<string, string | null>;
+      assert.equal(payload.status, status);
+      return jsonResponse({ id: applicationId, status });
+    });
+
+    await executeAdminAction({
+      route: `/admin/kca/applications/${applicationId}/decision`,
+      label,
+      recordId: applicationId,
+      payload: { status, reason_code: `${status}_by_admin` },
+    });
+  }
+});
+
 test('executeAdminAction refuses unmapped actions instead of faking success', async () => {
   installFetch(() => {
     throw new Error('unmapped actions must not call the API');

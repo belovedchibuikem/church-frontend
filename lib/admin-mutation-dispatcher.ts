@@ -98,6 +98,25 @@ type Ctx = {
 
 const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i;
 const CODE_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
+const KCA_APPLICATION_STATES = new Set([
+  'draft',
+  'received',
+  'information_required',
+  'interview',
+  'reviewed',
+  'accepted',
+  'provisionally_accepted',
+  'deferred',
+  'not_accepted',
+  'withdrawn',
+  'suspended',
+  'revoked',
+]);
+
+function kcaApplicationStatus(payload: Record<string, string>): string | undefined {
+  const status = field(payload, 'status')?.toLowerCase();
+  return status && KCA_APPLICATION_STATES.has(status) ? status : undefined;
+}
 
 function normalizeLabel(label: string): string {
   return label
@@ -1235,9 +1254,13 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     const recommendationId = requireId(firstUlid(payload.recommendation_id, ctx.recordId), 'recommendation');
     return mutate(`admin/kca/recommendations/${encodeURIComponent(recommendationId)}/verify`, {}, opts);
   }
-  if (routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') && labelIs(label, /transition|approv|defer|accept|reject|not accepted|decision|submit|edit|update|save/)) {
+  if (
+    routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') &&
+    (kcaApplicationStatus(payload) ||
+      labelIs(label, /transition|approv|defer|accept|admit|reject|not accepted|decision|submit|edit|update|save|interview|orientation|request info|information required/))
+  ) {
     const status =
-      field(payload, 'status') ??
+      kcaApplicationStatus(payload) ??
       (labelIs(label, /request info|information required/)
         ? 'information_required'
         : labelIs(label, /interview|orientation/)
