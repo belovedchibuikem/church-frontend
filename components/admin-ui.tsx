@@ -45,7 +45,7 @@ import {
 } from '../lib/admin-identity-api';
 import { KcaScreenContent } from './kca-ui';
 import { MissionScreenContent } from './mission-ui';
-import { PlatformScreenContent, DemoDatasetBanner } from './platform-ui';
+import { PlatformScreenContent, DemoDatasetBanner, PlatformSettingsScreen } from './platform-ui';
 import { ApprovalsInboxPanel } from './approvals-inbox-panel';
 import {
   breakdownToItems,
@@ -53,16 +53,23 @@ import {
   formatRelativeTime,
 } from '../lib/admin-dashboard-api';
 import { useAdminDashboard } from '../lib/use-admin-dashboard';
+import { dashboardNavItems } from '../lib/admin-dashboard-nav';
+import {
+  DashboardQuickLinks,
+  DashboardShell,
+  LinkedMetricCards,
+  SeriesBarChart,
+} from './admin-dashboard-chrome';
 import { AdminInteractionShell } from './admin-interaction-shell';
 import { getAdminBreadcrumbs, getInteractionRouteMap, type AdminBreadcrumb } from '../lib/admin-navigation';
 import { AppBrand } from './app-brand';
-import { BrandingSettingsPanel } from './branding-settings-panel';
-import { MapsSettingsPanel } from './maps-settings-panel';
-import { PaymentsSettingsPanel } from './payments-settings-panel';
-import { CommunicationsSettingsPanel } from './communications-settings-panel';
-import { KcaSettingsPanel } from './platform-ui';
 import { InteractiveMap } from './interactive-map';
 import { HierarchyTreeView } from './hierarchy-tree-view';
+import { GeographyScreenContent } from './geography-ops';
+import { HomeChurchesScreenContent } from './home-churches-ops';
+import { ChurchScreenContent } from './church-ops';
+import { PeopleScreenContent } from './people-ops';
+import { AdministrationAuditExport, AdministrationScreenContent } from './administration-ops';
 import { SearchSelect } from './search-select';
 import { TableRowActions } from './table-row-actions';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
@@ -75,10 +82,17 @@ import {
   assignPrayerRequest,
   completeFollowUpTask,
   createChurch,
+  createHomeChurch,
   defaultOpsScope,
   listFollowUpTasks,
+  listHomeChurchApplications,
+  listLeaders,
+  listMissionInvitations,
+  listMemberships,
   listPastoralNeeds,
   listPrayerRequests,
+  listSouls,
+  listWorkers,
   loadOpsDataset,
   operationsErrorMessage,
   opsRecordsToRows,
@@ -197,42 +211,52 @@ const navByBatch = {
   C: [
     ['dashboard', '⌂', 'Dashboard', '/admin'], ['users', '♙', 'Users', '/admin/users'], ['access', '◉', 'Roles & Permissions', '/admin/roles'],
     ['geography', '◎', 'Geography', '/admin/geography'], ['geography', '↳', 'Global Dashboard', '/admin/geography'], ['geography', '·', 'Countries', '/admin/geography/countries'],
-    ['geography', '·', 'Regions / States', '/admin/geography/countries/nigeria/regions'], ['geography', '·', 'Local Areas', '/admin/geography/countries/nigeria/regions/lagos/local-areas'],
-    ['geography', '·', 'Hierarchy Tree', '/admin/geography/hierarchy'], ['geography', '▦', 'Organizations', '/admin/geography/church-hierarchy'],
+    ['geography', '·', 'Regions / States', '/admin/geography/regions'], ['geography', '·', 'Local Areas', '/admin/geography/local-areas'],
+    ['geography', '·', 'Hierarchy Tree', '/admin/geography/hierarchy'], ['geography', '▦', 'Organizations', '/admin/geography/organizations'],
     ['geography', '◊', 'Church Hierarchy', '/admin/geography/church-hierarchy'], ['geography', '◊', 'Home Church Hierarchy', '/admin/geography/home-church-hierarchy'],
+    ['geography', '⌖', 'Geography Map', '/admin/geography/map'], ['geography', '◎', 'Scope Assignment', '/admin/geography/scope-assignment'],
     ['reports', '▣', 'Reports', '/admin/geography/reports'], ['settings', '◇', 'Settings', '/admin/geography/settings'],
   ],
   D: [
-    ['dashboard', '⌂', 'Dashboard', '/admin/home-churches/dashboard'], ['applications', '▤', 'Applications', '/admin/home-churches/applications'],
-    ['home-churches', '▣', 'Home Churches', '/admin/home-churches'], ['leaders', '♙', 'Leaders', '/admin/home-churches/grace-home-church'],
-    ['members', '◉', 'Members', '/admin/home-churches/grace-home-church/members'], ['attendance', '▦', 'Attendance', '/admin/home-churches/grace-home-church/attendance'],
-    ['activities', '◇', 'Activities', '/admin/home-churches/grace-home-church/activities'], ['needs', '□', 'Needs', '/admin/home-churches/grace-home-church/needs'],
-    ['finance', '₦', 'Finance', '/admin/home-churches/grace-home-church/finance'], ['reports', '▤', 'Reports', '/admin/home-churches/grace-home-church/finance'],
-    ['settings', '⚙', 'Settings', '/admin/home-churches/grace-home-church/status'],
+    ['dashboard', '⌂', 'Dashboard', '/admin/home-churches/dashboard'],
+    ['applications', '▤', 'Applications', '/admin/home-churches/applications'],
+    ['home-churches', '▣', 'Home Churches', '/admin/home-churches'],
+    ['leaders', '♙', 'Leaders', '/admin/home-churches/leaders'],
+    ['members', '◉', 'Members', '/admin/home-churches/members'],
+    ['attendance', '▦', 'Attendance', '/admin/home-churches/attendance'],
+    ['activities', '◇', 'Activities', '/admin/home-churches/activities'],
+    ['needs', '□', 'Needs', '/admin/home-churches/needs'],
+    ['finance', '₦', 'Monthly Reports', '/admin/home-churches'],
+    ['settings', '⚙', 'Suspend / Close', '/admin/home-churches'],
   ],
   E: [
-    ['dashboard', '⌂', 'Dashboard', '/admin/church/dashboard'], ['churches', '▣', 'Churches', '/admin/churches'],
-    ['leaders', '♛', 'Leadership', '/admin/churches/the-covenant-place/leadership'], ['members', '◉', 'Members', '/admin/churches/the-covenant-place/members'],
-    ['first-timers', '◇', 'First Timers', '/admin/churches/the-covenant-place/first-timers'], ['converts', '✓', 'Converts', '/admin/churches/the-covenant-place/converts'],
-    ['discipleship', '◎', 'Disciples', '/admin/churches/the-covenant-place/disciples'], ['workers', '♙', 'Workers', '/admin/churches/the-covenant-place/workers'],
-    ['departments', '▦', 'Departments', '/admin/churches/the-covenant-place/departments'],
-    ['small-groups', '◎', 'Small Groups', '/admin/churches/the-covenant-place/small-groups'], ['evangelism', '◇', 'Evangelism', '/admin/churches/the-covenant-place/evangelism'],
-    ['finance', '₦', 'Finance', '/admin/churches/the-covenant-place/finance'], ['reports', '▤', 'Reports', '/admin/churches/the-covenant-place/reports'],
-    ['settings', '⚙', 'Settings', '/admin/churches/the-covenant-place/settings'],
+    ['dashboard', '⌂', 'Dashboard', '/admin/church/dashboard'],
+    ['churches', '▣', 'Churches', '/admin/churches'],
+    ['leaders', '♛', 'Leadership', '/admin/church/leadership'],
+    ['members', '◉', 'Members', '/admin/church/members'],
+    ['first-timers', '◇', 'First Timers', '/admin/church/first-timers'],
+    ['converts', '✓', 'Converts', '/admin/church/converts'],
+    ['discipleship', '◎', 'Disciples', '/admin/church/disciples'],
+    ['workers', '♙', 'Workers', '/admin/church/workers'],
+    ['departments', '▦', 'Departments', '/admin/church/departments'],
+    ['small-groups', '◎', 'Small Groups', '/admin/church/small-groups'],
+    ['evangelism', '◇', 'Evangelism', '/admin/church/evangelism'],
+    ['finance', '₦', 'Finance', '/admin/church/finance'],
+    ['reports', '▤', 'Reports', '/admin/church/reports'],
+    ['settings', '⚙', 'Settings', '/admin/church/settings'],
   ],
   F: [
-    ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '◉', 'People', '/admin/people'], ['first-timers', '◇', 'First Timers', '/admin/people/first-timers'],
-    ['follow-up', '↻', 'Follow-Up', '/admin/people/follow-up'], ['converts', '✓', 'Converts', '/admin/people/converts/mary-okafor'],
-    ['discipleship', '◎', 'Discipleship', '/admin/people/journeys/membership/john-emmanuel'], ['membership', '▦', 'Membership', '/admin/people/journeys/membership/john-emmanuel'],
-    ['workers', '♙', 'Workers', '/admin/people/journeys/worker/blessing-friday'], ['leaders', '♛', 'Leaders', '/admin/people/journeys/leadership/peter-okafor'],
+    ['dashboard', '⌂', 'Dashboard', '/admin/people/dashboard'], ['people', '◉', 'People', '/admin/people'], ['first-timers', '◇', 'First Timers', '/admin/people/first-timers'],
+    ['follow-up', '↻', 'Follow-Up', '/admin/people/follow-up'], ['converts', '✓', 'Converts', '/admin/people/converts'],
+    ['discipleship', '◎', 'Discipleship', '/admin/people/discipleship'], ['workers', '♙', 'Workers', '/admin/people/workers'], ['leaders', '♛', 'Leaders', '/admin/people/leaders'],
     ['ministry-history', '▤', 'Ministry History', '/admin/people/ministry-history'], ['prayer', '◇', 'Prayer', '/admin/people/prayer-requests'],
     ['needs', '□', 'Needs', '/admin/people/needs'], ['counselling', '◌', 'Counselling', '/admin/people/counselling'],
-    ['testimonies', '✦', 'Testimonies', '/admin/people/testimonies'], ['safeguarding', '!', 'Safeguarding', '/admin/people/safeguarding/escalation'],
-    ['reports', '▣', 'Reports', '/admin/reports/country-performance'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
+    ['testimonies', '✦', 'Testimonies', '/admin/people/testimonies'], ['safeguarding', '!', 'Safeguarding', '/admin/people/safeguarding'],
+    ['reports', '▣', 'Reports', '/admin/people/reports'], ['settings', '⚙', 'Settings', '/admin/people/settings'],
   ],
   G: [
     ['dashboard', '⌂', 'Dashboard', '/admin/kca'], ['kca-applications', '▤', 'Applications', '/admin/kca/applications'],
-    ['kca-review', '↻', 'Review Queue', '/admin/kca/review-queue'], ['kca-decisions', '✓', 'Decisions', '/admin/kca/applications/samuel-david/decision'],
+    ['kca-review', '↻', 'Review Queue', '/admin/kca/review-queue'], ['kca-decisions', '✓', 'Decisions', '/admin/kca/applications'],
     ['kca-students', '♙', 'Students', '/admin/kca/students'], ['kca-cohorts', '◎', 'Cohorts', '/admin/kca/cohorts'],
     ['kca-mentors', '♛', 'Mentors', '/admin/kca/mentors'], ['kca-lecturers', '▦', 'Lecturers', '/admin/kca/lecturers'],
     ['kca-modules', '◇', 'Modules', '/admin/kca/modules'], ['kca-learning', '▣', 'Learning', '/admin/kca/attendance'],
@@ -330,24 +354,12 @@ function navItems(batches: NavBatch[], excludedLabels: string[] = []): Enterpris
   return items;
 }
 
-const dashboardItems: EnterpriseNavItem[] = [
-  { icon: '◆', label: 'Global Admin', href: '/admin' },
-  { icon: '◎', label: 'Geography', href: '/admin/geography' },
-  { icon: '⌂', label: 'Home Churches', href: '/admin/home-churches/dashboard' },
-  { icon: '▣', label: 'Church', href: '/admin/church/dashboard' },
-  { icon: '◇', label: 'KCA', href: '/admin/kca' },
-  { icon: '⌖', label: 'Mission', href: '/admin/mission' },
-  { icon: '▤', label: 'Press', href: '/admin/press' },
-  { icon: '₦', label: 'Finance', href: '/admin/finance' },
-  { icon: '◉', label: 'Communications', href: '/admin/communications' },
-  { icon: '▦', label: 'Reports & Analytics', href: '/admin/reports' },
-  { icon: '!', label: 'Security', href: '/admin/security' },
-];
+const dashboardItems: EnterpriseNavItem[] = dashboardNavItems.map(({ icon, label, href }) => ({ icon, label, href }));
 
 const reportItems: EnterpriseNavItem[] = [
   ...navItems(['N'], ['Dashboard']),
-  { icon: '⌂', label: 'Home Church Reports', href: '/admin/home-churches/grace-home-church/finance' },
-  { icon: '▣', label: 'Church Reports', href: '/admin/churches/the-covenant-place/reports' },
+  { icon: '⌂', label: 'Home Church Reports', href: '/admin/home-churches' },
+  { icon: '▣', label: 'Church Reports', href: '/admin/church/reports' },
   { icon: '⌖', label: 'Mission Reports', href: '/admin/mission/reports' },
   { icon: '▤', label: 'Press Analytics', href: '/admin/press/analytics' },
   { icon: '₦', label: 'Finance Reports', href: '/admin/finance/reports' },
@@ -372,12 +384,23 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
     { icon: '◆', label: 'Platform', href: '/admin/settings/platform' },
     { icon: '▣', label: 'Branding', href: '/admin/settings/branding' },
     { icon: '▤', label: 'Public Site CMS', href: '/admin/settings/public-site' },
-    { icon: '⌂', label: 'Home Church Rules', href: '/admin/home-churches/grace-home-church/status' },
-    { icon: '▣', label: 'Church Settings', href: '/admin/churches/the-covenant-place/settings' },
+    { icon: '▣', label: 'Ministry Settings', href: '/admin/settings/ministry' },
+    { icon: '▣', label: 'Church Settings', href: '/admin/settings/church' },
+    { icon: '⌂', label: 'Home Church Rules', href: '/admin/settings/home-church-rules' },
     { icon: '◇', label: 'KCA Settings', href: '/admin/settings/kca' },
     { icon: '⌖', label: 'Mission Settings', href: '/admin/settings/mission' },
     { icon: '▤', label: 'Press Settings', href: '/admin/settings/press' },
+    { icon: '▣', label: 'Event Settings', href: '/admin/settings/events' },
     { icon: '₦', label: 'Payment Settings', href: '/admin/settings/payments' },
+    { icon: '✉', label: 'Notification Providers', href: '/admin/settings/notifications' },
+    { icon: '◎', label: 'Languages', href: '/admin/settings/languages' },
+    { icon: '▤', label: 'Translation Governance', href: '/admin/settings/translation-governance' },
+    { icon: '⚑', label: 'Feature Flags', href: '/admin/settings/feature-flags' },
+    { icon: '◎', label: 'Maps Providers', href: '/admin/settings/maps' },
+    { icon: '▤', label: 'Media Library', href: '/admin/settings/media' },
+    { icon: '▤', label: 'File / Upload', href: '/admin/settings/uploads' },
+    { icon: '◆', label: 'System Information', href: '/admin/settings/system-information' },
+    { icon: '◇', label: 'AI API', href: '/admin/settings/ai-api' },
     { icon: '✉', label: 'Communication Settings', href: '/admin/communications/settings' },
     { icon: '!', label: 'Security Configuration', href: '/admin/security/configuration' },
     { icon: '◎', label: 'Geography Settings', href: '/admin/geography/settings' },
@@ -455,7 +478,7 @@ function PageHeader({ screen, hideAction = false }: { screen: AdminScreen; hideA
   const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
   const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
   const showHeaderAction = !hideAction && !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && <button type="button" className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button type="button" className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && screen.batch !== 'C' && <button type="button" className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button type="button" className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && screen.batch !== 'C' && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
@@ -467,12 +490,11 @@ function MetricCards({ metrics = [] }: { metrics?: Metric[] }) {
 }
 
 function ChartCard({ title, value, green = false, bars = false, series }: { title: string; value?: string; green?: boolean; bars?: boolean; series?: Array<{ label: string; value: number }> }) {
-  const max = Math.max(1, ...(series?.map((point) => point.value) ?? [1]));
-  const barValues = series?.length
-    ? series.map((point) => Math.max(8, Math.round((point.value / max) * 100)))
-    : [46, 78, 54, 92, 63, 88, 66, 96, 72, 86, 70, 98];
-  const axisLabels = series?.length ? series.map((point) => point.label) : ['May 1', 'May 7', 'May 13'];
-  return <article className="card chart-card"><h2 className="card-title">{title}</h2>{value && <><span className="chart-kicker">This {title.includes('Giving') ? 'Week' : 'Month'}</span><strong className="chart-value">{value}</strong></>}{bars ? <div className="bar-chart">{barValues.map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}</div> : <div className={`chart ${green ? 'green' : ''}`} />}<div className="chart-axis">{axisLabels.map((label) => <span key={label}>{label}</span>)}</div></article>;
+  const points = series ?? [];
+  const max = Math.max(1, ...points.map((point) => point.value));
+  const barValues = points.map((point) => Math.round((point.value / max) * 100));
+  const axisLabels = points.map((point) => point.label);
+  return <article className="card chart-card"><h2 className="card-title">{title}</h2>{value && <><span className="chart-kicker">This period</span><strong className="chart-value">{value}</strong></>}{points.length === 0 ? <p className="maps-settings-lead">No series values in this period.</p> : bars ? <div className="bar-chart">{barValues.map((height, index) => <i key={axisLabels[index] ?? index} style={{ height: `${height}%` }} />)}</div> : <div className={`chart ${green ? 'green' : ''}`} />}<div className="chart-axis">{axisLabels.map((label) => <span key={label}>{label}</span>)}</div></article>;
 }
 
 function DashboardLiveNotice({ loading, error }: { loading?: boolean; error?: string | null }) {
@@ -486,10 +508,30 @@ function pendingLiveApiMessage(route: string): string | null {
 
 function DashboardView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
-  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
-  const receipts = dashboard.data?.metrics.find((metric) => metric.label === 'Total Receipts')?.value;
+  const churches = dashboard.data?.metrics.find((metric) => metric.label === 'Total Churches')?.value;
   const members = dashboard.data?.metrics.find((metric) => metric.label === 'Members')?.value;
-  return <><DemoDatasetBanner /><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="dashboard-grid"><ChartCard title="New Registrations" value={members} series={dashboard.data?.series} bars /><ChartCard title="Giving (USD)" value={receipts ?? dashboard.data?.metrics[0]?.value} series={dashboard.data?.series} bars /><ChartCard title="Active Users" value={dashboard.data?.metrics.find((metric) => metric.label === 'Countries')?.value} green series={dashboard.data?.series} /></div></>;
+  const countries = dashboard.data?.metrics.find((metric) => metric.label === 'Countries')?.value;
+  return (
+    <DashboardShell
+      screenId={screen.id}
+      href={screen.route}
+      data={dashboard.data}
+      loading={dashboard.loading}
+      error={dashboard.error}
+      onRetry={dashboard.retry}
+      preset={dashboard.preset}
+      onPresetChange={dashboard.setPreset}
+      showModules
+    >
+      <DemoDatasetBanner />
+      <LinkedMetricCards screenId={screen.id} metrics={dashboard.metrics} />
+      <div className="dashboard-grid">
+        <SeriesBarChart title="New Registrations" value={members} series={dashboard.data?.series} />
+        <SeriesBarChart title="Church Growth" value={churches} series={dashboard.data?.series} />
+        <SeriesBarChart title="Countries" value={countries} series={dashboard.data?.series} />
+      </div>
+    </DashboardShell>
+  );
 }
 
 function SearchBar({ placeholder }: { placeholder?: string }) {
@@ -562,6 +604,8 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
   const [message, setMessage] = useState('Loading users…');
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const refresh = useCallback(async () => {
     const scope = defaultAdminScope(requestedScope);
@@ -570,6 +614,8 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
       const result = await listAdminUsers({
         scope,
         status: suspendedOnly ? 'suspended' : undefined,
+        search: search.trim() || undefined,
+        page,
         perPage: 25,
         sort: '-created_at',
       });
@@ -595,10 +641,11 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
       setError(identityErrorMessage(err));
       setMessage('Live user directory unavailable');
     }
-  }, [requestedScope, suspendedOnly]);
+  }, [requestedScope, suspendedOnly, search, page]);
 
   useEffect(() => {
-    void refresh();
+    const handle = window.setTimeout(() => { void refresh(); }, 250);
+    return () => window.clearTimeout(handle);
   }, [refresh]);
 
   async function onSuspend(user: AdminUser) {
@@ -656,7 +703,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
   return (
     <>
       <MetricCards metrics={metrics} />
-      <div className="table-toolbar"><SearchBar /></div>
+      <div className="table-toolbar"><input aria-label="Search users" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name or email" /></div>
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>
@@ -689,6 +736,8 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
                   {!suspendedOnly && <td>{formatTimestamp(user.created_at)}</td>}
                   <td className="actions-cell">
                     <div className="row-actions">
+                      <Link className="table-action" href={`/admin/users/${user.id}`}>View</Link>
+                      <Link className="table-action" href={`/admin/users/${user.id}/edit`}>Edit</Link>
                       <TableRowActions
                         record={formatRowActionRecord(user.name, user.id)}
                         entityKey="user"
@@ -773,6 +822,7 @@ function IdentityRolesTable({ requestedScope }: { requestedScope?: string }) {
                     canEdit={false}
                     canDelete={false}
                   />
+                  <Link className="table-action" href={`/admin/roles/${role.id}`}>View</Link>
                 </td>
               </tr>
             ))}
@@ -1066,6 +1116,8 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
   const [busyId, setBusyId] = useState<string | null>(null);
   const [registerBusy, setRegisterBusy] = useState(false);
   const [registerMessage, setRegisterMessage] = useState<string | null>(null);
+  const [createHomeChurchBusy, setCreateHomeChurchBusy] = useState(false);
+  const [createHomeChurchMessage, setCreateHomeChurchMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -1149,6 +1201,47 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
       setRegisterMessage(operationsErrorMessage(err, 'First-timer registration failed.'));
     } finally {
       setRegisterBusy(false);
+    }
+  }
+
+  async function onCreateHomeChurch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+    const churchId = String(form.get('church_id') ?? '').trim();
+    const leaderId = String(form.get('leader_person_id') ?? '').trim();
+    const locationId = String(form.get('location_id') ?? '').trim();
+    const unitId = String(form.get('administrative_unit_id') ?? '').trim();
+    const name = String(form.get('name') ?? '').trim();
+    if (!churchId || !leaderId || !locationId || !unitId || !name) {
+      setCreateHomeChurchMessage('Church, leader, location, administrative unit, and name are required.');
+      return;
+    }
+    if (![churchId, leaderId, locationId, unitId].every(isOpsPublicId)) {
+      setCreateHomeChurchMessage('Select live church, leader, location, and administrative unit from search lists.');
+      return;
+    }
+    setCreateHomeChurchBusy(true);
+    setCreateHomeChurchMessage(null);
+    setError(null);
+    try {
+      const record = await createHomeChurch(
+        {
+          church_id: churchId,
+          leader_person_id: leaderId,
+          location_id: locationId,
+          administrative_unit_id: unitId,
+          name,
+        },
+        defaultOpsScope(screen.scope),
+      );
+      setCreateHomeChurchMessage(`Created home church ${record.name} (${record.id}).`);
+      formEl.reset();
+      await refresh();
+    } catch (err) {
+      setCreateHomeChurchMessage(operationsErrorMessage(err, 'Home church creation failed.'));
+    } finally {
+      setCreateHomeChurchBusy(false);
     }
   }
 
@@ -1257,6 +1350,42 @@ function OperationsLiveTable({ screen, dataset }: { screen: AdminScreen; dataset
               {registerBusy
                 ? t('admin.registering', { defaultMessage: 'Registering…' })
                 : t('admin.registerFirstTimer', { defaultMessage: 'Register first timer' })}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {dataset === 'home-churches' ? (
+        <form className="card form-card" onSubmit={(event) => void onCreateHomeChurch(event)}>
+          <h2 className="section-title">{t('admin.createHomeChurch', { defaultMessage: 'Create home church' })}</h2>
+          <p className="page-subtitle">{t('admin.createHomeChurchCopy', { defaultMessage: 'Directly register an active home church without going through the application workflow.' })}</p>
+          <div className="form-grid">
+            <label>
+              <span>{t('admin.churchRequired', { defaultMessage: 'Church *' })}</span>
+              <SearchSelect name="church_id" catalog="church" options={catalogOptions.church} placeholder={t('admin.searchChurch', { defaultMessage: 'Search church' })} />
+            </label>
+            <label>
+              <span>{t('admin.leaderRequired', { defaultMessage: 'Leader *' })}</span>
+              <SearchSelect name="leader_person_id" catalog="person" options={catalogOptions.person} placeholder={t('admin.searchPerson', { defaultMessage: 'Search person' })} />
+            </label>
+            <label>
+              <span>{t('admin.locationRequired', { defaultMessage: 'Location *' })}</span>
+              <SearchSelect name="location_id" catalog="location" options={catalogOptions.location} placeholder={t('admin.searchLocation', { defaultMessage: 'Search location' })} />
+            </label>
+            <label>
+              <span>{t('admin.administrativeUnitRequired', { defaultMessage: 'Administrative unit *' })}</span>
+              <SearchSelect name="administrative_unit_id" catalog="administrativeUnit" options={catalogOptions.administrativeUnit} placeholder={t('admin.searchAdministrativeUnit', { defaultMessage: 'Search administrative unit' })} />
+            </label>
+            <label className="full">
+              <span>{t('admin.homeChurchName', { defaultMessage: 'Home church name *' })}</span>
+              <input name="name" type="text" required maxLength={191} />
+            </label>
+          </div>
+          {createHomeChurchMessage ? <p className="field-help" role="status">{createHomeChurchMessage}</p> : null}
+          <div className="form-footer">
+            <button className="primary-button" type="submit" disabled={createHomeChurchBusy}>
+              {createHomeChurchBusy
+                ? t('admin.creating', { defaultMessage: 'Creating…' })
+                : t('admin.createHomeChurch', { defaultMessage: 'Create home church' })}
             </button>
           </div>
         </form>
@@ -1600,7 +1729,7 @@ function CountryPerformanceLiveTable({ screen, requestedScope }: { screen: Admin
           defaultMessage: 'Country performance uses the live geography dashboard breakdown. Column-level metrics beyond that require a dedicated report API.',
         })}
       </p>
-      <MetricCards metrics={dashboard.live ? dashboard.metrics : screen.metrics} />
+      <MetricCards metrics={dashboard.metrics} />
       <div className="card table-card">
         <table>
           <thead>
@@ -1631,18 +1760,117 @@ function CountryPerformanceLiveTable({ screen, requestedScope }: { screen: Admin
   );
 }
 
+function MinistryHistoryLivePanel({ screen }: { screen: AdminScreen }) {
+  const scope = defaultOpsScope(screen.scope);
+  const [rows, setRows] = useState<Array<Record<string, string>>>([]);
+  const [total, setTotal] = useState(0);
+  const [message, setMessage] = useState('Loading ministry history…');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setMessage('Loading ministry history…');
+      try {
+        const [memberships, workers, leaders] = await Promise.all([
+          listMemberships({ scope, perPage: 50 }),
+          listWorkers({ scope, perPage: 50 }),
+          listLeaders({ scope, perPage: 50 }),
+        ]);
+        if (cancelled) return;
+        const merged = [
+          ...memberships.items.map((item) => ({
+            activity: 'Membership',
+            person: String(item.person_name ?? '—'),
+            church: String(item.church_name ?? item.home_church_name ?? '—'),
+            date: item.joined_at ? formatTimestamp(item.joined_at) : '—',
+            status: String(item.status ?? '—'),
+            sort: item.joined_at ? Date.parse(item.joined_at) : 0,
+          })),
+          ...workers.items.map((item) => ({
+            activity: `Worker · ${String(item.title ?? item.role_type ?? 'Role')}`,
+            person: String(item.person_name ?? '—'),
+            church: String(item.church_name ?? '—'),
+            date: item.started_at ? formatTimestamp(String(item.started_at)) : '—',
+            status: String(item.status ?? '—'),
+            sort: item.started_at ? Date.parse(String(item.started_at)) : 0,
+          })),
+          ...leaders.items.map((item) => ({
+            activity: `Leader · ${String(item.title ?? item.role_type ?? 'Role')}`,
+            person: String(item.person_name ?? '—'),
+            church: String(item.church_name ?? '—'),
+            date: item.started_at ? formatTimestamp(String(item.started_at)) : '—',
+            status: String(item.status ?? '—'),
+            sort: item.started_at ? Date.parse(String(item.started_at)) : 0,
+          })),
+        ].sort((a, b) => b.sort - a.sort);
+        setRows(merged.map(({ activity, person, church, date, status }) => ({ Activity: activity, Person: person, Church: church, Date: date, Status: status })));
+        setTotal(merged.length);
+        setMessage(
+          merged.length === 0
+            ? 'No membership or role assignment records in this scope.'
+            : `Showing ${merged.length} combined history records from memberships and role assignments.`,
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setTotal(0);
+        setError(operationsErrorMessage(err, 'Unable to load ministry history.'));
+        setMessage('Live ministry history unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
+  const columns = ['Activity', 'Person', 'Church', 'Date', 'Status'];
+  return (
+    <>
+      <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+        {error ?? 'Ministry history is derived from live memberships and role assignments. There is no separate journey-history API.'}
+      </p>
+      <MetricCards metrics={[{ label: 'Total Records', value: String(total) }, ...(screen.metrics ?? []).slice(1, 4)]} />
+      <div className="card table-card">
+        <table>
+          <thead>
+            <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={columns.length}>{message}</td></tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr key={`${row.Activity}-${index}`}>
+                  {columns.map((column) => (
+                    <td key={column}>{column === 'Status' ? <StatusBadge value={row[column] ?? '—'} /> : row[column]}</td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <p className="maps-settings-lead" role="status">{message}</p>
+      </div>
+    </>
+  );
+}
+
 function DataTable({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const { t } = useLocale();
   if (!shouldUseDesignFixtures()) {
     if (screen.route === '/admin/reports/country-performance' || screen.id === 'A-13') {
       return <CountryPerformanceLiveTable screen={screen} requestedScope={requestedScope} />;
     }
+    if (screen.route === '/admin/people/ministry-history' || screen.id === 'F-09') {
+      return <MinistryHistoryLivePanel screen={screen} />;
+    }
     if (screen.route === '/admin/users' || screen.route === '/admin/users/suspended') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.route === '/admin/roles') return <IdentityRolesTable requestedScope={requestedScope} />;
     if (screen.route === '/admin/access/history') return <IdentityAccessDecisionsTable requestedScope={requestedScope} />;
     const opsDataset = resolveOpsDataset(screen);
     if (opsDataset && shouldUseOperationsLiveData()) return <OperationsLiveTable screen={screen} dataset={opsDataset} />;
-    if (screen.route === '/admin/people') return <IdentityUsersTable screen={screen} requestedScope={requestedScope} />;
     if (screen.batch === 'C' && isOrganizationCatalogRoute(screen.route)) {
       return <OrganizationCatalogTable screen={screen} />;
     }
@@ -1930,12 +2158,13 @@ function CommandView({ screen }: { screen: AdminScreen }) {
 }
 
 function TasksView({ screen }: { screen: AdminScreen }) {
-  const [tasks, setTasks] = useState<FollowUpTaskRecord[]>([]);
+  type TaskItem = FollowUpTaskRecord & { source: 'follow_up' | 'applications' | 'invitations' | 'pastoral' };
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState('Loading tasks…');
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'pending' | 'completed'>('pending');
+  const [tab, setTab] = useState<'pending' | 'team' | 'completed'>('pending');
 
   const refresh = useCallback(async () => {
     if (!shouldUseOperationsLiveData()) {
@@ -1946,19 +2175,72 @@ function TasksView({ screen }: { screen: AdminScreen }) {
     setError(null);
     setMessage('Loading tasks…');
     try {
-      const result = await listFollowUpTasks({ scope: defaultOpsScope(screen.scope), perPage: 50 });
-      stashAdminRecords(result.items as unknown as Array<Record<string, unknown>>);
-      setTasks(result.items);
-      setTotal(result.pagination.total);
+      const scope = defaultOpsScope(screen.scope);
+      const [followUps, applications, invitations, needs] = await Promise.all([
+        listFollowUpTasks({ scope, perPage: 50 }),
+        listHomeChurchApplications({ scope, perPage: 25 }),
+        listMissionInvitations({ scope, perPage: 25 }),
+        listPastoralNeeds({ scope, perPage: 25 }),
+      ]);
+      stashAdminRecords([
+        ...(followUps.items as unknown as Array<Record<string, unknown>>),
+        ...(applications.items as unknown as Array<Record<string, unknown>>),
+        ...(invitations.items as unknown as Array<Record<string, unknown>>),
+        ...(needs.items as unknown as Array<Record<string, unknown>>),
+      ]);
+      const derived: TaskItem[] = [
+        ...followUps.items.map((task) => ({ ...task, source: 'follow_up' as const })),
+        ...applications.items
+          .filter((item) => !['active', 'approved', 'rejected', 'closed'].includes((item.status ?? '').toLowerCase()))
+          .map((item) => ({
+            id: item.id,
+            person_name: item.applicant_name ?? item.proposed_name,
+            assigned_to_name: null,
+            type: 'home_church_application_review',
+            status: item.status,
+            due_at: item.status_changed_at ?? null,
+            completed_at: null,
+            completion_reason_code: null,
+            source: 'applications' as const,
+          })),
+        ...invitations.items
+          .filter((item) => (item.status ?? '').toLowerCase() !== 'accepted')
+          .map((item) => ({
+            id: item.id,
+            person_name: item.requester_name ?? item.requested_location_name,
+            assigned_to_name: null,
+            type: 'mission_invitation_followup',
+            status: item.status,
+            due_at: item.status_changed_at ?? item.created_at ?? null,
+            completed_at: null,
+            completion_reason_code: null,
+            source: 'invitations' as const,
+          })),
+        ...needs.items
+          .filter((item) => (item.status ?? '').toLowerCase() !== 'resolved')
+          .map((item) => ({
+            id: item.id,
+            person_name: item.person_name ?? item.category,
+            assigned_to_name: null,
+            type: 'pastoral_need_review',
+            status: item.status,
+            due_at: item.created_at ?? null,
+            completed_at: null,
+            completion_reason_code: null,
+            source: 'pastoral' as const,
+          })),
+      ];
+      setTasks(derived);
+      setTotal(derived.length);
       setMessage(
-        result.pagination.total === 0
-          ? 'No follow-up tasks in this scope.'
-          : `Showing ${result.items.length} of ${result.pagination.total} follow-up tasks`,
+        derived.length === 0
+          ? 'No task items in this scope.'
+          : `Loaded ${derived.length} task item(s) from follow-up, applications, invitations, and pastoral needs.`,
       );
     } catch (err) {
       setTasks([]);
       setTotal(0);
-      setError(operationsErrorMessage(err, 'Unable to load follow-up tasks.'));
+      setError(operationsErrorMessage(err, 'Unable to load task queues.'));
       setMessage('Live tasks unavailable');
     }
   }, [screen.scope]);
@@ -1982,15 +2264,22 @@ function TasksView({ screen }: { screen: AdminScreen }) {
     }
   }
 
-  const pending = tasks.filter((task) => !/completed|done/i.test(task.status ?? ''));
-  const completed = tasks.filter((task) => /completed|done/i.test(task.status ?? ''));
-  const visible = tab === 'pending' ? pending : completed;
+  const pending = tasks.filter((task) => !/completed|done|resolved|active|accepted/i.test(task.status ?? ''));
+  const team = tasks.filter((task) => task.source !== 'follow_up' && !/completed|done|resolved|active|accepted/i.test(task.status ?? ''));
+  const completed = tasks.filter((task) => /completed|done|resolved|active|accepted/i.test(task.status ?? ''));
+  const visible = tab === 'pending' ? pending : tab === 'team' ? team : completed;
 
   return (
     <>
+      <p className="maps-settings-lead" role="status">
+        Tasks are aggregated from live operational queues (follow-up, applications, invitations, pastoral needs) because there is no standalone generic task entity.
+      </p>
       <div className="chip-row" style={{ marginBottom: 12 }}>
         <button type="button" data-interaction-native="true" className={tab === 'pending' ? 'is-active' : undefined} onClick={() => setTab('pending')}>
           My Tasks ({pending.length})
+        </button>
+        <button type="button" data-interaction-native="true" className={tab === 'team' ? 'is-active' : undefined} onClick={() => setTab('team')}>
+          Team Tasks ({team.length})
         </button>
         <button type="button" data-interaction-native="true" className={tab === 'completed' ? 'is-active' : undefined} onClick={() => setTab('completed')}>
           Completed ({completed.length})
@@ -2005,9 +2294,9 @@ function TasksView({ screen }: { screen: AdminScreen }) {
           visible.map((task) => (
             <div className="task-item" key={task.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
               <div>
-                <strong>{task.person_name || task.type || 'Follow-up task'}</strong>
+                <strong>{task.person_name || task.type || 'Task item'}</strong>
                 <small style={{ display: 'block' }}>
-                  {task.assigned_to_name ? `Assigned to ${task.assigned_to_name}` : 'Unassigned'} · {task.status}
+                  {task.assigned_to_name ? `Assigned to ${task.assigned_to_name}` : 'Unassigned'} · {task.status} · {task.source.replace('_', ' ')}
                 </small>
                 <time>{task.due_at ? formatTimestamp(task.due_at) : 'No due date'}</time>
               </div>
@@ -2018,7 +2307,7 @@ function TasksView({ screen }: { screen: AdminScreen }) {
                   canEdit={false}
                   canDelete={false}
                 />
-                {tab === 'pending' ? (
+                {tab !== 'completed' && task.source === 'follow_up' ? (
                   <button
                     type="button"
                     className="table-action"
@@ -2040,21 +2329,33 @@ function TasksView({ screen }: { screen: AdminScreen }) {
 
 function KpiView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
-  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
-  const breakdownItems = dashboard.live
-    ? breakdownToItems(dashboard.data?.breakdown)
-    : (screen.items ?? ['Active Churches — 24,518', 'Home Churches — 18,642', 'Members — 1,638,732', 'Leaders — 98,431']);
-  const topCountries = dashboard.live
-    ? breakdownToItems(dashboard.data?.breakdown)
-    : ['Nigeria — 4,354', 'Ghana — 2,491', 'Kenya — 1,637', 'South Africa — 1,348'];
+  const metrics = dashboard.metrics;
+  const breakdownItems = breakdownToItems(dashboard.data?.breakdown);
 
   if (screen.route === '/admin/audit' && !shouldUseDesignFixtures()) {
-    return <><MetricCards metrics={metrics} /><div className="analytics-grid kpi-two"><IdentityAuditEventsPanel compact requestedScope={requestedScope} /><ChartCard title="Audit Logs Trend" bars series={dashboard.data?.series} /></div></>;
+    return <><MetricCards metrics={metrics} /><AdministrationAuditExport requestedScope={requestedScope} /><div className="analytics-grid kpi-two"><IdentityAuditEventsPanel compact requestedScope={requestedScope} /><ChartCard title="Audit Logs Trend" bars series={dashboard.data?.series} /></div></>;
   }
   if (screen.batch === 'A') {
-    return <><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="analytics-grid kpi-two">{screen.id === 'A-12' ? <><ChartCard title="Member Growth" series={dashboard.data?.series} /><ChartCard title="Giving Trend (USD)" bars series={dashboard.data?.series} /></> : <><div className="card list-card"><h2 className="card-title">Top Admin Actions</h2>{(screen.items ?? []).map(item => <div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Audit Logs Trend" bars series={dashboard.data?.series} /></>}</div></>;
+    return (
+      <DashboardShell screenId={screen.id} href={screen.route} data={dashboard.data} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.retry} preset={dashboard.preset} onPresetChange={dashboard.setPreset}>
+        <LinkedMetricCards screenId={screen.id} metrics={metrics} />
+        <div className="analytics-grid kpi-two">{screen.id === 'A-12' ? <><ChartCard title="Member Growth" bars series={dashboard.data?.series} /><ChartCard title="Giving Trend" bars series={dashboard.data?.series} /></> : <><div className="card list-card"><h2 className="card-title">Top Admin Actions</h2>{breakdownItems.length === 0 ? <p className="maps-settings-lead">No activity in this period.</p> : breakdownItems.map(item => <div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Audit Logs Trend" bars series={dashboard.data?.series} /></>}</div>
+      </DashboardShell>
+    );
   }
-  return <><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="analytics-grid"><div className="card list-card"><h2 className="card-title">Organization Overview</h2>{breakdownItems.map(item => <div className="rank-row" key={item}><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Churches Growth" series={dashboard.data?.series} /><div className="card list-card"><h2 className="card-title">Top Countries by Churches</h2>{topCountries.map((item, index) => <div className="bar-rank" key={item}><span>{item.split(' — ')[0]}</span><i style={{ width: `${92 - index * 15}%` }} /><strong>{item.split(' — ')[1]}</strong></div>)}</div><ChartCard title="Giving Trend (USD)" bars series={dashboard.data?.series} /></div></>;
+  const countryRanks = dashboard.data?.breakdown ?? [];
+  return (
+    <DashboardShell screenId={screen.id} href={screen.route} data={dashboard.data} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.retry} preset={dashboard.preset} onPresetChange={dashboard.setPreset}>
+      <LinkedMetricCards screenId={screen.id} metrics={metrics} />
+      <div className="analytics-grid">
+        <div className="card list-card"><h2 className="card-title">Organization Overview</h2>{metrics.length === 0 ? <p className="maps-settings-lead">No organization totals in this period.</p> : metrics.map((metric) => <div className="rank-row" key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong></div>)}</div>
+        <ChartCard title="Churches Growth" bars series={dashboard.data?.series} />
+        <div className="card list-card"><h2 className="card-title">Top Countries by Churches</h2>{countryRanks.length === 0 ? <p className="maps-settings-lead">No country church counts in this period.</p> : countryRanks.map((item) => <div className="bar-rank" key={item.label}><span>{item.label}</span><i style={{ width: `${Math.max(8, item.percent ?? 0)}%` }} /><strong>{item.value}</strong></div>)}</div>
+        <ChartCard title="Growth Trend" bars series={dashboard.data?.series} />
+      </div>
+      <DashboardQuickLinks screenId={screen.id} />
+    </DashboardShell>
+  );
 }
 
 function DetailView({ screen }: { screen: AdminScreen }) {
@@ -2839,29 +3140,36 @@ function MapView({ screen }: { screen: AdminScreen }) {
   );
 }
 
-function DonutVisual({ value = '726', label = 'Average', breakdown }: { value?: string; label?: string; breakdown?: Array<{ label: string; value: string; percent?: number }> }) {
-  const segments = breakdown?.length
-    ? breakdown.slice(0, 3).map((item) => ({ label: item.label, percent: item.percent ?? 0 }))
-    : [
-      { label: 'Adults', percent: 64 },
-      { label: 'Youth', percent: 21 },
-      { label: 'Children', percent: 15 },
-    ];
-  return <div className="donut-wrap"><div className="donut-chart"><div><strong>{value}</strong><span>{label}</span></div></div><ul>{segments.map((item) => <li key={item.label}><i />{item.label} <b>{item.percent}%</b></li>)}</ul></div>;
+function DonutVisual({ value = '0', label = 'Total', breakdown }: { value?: string; label?: string; breakdown?: Array<{ label: string; value: string; percent?: number }> }) {
+  const segments = (breakdown ?? []).slice(0, 3).map((item) => ({ label: item.label, percent: item.percent ?? 0 }));
+  return <div className="donut-wrap"><div className="donut-chart"><div><strong>{value}</strong><span>{label}</span></div></div><ul>{segments.length === 0 ? <li>No segments in this period</li> : segments.map((item) => <li key={item.label}><i />{item.label} <b>{item.percent}%</b></li>)}</ul></div>;
 }
 
 function MinistryDashboardView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
-  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
   const donut = dashboard.data?.donut;
-  const activities = dashboard.live
-    ? (dashboard.data?.recent_activities ?? []).map((activity) => ({
-      title: activity.title,
-      time: formatRelativeTime(activity.occurred_at),
-    }))
-    : ['New member added', 'Attendance recorded', 'Application reviewed', 'First timer registered'].map((item, index) => ({ title: item, time: `${index + 1}h ago` }));
+  const activities = (dashboard.data?.recent_activities ?? []).map((activity) => ({
+    title: activity.title,
+    time: formatRelativeTime(activity.occurred_at),
+  }));
 
-  return <><DashboardLiveNotice loading={dashboard.loading} error={dashboard.error} /><MetricCards metrics={metrics} /><div className="ministry-dashboard-grid"><ChartCard title={screen.batch === 'D' ? 'Home Churches Growth (6 Months)' : 'Membership Growth'} series={dashboard.data?.series} /><article className="card dashboard-donut"><h2 className="card-title">{screen.batch === 'D' ? 'Application Status' : 'Attendance Overview'}</h2><DonutVisual value={donut?.value ?? (screen.batch === 'D' ? '24' : '726')} label={donut?.label ?? (screen.batch === 'D' ? 'Total' : 'Average')} breakdown={dashboard.data?.breakdown} /></article><article className="card compact-list"><h2 className="card-title">Quick Actions</h2>{(screen.items ?? []).slice(0, 4).map((item, index) => <button key={item}><span>{['▣', '▦', '◇', '▤'][index]}</span>{item}</button>)}</article><article className="card compact-list"><h2 className="card-title">Recent Activities</h2>{activities.map((item) => <div className="activity-row" key={item.title}><span>●</span><b>{item.title}</b><time>{item.time}</time></div>)}</article></div></>;
+  return (
+    <DashboardShell screenId={screen.id} href={screen.route} data={dashboard.data} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.retry} preset={dashboard.preset} onPresetChange={dashboard.setPreset}>
+      <LinkedMetricCards screenId={screen.id} metrics={dashboard.metrics} />
+      <div className="ministry-dashboard-grid">
+        <ChartCard title={screen.batch === 'D' ? 'Home Churches Growth (6 Months)' : screen.batch === 'F' ? 'People growth' : 'Membership Growth'} series={dashboard.data?.series} />
+        <article className="card dashboard-donut"><h2 className="card-title">{screen.batch === 'D' ? 'Application Status' : screen.batch === 'F' ? 'People mix' : 'Attendance Overview'}</h2><DonutVisual value={donut?.value ?? '0'} label={donut?.label ?? (screen.batch === 'D' ? 'Total' : screen.batch === 'F' ? 'People' : 'Average')} breakdown={dashboard.data?.breakdown} /></article>
+        <DashboardQuickLinks screenId={screen.id} />
+        <article className="card compact-list"><h2 className="card-title">Recent Activities</h2>{activities.length === 0 ? <p className="maps-settings-lead">No recent activity in this scope.</p> : activities.map((item) => <div className="activity-row" key={`${item.title}-${item.time}`}><span>●</span><b>{item.title}</b><time>{item.time}</time></div>)}</article>
+      </div>
+      {dashboard.data?.definitions?.length ? (
+        <article className="card" aria-label="Metric definitions">
+          <h2 className="card-title">How these numbers are counted</h2>
+          <ul>{dashboard.data.definitions.map((item) => <li key={item}>{item}</li>)}</ul>
+        </article>
+      ) : null}
+    </DashboardShell>
+  );
 }
 
 function WorkflowView({ screen }: { screen: AdminScreen }) {
@@ -3027,22 +3335,101 @@ function OperationsView({ screen, requestedScope }: { screen: AdminScreen; reque
 }
 
 function JourneyView({ screen }: { screen: AdminScreen }) {
-  if (!shouldUseDesignFixtures()) {
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
+  const journeyKind = screen.route.includes('/membership')
+    ? 'membership'
+    : screen.route.includes('/worker')
+      ? 'worker'
+      : screen.route.includes('/leadership')
+        ? 'leadership'
+        : 'membership';
+  const [record, setRecord] = useState<Record<string, unknown> | null>(null);
+  const [message, setMessage] = useState('Loading journey context…');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setMessage('Loading journey context…');
+      try {
+        const scope = defaultOpsScope(screen.scope);
+        const result =
+          journeyKind === 'membership'
+            ? await listMemberships({ scope, perPage: 1 })
+            : journeyKind === 'worker'
+              ? await listWorkers({ scope, perPage: 1 })
+              : await listLeaders({ scope, perPage: 1 });
+        if (cancelled) return;
+        setRecord((result.items[0] as Record<string, unknown>) ?? null);
+        setMessage(
+          result.items[0]
+            ? 'Progress is inferred from live membership/role records. There is no dedicated journey workflow API.'
+            : 'No live records found for this journey type in the current scope.',
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setRecord(null);
+        setError(operationsErrorMessage(err, 'Unable to load journey context.'));
+        setMessage('Live journey data unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [journeyKind, live, screen.scope]);
+
+  if (live) {
+    const personName = String(record?.person_name ?? 'Person');
+    const stageLabel =
+      journeyKind === 'membership'
+        ? String(record?.status ?? 'Membership')
+        : String(record?.title ?? record?.role_type ?? journeyKind);
+    const progress = record ? (record.status === 'active' || record.status === 'Active' ? '60%' : '30%') : '0%';
+    const steps =
+      journeyKind === 'membership'
+        ? ['Application / join — Inferred', 'Orientation — Unknown', 'Membership status — Live']
+        : journeyKind === 'worker'
+          ? ['Role assigned — Live', 'Training — Unknown', 'Active service — Inferred']
+          : ['Identified — Inferred', 'Development — Unknown', 'Leadership role — Live'];
     return (
-      <article className="card journey-card">
-        <p className="maps-settings-lead" role="status">
-          Journey screens have no dedicated admin API. Use People, Workers, and Leadership live tables for operational records.
+      <>
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+          {error ?? message}
         </p>
-        <header>
-          <div className="portrait">{screen.title.split(' ').map((part) => part[0]).slice(0, 2).join('')}</div>
-          <div>
-            <h2>{screen.title}</h2>
-            <p>{screen.subtitle}</p>
+        <div className="journey-rail">
+          {steps.map((item, index) => (
+            <div className={index === 0 ? 'complete' : index === 1 ? 'active' : ''} key={item}>
+              <span>{index + 1}</span>
+              <b>{item.split(' — ')[0]}</b>
+            </div>
+          ))}
+        </div>
+        <article className="card journey-card">
+          <header>
+            <div className="portrait">{personName.split(' ').map((part) => part[0]).slice(0, 2).join('')}</div>
+            <div>
+              <h2>{personName}</h2>
+              <p>Current {stageLabel}</p>
+            </div>
+            <strong>{progress}</strong>
+          </header>
+          <div className="progress-track"><i style={{ width: progress }} /></div>
+          <div className="journey-list">
+            {steps.map((item, index) => (
+              <div key={item}>
+                <span className={index === 0 ? 'done' : index === 1 ? 'doing' : ''}>{index === 0 ? '✓' : '●'}</span>
+                <b>{item.split(' — ')[0]}</b>
+                <StatusBadge value={item.split(' — ')[1] ?? 'Pending'} />
+              </div>
+            ))}
           </div>
-        </header>
-      </article>
+        </article>
+      </>
     );
   }
+
   const details = screen.details ?? {};
   return <><div className="journey-rail">{(screen.items ?? []).map((item,index)=><div className={index<2?'complete':index===2?'active':''} key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b></div>)}</div><article className="card journey-card"><header><div className="portrait">{details.Name?.split(' ').map(part=>part[0]).slice(0,2).join('')}</div><div><h2>{details.Name}</h2><p>Current {details.Stage}</p></div><strong>{details.Progress}</strong></header><div className="progress-track"><i style={{width:details.Progress}}/></div><div className="journey-list">{(screen.items ?? []).map((item,index)=><div key={item}><span className={index<2?'done':index===2?'doing':''}>{index<2?'✓':'●'}</span><b>{item.split(' — ')[0]}</b><StatusBadge value={item.split(' — ')[1]}/></div>)}</div><button className="primary-button">View Journey Details</button></article></>;
 }
@@ -3241,24 +3628,17 @@ function pastoralRecordIdFromRoute(route: string): string | null {
   return /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(match[1]) ? match[1] : null;
 }
 
-function SettingsView({ screen }: { screen: AdminScreen }) {
-  if (screen.route.includes('/settings/maps')) {
-    return <MapsSettingsPanel />;
-  }
-  if (screen.route.includes('/settings/payments') || screen.route.includes('/finance/providers')) {
-    return <PaymentsSettingsPanel />;
-  }
-  if (screen.route.includes('/communications/settings')) {
-    return <CommunicationsSettingsPanel />;
-  }
-  if (screen.route.includes('/settings/kca')) {
-    return <KcaSettingsPanel />;
-  }
-  if (screen.route.includes('/settings/branding')) {
-    return <BrandingSettingsPanel />;
-  }
+function SettingsView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   if (screen.route.includes('/geography/settings') && !shouldUseOrganizationFixtures()) {
-    return <HierarchyTreeView route="/admin/geography/hierarchy" title={screen.title} />;
+    return <GeographyScreenContent screen={screen} requestedScope={requestedScope} />;
+  }
+  if (
+    screen.route.includes('/admin/settings')
+    || screen.route.includes('/communications/settings')
+    || screen.route.includes('/finance/providers')
+    || screen.route.includes('/security/configuration')
+  ) {
+    return <PlatformSettingsScreen screen={screen} />;
   }
   const destructive = screen.id === 'D-14';
   const fixtures = shouldUseDesignFixtures();
@@ -3515,6 +3895,22 @@ function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; reques
   if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen} requestedScope={requestedScope} />;
   if (screen.batch === 'I') return <MissionScreenContent screen={screen} requestedScope={requestedScope} />;
   if (['J','K','L','M','N','O'].includes(screen.batch)) return <PlatformScreenContent screen={screen} requestedScope={requestedScope} />;
+  if (screen.batch === 'C' && screen.route !== '/admin/geography' && !screen.route.includes('/geography/scope')) {
+    return <GeographyScreenContent screen={screen} requestedScope={requestedScope} />;
+  }
+  if (screen.batch === 'D' && screen.route !== '/admin/home-churches/dashboard') {
+    return <HomeChurchesScreenContent screen={screen} requestedScope={requestedScope} />;
+  }
+  if (screen.batch === 'E' && screen.route !== '/admin/church/dashboard') {
+    return <ChurchScreenContent screen={screen} requestedScope={requestedScope} />;
+  }
+  if (screen.batch === 'F' && screen.route !== '/admin/people/dashboard') {
+    return <PeopleScreenContent screen={screen} requestedScope={requestedScope} />;
+  }
+  if ((screen.batch === 'A' || screen.batch === 'B') && screen.kind !== 'login' && screen.kind !== 'mfa') {
+    const administration = AdministrationScreenContent({ screen, requestedScope });
+    if (administration) return administration;
+  }
   switch(screen.kind){
     case 'dashboard': return <DashboardView screen={screen} requestedScope={requestedScope} />;
     case 'scope-grid': return <ScopeGrid screen={screen}/>;
@@ -3539,7 +3935,7 @@ function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; reques
     case 'operations': return <OperationsView screen={screen} requestedScope={requestedScope}/>;
     case 'journey': return <JourneyView screen={screen}/>;
     case 'approval': return <ApprovalView screen={screen}/>;
-    case 'settings': return <SettingsView screen={screen}/>;
+    case 'settings': return <SettingsView screen={screen} requestedScope={requestedScope}/>;
     case 'finance': return <FinanceView screen={screen}/>;
     case 'reports': return <ReportsView screen={screen}/>;
     case 'restricted': return <RestrictedView screen={screen}/>;

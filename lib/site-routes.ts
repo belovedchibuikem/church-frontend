@@ -315,6 +315,19 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
     };
   }
 
+  const kcaLessonMatch = path.match(/^\/account\/kca\/lessons\/([0-9A-HJKMNP-TV-Z]{26})$/i);
+  if (kcaLessonMatch) {
+    return {
+      path,
+      title: 'KCA Lesson',
+      action: 'Continue',
+      subtitle: subtitles.KCA,
+      surface: 'member',
+      kind: 'detail',
+      section: 'KCA',
+    };
+  }
+
   const kcaAssignmentMatch = path.match(/^\/account\/kca\/assignments\/([0-9A-HJKMNP-TV-Z]{26})$/i);
   if (kcaAssignmentMatch) {
     return {

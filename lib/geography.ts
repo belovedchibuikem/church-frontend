@@ -1,6 +1,6 @@
 /** Public world geography for searchable Country → State → City/LGA selects. */
 
-import { resolveApiV1BaseUrl } from '@/lib/api-config';
+import { resolveApiV1BaseUrl } from './api-config.ts';
 
 export const DEFAULT_COUNTRY_CODE = 'NG';
 
@@ -172,20 +172,26 @@ type StatesResponse = {
   data?: { name?: string; states?: Array<{ name?: string }> };
 };
 
-export async function fetchStates(countryName: string, signal?: AbortSignal): Promise<string[]> {
-  const name = countryName.trim();
+function countryCodeHint(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length === 2 ? trimmed.toUpperCase() : null;
+}
+
+export async function fetchStates(countryCodeOrName: string, signal?: AbortSignal): Promise<string[]> {
+  const name = countryCodeOrName.trim();
   if (!name) return [];
   const key = cacheKey(name);
   const cached = statesCache.get(key);
   if (cached) return cached;
 
-  const iso = await isoForCountryName(name, signal);
-  if (iso) {
+  const iso = countryCodeHint(name) ?? (await isoForCountryName(name, signal));
+  if (laravelGeographyBase() && iso) {
     const fromLaravel = await fetchLaravelStates(iso, signal);
-    if (fromLaravel && fromLaravel.length > 0) {
+    if (fromLaravel !== null) {
       statesCache.set(key, fromLaravel);
       return fromLaravel;
     }
+    throw new Error('Unable to load states from the platform catalogue.');
   }
 
   const payload = await fetchJson<StatesResponse>(
@@ -211,21 +217,22 @@ type CitiesResponse = {
   data?: string[];
 };
 
-export async function fetchCities(countryName: string, stateName: string, signal?: AbortSignal): Promise<string[]> {
-  const country = countryName.trim();
+export async function fetchCities(countryCodeOrName: string, stateName: string, signal?: AbortSignal): Promise<string[]> {
+  const country = countryCodeOrName.trim();
   const state = stateName.trim();
   if (!country || !state) return [];
   const key = cacheKey(country, state);
   const cached = citiesCache.get(key);
   if (cached) return cached;
 
-  const iso = await isoForCountryName(country, signal);
-  if (iso) {
+  const iso = countryCodeHint(country) ?? (await isoForCountryName(country, signal));
+  if (laravelGeographyBase() && iso) {
     const fromLaravel = await fetchLaravelLocalities(iso, state, signal);
-    if (fromLaravel && fromLaravel.length > 0) {
+    if (fromLaravel !== null) {
       citiesCache.set(key, fromLaravel);
       return fromLaravel;
     }
+    throw new Error('Unable to load local areas from the platform catalogue.');
   }
 
   const payload = await fetchJson<CitiesResponse>(
@@ -290,7 +297,7 @@ async function fetchLaravelStates(iso: string, signal?: AbortSignal): Promise<st
     const names = (payload.data ?? [])
       .map((item) => (item.name ?? '').trim())
       .filter(Boolean);
-    return names.length > 0 ? names : null;
+    return names;
   } catch (error) {
     if (signal?.aborted) throw error;
     return null;
@@ -312,7 +319,7 @@ async function fetchLaravelLocalities(
     const names = (payload.data ?? [])
       .map((item) => (item.name ?? '').trim())
       .filter(Boolean);
-    return names.length > 0 ? names : null;
+    return names;
   } catch (error) {
     if (signal?.aborted) throw error;
     return null;

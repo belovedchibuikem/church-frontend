@@ -1,16 +1,20 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createCountry,
   createLevel,
   createLocation,
   createUnit,
+  fetchChurchTree,
+  fetchHomeChurchTree,
   isOrganizationApiConfigured,
   loadOrganizationHierarchy,
   moveUnit,
   organizationErrorMessage,
   shouldUseOrganizationFixtures,
+  type GeographyTreeNode,
   type OrganizationHierarchySnapshot,
 } from '../lib/admin-organization-api';
 import {
@@ -554,6 +558,9 @@ function LiveOrganizationHierarchy({ title }: { title: string }) {
               </form>
             ) : null}
             {actionMessage ? <p className="maps-settings-lead">{actionMessage}</p> : null}
+            {selected.kind === 'country' ? <Link className="ghost-button link-button" href={`/admin/geography/countries/${selected.code}`}>{t('common.viewDetails', { defaultMessage: 'View Details' })}</Link> : null}
+            {selected.kind === 'unit' ? <Link className="ghost-button link-button" href={`/admin/geography/units/${selected.id}`}>{t('common.viewDetails', { defaultMessage: 'View Details' })}</Link> : null}
+            {selected.kind === 'location' ? <Link className="ghost-button link-button" href={`/admin/geography/locations/${selected.id}`}>{t('common.viewDetails', { defaultMessage: 'View Details' })}</Link> : null}
           </div>
         </div>
       )}
@@ -688,11 +695,119 @@ function FixtureHierarchyTree({ route, title }: Props) {
 }
 
 export function HierarchyTreeView({ route, title }: Props) {
-  if (isAdminOrganizationHierarchyRoute(route)) {
-    if (shouldUseOrganizationFixtures() && !isOrganizationApiConfigured()) {
-      return <FixtureHierarchyTree route={route} title={title} />;
-    }
+  if (shouldUseOrganizationFixtures() && !isOrganizationApiConfigured()) {
+    return <FixtureHierarchyTree route={route} title={title} />;
+  }
+  if (isAdminOrganizationHierarchyRoute(route) || route.includes('/geography/hierarchy')) {
     return <LiveOrganizationHierarchy title={title} />;
   }
+  if (route.includes('home-church-hierarchy')) {
+    return <LiveNamedTree title={title} load={fetchHomeChurchTree} empty="No home churches in this scope." />;
+  }
+  if (route.includes('church-hierarchy')) {
+    return <LiveNamedTree title={title} load={fetchChurchTree} empty="No churches in this scope." />;
+  }
   return <FixtureHierarchyTree route={route} title={title} />;
+}
+
+function treeFromNodes(nodes: GeographyTreeNode[]): HierarchyNode | null {
+  if (nodes.length === 0) return null;
+  const mapNode = (node: GeographyTreeNode): HierarchyNode => ({
+    id: node.id,
+    label: node.label,
+    level: node.level,
+    code: node.code,
+    kind: (node.kind as HierarchyNode['kind']) ?? 'group',
+    parent: node.parent,
+    churches: node.churches,
+    homeChurches: node.homeChurches,
+    children: node.children?.map(mapNode),
+  });
+  if (nodes.length === 1) return mapNode(nodes[0]);
+  return {
+    id: 'tree-root',
+    label: 'Organization',
+    level: 'Root',
+    code: 'ROOT',
+    kind: 'group',
+    children: nodes.map(mapNode),
+  };
+}
+
+function LiveNamedTree({
+  title,
+  load,
+  empty,
+}: {
+  title: string;
+  load: () => Promise<GeographyTreeNode[]>;
+  empty: string;
+}) {
+  const [state, setState] = useState<LoadState>('loading');
+  const [message, setMessage] = useState('Loading hierarchy…');
+  const [root, setRoot] = useState<HierarchyNode | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState('');
+
+  const refresh = useCallback(async () => {
+    setState('loading');
+    try {
+      const nodes = await load();
+      const tree = treeFromNodes(nodes);
+      if (!tree) {
+        setRoot(null);
+        setState('empty');
+        setMessage(empty);
+        return;
+      }
+      setRoot(tree);
+      setExpanded(new Set(collectExpandableIds(tree).slice(0, 12)));
+      setSelectedId(tree.id);
+      setState('ready');
+    } catch (error) {
+      setRoot(null);
+      setState('error');
+      setMessage(organizationErrorMessage(error));
+    }
+  }, [empty, load]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  if (state !== 'ready' || !root) {
+    return <HierarchyStatus state={state} message={message} onRetry={() => void refresh()} />;
+  }
+
+  const selected = findHierarchyNode(root, selectedId) ?? root;
+  const expandableIds = collectExpandableIds(root);
+  return (
+    <div className="tree-layout" data-hierarchy-title={title}>
+      <div className="card tree-card">
+        <div className="tree-toolbar">
+          <strong>Structure</strong>
+          <div>
+            <button type="button" className="ghost-button" onClick={() => setExpanded(new Set(expandableIds))}>Expand All</button>
+            <button type="button" className="ghost-button" onClick={() => setExpanded(new Set())}>Collapse All</button>
+          </div>
+        </div>
+        <TreeBranch node={root} depth={0} expanded={expanded} selectedId={selectedId} onToggle={(id) => {
+          setExpanded((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+        }} onSelect={setSelectedId} />
+      </div>
+      <div className="card tree-detail">
+        <h2 className="card-title">Selected Node</h2>
+        <h3>{selected.label}</h3>
+        <dl>
+          <div><dt>Level</dt><dd>{selected.level}</dd></div>
+          <div><dt>Code</dt><dd>{selected.code}</dd></div>
+        </dl>
+      </div>
+    </div>
+  );
 }

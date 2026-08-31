@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
@@ -7,15 +8,21 @@ import {
   assignSoulMentor,
   captureSoul,
   completeSoulFollowUp,
+  createCrusade,
   defaultOpsScope,
+  fetchFollowUpGaps,
   listCrusades,
+  listMissionInvitations,
   listSouls,
+  listTeamAssignments,
   loadOpsDataset,
   operationsErrorMessage,
   opsRecordsToRows,
   recordSoulFollowUp,
+  requestMissionAdvisory,
   resolveOpsDataset,
   shouldUseOperationsLiveData,
+  transitionMissionInvitation,
   type CrusadeRecord,
   type SoulRecord,
 } from '../lib/admin-operations-api';
@@ -31,6 +38,7 @@ import {
   dashboardModuleForScreen,
 } from '../lib/admin-dashboard-api';
 import { useAdminDashboard } from '../lib/use-admin-dashboard';
+import { DashboardQuickLinks, DashboardShell, LinkedMetricCards } from './admin-dashboard-chrome';
 
 function isPublicId(value: string | undefined | null): boolean {
   return Boolean(value && /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(value.trim()));
@@ -570,34 +578,36 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
   );
 }
 
-function MissionLineChart({ title }: { title?: string }) {
+function MissionLineChart({ title, series }: { title?: string; series?: Array<{ label: string; value: number }> }) {
   const { t } = useLocale();
   const chartTitle = title ?? t('mission.soulsOverTime', { defaultMessage: 'Souls Over Time' });
+  const points = series ?? [];
+  const max = Math.max(1, ...points.map((point) => point.value));
+  const coords = points.map((point, index) => {
+    const x = points.length === 1 ? 260 : 28 + (index * 472) / Math.max(1, points.length - 1);
+    const y = 177 - (point.value / max) * 137;
+    return `${x},${y}`;
+  });
   return (
     <article className="mission-chart-card">
       <header>
         <h3>{chartTitle}</h3>
-        <span>{t('common.thisMonth', { defaultMessage: 'This Month⌄' })}</span>
       </header>
-      <svg className="mission-line-chart" viewBox="0 0 520 210" role="img" aria-label={t('common.chartAria', { defaultMessage: '{title} chart', vars: { title: chartTitle } })}>
-        <defs><linearGradient id="mission-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#5530e8" stopOpacity=".22"/><stop offset="1" stopColor="#5530e8" stopOpacity="0"/></linearGradient></defs>
+      {points.length === 0 ? <p className="maps-settings-lead">No soul captures in this period.</p> : (
+      <>
+      <svg className="mission-line-chart" viewBox="0 0 520 210" role="img" aria-label={chartTitle}>
         {[30, 75, 120, 165].map(y => <line x1="28" x2="500" y1={y} y2={y} key={y}/>) }
-        <path className="mission-chart-area" d="M28 177 L98 134 L168 142 L238 103 L308 118 L378 90 L448 76 L500 40 L500 190 L28 190 Z" fill="url(#mission-area)"/>
-        <polyline points="28,177 98,134 168,142 238,103 308,118 378,90 448,76 500,40"/>
-        {[['28','177'],['98','134'],['168','142'],['238','103'],['308','118'],['378','90'],['448','76'],['500','40']].map(([x,y]) => <circle cx={x} cy={y} r="5" key={`${x}-${y}`}/>) }
+        <polyline fill="none" points={coords.join(' ')} />
+        {coords.map((pair) => { const [x, y] = pair.split(','); return <circle cx={x} cy={y} r="5" key={pair}/>; })}
       </svg>
-      <div className="mission-chart-labels">
-        <span>{t('mission.chartMay1', { defaultMessage: 'May 1' })}</span>
-        <span>{t('mission.chartMay5', { defaultMessage: 'May 5' })}</span>
-        <span>{t('mission.chartMay10', { defaultMessage: 'May 10' })}</span>
-        <span>{t('mission.chartMay15', { defaultMessage: 'May 15' })}</span>
-        <span>{t('mission.chartMay20', { defaultMessage: 'May 20' })}</span>
-      </div>
+      <div className="mission-chart-labels">{points.map((point) => <span key={point.label}>{point.label}</span>)}</div>
+      </>
+      )}
     </article>
   );
 }
 
-function MissionDonut({ title, items, center = '12,458' }: { title: string; items: string[]; center?: string }) {
+function MissionDonut({ title, items, center = '0' }: { title: string; items: string[]; center?: string }) {
   const { t } = useLocale();
   const totalLabel = t('common.total', { defaultMessage: 'Total' });
   return (
@@ -614,7 +624,7 @@ function MissionDonut({ title, items, center = '12,458' }: { title: string; item
         >
           <div><strong>{center}</strong><span>{totalLabel}</span></div>
         </div>
-        <ul>{items.map((item, index) => <li key={item}><i style={{ backgroundColor: missionPalette[index % missionPalette.length] }}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1] ?? `${Math.max(8, 48 - index * 9)}%`}</b></li>)}</ul>
+        <ul>{items.length === 0 ? <li>No status data</li> : items.map((item, index) => <li key={item}><i style={{ backgroundColor: missionPalette[index % missionPalette.length] }}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1] ?? '0'}</b></li>)}</ul>
       </div>
     </article>
   );
@@ -623,28 +633,19 @@ function MissionDonut({ title, items, center = '12,458' }: { title: string; item
 function MissionDashboard({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const { t } = useLocale();
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
-  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
-  const statusItems = dashboard.live
-    ? breakdownToItems(dashboard.data?.breakdown)
-    : [
-      t('mission.wonPct', { defaultMessage: 'Won — 44%' }),
-      t('mission.followingUpPct', { defaultMessage: 'Following Up — 31%' }),
-      t('mission.discipledPct', { defaultMessage: 'Discipled — 19%' }),
-      t('mission.otherPct', { defaultMessage: 'Other — 6%' }),
-    ];
-  const rows = dashboard.live ? (dashboard.data?.recent_rows ?? []) : (screen.rows ?? []);
+  const statusItems = breakdownToItems(dashboard.data?.breakdown);
+  const rows = dashboard.data?.recent_rows ?? [];
   const donut = dashboard.data?.donut;
 
   return (
+    <DashboardShell screenId={screen.id} href={screen.route} data={dashboard.data} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.retry} preset={dashboard.preset} onPresetChange={dashboard.setPreset}>
     <div className="mission-dashboard">
-      {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
-      {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
-      <MissionMetrics metrics={metrics}/>
+      <LinkedMetricCards screenId={screen.id} metrics={dashboard.metrics} />
       <div className="mission-dashboard-charts">
-        <MissionLineChart/>
+        <MissionLineChart series={dashboard.data?.series} />
         <MissionDonut
           title={t('mission.soulsByStatus', { defaultMessage: 'Souls by Status' })}
-          center={donut?.value ?? '12,458'}
+          center={donut?.value ?? '0'}
           items={statusItems}
         />
       </div>
@@ -652,20 +653,18 @@ function MissionDashboard({ screen, requestedScope }: { screen: AdminScreen; req
         <article className="mission-list-card">
           <header>
             <h3 aria-level={2}>{t('mission.topCrusades', { defaultMessage: 'Top Crusades' })}</h3>
-            <button type="button">{t('mission.viewAllCrusades', { defaultMessage: 'View all crusades' })}</button>
+            <Link href="/admin/mission/crusades">{t('mission.viewAllCrusades', { defaultMessage: 'View all crusades' })}</Link>
           </header>
-          {rows.map((row, index) => (
+          {rows.length === 0 ? <p className="maps-settings-lead">No crusades in this scope.</p> : rows.map((row, index) => (
             <div className="mission-ranked-row" key={row['Crusade Name'] ?? index}>
               <span>{index + 1}</span><b>{row['Crusade Name']}</b><strong>{row.Souls}</strong>
             </div>
           ))}
         </article>
-        <article className="mission-action-card">
-          <header><h3 aria-level={2}>{t('common.quickActions', { defaultMessage: 'Quick Actions' })}</h3></header>
-          <div>{(screen.items ?? []).map((item, index) => <button type="button" key={item}><i aria-hidden="true">{['＋', '♙', '✉', '▤'][index]}</i><span>{item}</span></button>)}</div>
-        </article>
+        <DashboardQuickLinks screenId={screen.id} className="mission-action-card" />
       </div>
     </div>
+    </DashboardShell>
   );
 }
 
@@ -715,6 +714,10 @@ function MissionWizard({ screen }: { screen: AdminScreen }) {
   const details = Object.entries(screen.details ?? {});
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const live = shouldUseOperationsLiveData();
   const visibleDetails = wizard.currentStep === 0
     ? details
     : wizard.currentStep === 1
@@ -723,17 +726,40 @@ function MissionWizard({ screen }: { screen: AdminScreen }) {
         ? details.slice(Math.ceil(details.length / 2))
         : details;
 
+  async function onFinish() {
+    if (!live) return;
+    const form = document.querySelector('.mission-wizard') as HTMLElement | null;
+    const nameInput = form?.querySelector<HTMLInputElement>('input[name="name"]');
+    const name = nameInput?.value.trim() || form?.querySelector<HTMLInputElement>('input')?.value.trim() || '';
+    if (!name || name.toLowerCase().includes('enter crusade')) {
+      setError('Enter a crusade name before creating the record.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await createCrusade({ name }, defaultOpsScope(screen.scope));
+      setCreatedId(created.id);
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Unable to create crusade.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mission-wizard" data-admin-wizard="true">
       <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} className="mission-stepper" itemClassName="" activeClassName="active" />
       <section className="mission-form-card">
         <header><h2>{wizard.currentLabel}</h2><p>{screen.subtitle}</p></header>
+        {error ? <p className="field-help" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+        {createdId ? <p role="status">Created crusade {createdId}.</p> : null}
         {wizard.currentStep < steps.length - 1 ? (
           <div className="mission-form-grid">
             {visibleDetails.map(([label, value], index) => (
               <label className={index === visibleDetails.length - 1 || label === 'Description' ? 'mission-field-wide' : ''} key={label}>
                 <span>{label}{index < 8 && <em aria-hidden="true">*</em>}</span>
-                {label === 'Description' ? <textarea required={index < 8} defaultValue={value} /> : /Date/.test(label) ? <input required={index < 8} type="text" defaultValue={value} /> : /Location|Type|Focus/.test(label) ? <select required={index < 8} defaultValue={value}><option>{value}</option></select> : <input required={index < 8} defaultValue={value} />}
+                {label === 'Description' ? <textarea name={label === 'Crusade Name' ? 'name' : undefined} required={index < 8} defaultValue="" placeholder={value} /> : /Date/.test(label) ? <input required={index < 8} type="date" defaultValue="" /> : /Location|Type|Focus/.test(label) ? <select required={index < 8}><option value="">{value}</option></select> : <input name={label === 'Crusade Name' ? 'name' : undefined} required={index < 8} defaultValue="" placeholder={value} />}
               </label>
             ))}
           </div>
@@ -742,7 +768,7 @@ function MissionWizard({ screen }: { screen: AdminScreen }) {
             {details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
         )}
-        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={t('mission.createCrusade', { defaultMessage: 'Create crusade' })} primaryClassName="mission-primary-button" secondaryClassName="mission-secondary-button" />
+        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={busy ? t('common.saving', { defaultMessage: 'Saving…' }) : t('mission.createCrusade', { defaultMessage: 'Create crusade' })} primaryClassName="mission-primary-button" secondaryClassName="mission-secondary-button" onFinish={() => void onFinish()} />
       </section>
     </div>
   );
@@ -750,6 +776,84 @@ function MissionWizard({ screen }: { screen: AdminScreen }) {
 
 function InvitationReview({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = shouldUseOperationsLiveData();
+  const [invitations, setInvitations] = useState<Array<Record<string, unknown>>>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('Loading invitations…');
+  const [busy, setBusy] = useState(false);
+  const selected = invitations.find((item) => String(item.id) === selectedId);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void listMissionInvitations({ scope: defaultOpsScope(screen.scope), perPage: 25 })
+      .then((result) => {
+        if (cancelled) return;
+        setInvitations(result.items as Array<Record<string, unknown>>);
+        setSelectedId(String(result.items[0]?.id ?? ''));
+        setMessage(result.pagination.total === 0 ? 'No invitations in this scope.' : `Reviewing ${result.pagination.total} invitation(s).`);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(operationsErrorMessage(err, 'Unable to load invitations.'));
+        setMessage('Live invitation review unavailable');
+      });
+    return () => { cancelled = true; };
+  }, [live, screen.scope]);
+
+  async function decide(status: string) {
+    if (!selectedId) return;
+    const reason = status === 'approved' ? null : (note.trim() || 'review_decision');
+    if (status !== 'approved' && !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(reason ?? '')) {
+      setError('Adverse decisions need a lowercase reason code (e.g. incomplete_safeguarding).');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await transitionMissionInvitation(selectedId, status, reason, defaultOpsScope(screen.scope));
+      setInvitations((current) => current.map((item) => (String(item.id) === selectedId ? { ...item, ...updated } : item)));
+      setMessage(`Invitation is now ${updated.status}.`);
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Unable to update invitation.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (live) {
+    return (
+      <div className="mission-invitation-review">
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>{error ?? message}</p>
+        <label>
+          <span>Invitation</span>
+          <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+            {invitations.map((item) => (
+              <option key={String(item.id)} value={String(item.id)}>{String(item.requester_name ?? item.id)} · {String(item.status)}</option>
+            ))}
+          </select>
+        </label>
+        <MissionDefinitionList details={{
+          Status: String(selected?.status ?? 'Not provided'),
+          Location: String(selected?.requested_location_name ?? 'Not provided'),
+          Purpose: String(selected?.purpose ?? 'Not provided'),
+          Crusade: String(selected?.crusade_name ?? 'Not linked until approved'),
+        }}/>
+        <label className="mission-response-field">
+          <span>{t('mission.responseNote', { defaultMessage: 'Reason code (required to decline / request info)' })}</span>
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="incomplete_safeguarding"/>
+        </label>
+        <footer className="mission-review-actions">
+          <button className="mission-danger-outline" type="button" disabled={busy || !selectedId} onClick={() => void decide('declined')}>{t('mission.decline', { defaultMessage: 'Decline' })}</button>
+          <button className="mission-secondary-button" type="button" disabled={busy || !selectedId} onClick={() => void decide('information_required')}>{t('mission.requestMoreInfo', { defaultMessage: 'Request More Info' })}</button>
+          <button className="mission-success-button" type="button" disabled={busy || !selectedId} onClick={() => void decide('approved')}>{screen.action}</button>
+        </footer>
+      </div>
+    );
+  }
+
   const entries = Object.entries(screen.details ?? {});
   return (
     <div className="mission-invitation-review">
@@ -765,31 +869,103 @@ function InvitationReview({ screen }: { screen: AdminScreen }) {
         <article className="mission-panel">
           <h3>{t('mission.invitationDetails', { defaultMessage: 'Invitation Details' })}</h3>
           <MissionDefinitionList details={Object.fromEntries(entries.slice(0, 8))}/>
-          <h4>{t('common.documents', { defaultMessage: 'Documents' })}</h4>
-          <div className="mission-document-list">{(screen.items ?? []).map(item => <button type="button" key={item}>▧ <span>{item}</span><b>{t('common.view', { defaultMessage: 'View' })}</b></button>)}</div>
-        </article>
-        <article className="mission-panel">
-          <h3>{t('mission.inviteeMessage', { defaultMessage: 'Invitee Message' })}</h3>
-          <blockquote>{screen.details?.Message}</blockquote>
-          <label className="mission-response-field">
-            <span>{t('mission.responseNote', { defaultMessage: 'Response note' })}</span>
-            <textarea placeholder={t('mission.optionalNotePlaceholder', { defaultMessage: 'Add an optional note...' })}/>
-          </label>
         </article>
       </div>
-      <footer className="mission-review-actions">
-        <button className="mission-danger-outline" type="button">{t('mission.decline', { defaultMessage: 'Decline' })}</button>
-        <button className="mission-secondary-button" type="button">{t('mission.requestMoreInfo', { defaultMessage: 'Request More Info' })}</button>
-        <button className="mission-success-button" type="button">{screen.action}</button>
-      </footer>
     </div>
   );
 }
 
 function PlanningView({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
-  const details = Object.entries(screen.details ?? {});
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
   const [tab, setTab] = useState(0);
+  const [crusades, setCrusades] = useState<CrusadeRecord[]>([]);
+  const [invitations, setInvitations] = useState<Array<Record<string, unknown>>>([]);
+  const [message, setMessage] = useState('Loading planning context…');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const scope = defaultOpsScope(screen.scope);
+        const [crusadeResult, invitationResult] = await Promise.all([
+          listCrusades({ scope, perPage: 10 }),
+          listMissionInvitations({ scope, perPage: 10 }),
+        ]);
+        if (cancelled) return;
+        setCrusades(crusadeResult.items);
+        setInvitations(invitationResult.items as Array<Record<string, unknown>>);
+        setMessage('Planning is derived from live crusades and invitations. There is no separate planning workflow API.');
+      } catch (err) {
+        if (cancelled) return;
+        setCrusades([]);
+        setInvitations([]);
+        setError(operationsErrorMessage(err, 'Unable to load planning data.'));
+        setMessage('Live planning data unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, screen.scope]);
+
+  if (live) {
+    const crusade = crusades[0];
+    const details: Array<[string, string]> = crusade
+      ? [
+          ['Crusade', crusade.name ?? '—'],
+          ['Location', String(crusade.location_name ?? '—')],
+          ['Starts', crusade.starts_at ? new Date(crusade.starts_at).toLocaleDateString() : '—'],
+          ['Ends', crusade.ends_at ? new Date(crusade.ends_at).toLocaleDateString() : '—'],
+          ['Invitations', String(invitations.length)],
+        ]
+      : [['Planning', 'No crusades in scope']];
+    const items = [
+      `Crusade scheduled — ${crusade ? 'Live' : 'Pending'}`,
+      `Invitations (${invitations.length}) — Live`,
+      'Logistics — No API',
+      'Communication — No API',
+      'Budget — No API',
+    ];
+    return (
+      <div className="mission-planning">
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+          {error ?? message}
+        </p>
+        <MissionTabs tabs={['General', 'Invitations', 'Schedule', 'Logistics', 'Communication']} active={tab} onChange={setTab} />
+        <div className="mission-planning-grid">
+          <article className="mission-panel mission-planning-summary">
+            <span className="mission-progress-ring" role="progressbar" aria-valuenow={crusade ? 40 : 0}>40%</span>
+            <h3>{crusade ? 'Crusade + invitations loaded' : 'No crusade in scope'}</h3>
+            <p>{t('mission.planningReady', { defaultMessage: 'Operational planning uses crusade and invitation records.' })}</p>
+            {items.map((item) => <div key={item}><i aria-hidden="true">✓</i><span>{item.split(' — ')[0]}</span><MissionStatus value={item.split(' — ')[1] ?? 'Pending'} /></div>)}
+          </article>
+          <article className="mission-panel mission-planning-details">
+            <h3>{tab === 1 ? 'Invitations' : 'General'}</h3>
+            {tab === 1 ? (
+              invitations.length === 0 ? (
+                <p>No invitations in this scope.</p>
+              ) : (
+                invitations.map((invitation) => (
+                  <div key={String(invitation.id)}>
+                    <span>{String(invitation.requester_name ?? 'Invitee')}</span>
+                    <strong>{String(invitation.status ?? '—')}</strong>
+                  </div>
+                ))
+              )
+            ) : (
+              details.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)
+            )}
+          </article>
+        </div>
+      </div>
+    );
+  }
+
+  const details = Object.entries(screen.details ?? {});
   return (
     <div className="mission-planning">
       <MissionTabs tabs={screen.tabs} active={tab} onChange={setTab} />
@@ -811,6 +987,77 @@ function PlanningView({ screen }: { screen: AdminScreen }) {
 
 function TeamDetail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
+  const roleCode = screen.route.split('/').pop() ?? 'counselling';
+  const [members, setMembers] = useState<Array<Record<string, unknown>>>([]);
+  const [message, setMessage] = useState('Loading team members…');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const result = await listTeamAssignments({
+          scope: defaultOpsScope(screen.scope),
+          perPage: 50,
+          filter: { role_code: roleCode, status: 'active' },
+        });
+        if (cancelled) return;
+        setMembers(result.items as Array<Record<string, unknown>>);
+        setMessage(
+          result.items.length === 0
+            ? `No active ${roleCode} team assignments in this scope.`
+            : `Showing ${result.items.length} active ${roleCode} assignment(s).`,
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setMembers([]);
+        setError(operationsErrorMessage(err, 'Unable to load team assignments.'));
+        setMessage('Live team data unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, roleCode, screen.scope]);
+
+  if (live) {
+    const leader = members[0];
+    return (
+      <div className="mission-team-detail">
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+          {error ?? 'Team detail uses live mission team assignments. There is no separate team CRM API.'}
+        </p>
+        <MissionDetailHero screen={screen} />
+        <article className="mission-panel">
+          <h3>{t('mission.teamMembers', { defaultMessage: 'Team Members' })}</h3>
+          <p className="maps-settings-lead" role="status">{message}</p>
+          <div className="mission-member-list">
+            {members.map((member) => (
+              <div key={String(member.id)}>
+                <span>{String(member.person_name ?? '?').slice(0, 1)}</span>
+                <b>{String(member.person_name ?? 'Member')}</b>
+                <small>{String(member.crusade_name ?? member.status ?? 'Active')}</small>
+              </div>
+            ))}
+          </div>
+          {leader ? (
+            <div className="mission-team-leader">
+              <span>{String(leader.person_name ?? '?').slice(0, 2)}</span>
+              <div>
+                <small>{t('mission.teamLeader', { defaultMessage: 'Team Leader' })}</small>
+                <strong>{String(leader.person_name ?? '—')}</strong>
+              </div>
+              <MissionStatus value="Leader" />
+            </div>
+          ) : null}
+        </article>
+      </div>
+    );
+  }
+
   return (
     <div className="mission-team-detail">
       <MissionDetailHero screen={screen}/>
@@ -874,6 +1121,77 @@ function MissionBars({ items }: { items: string[] }) {
 
 function DistributionView({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
+  const [souls, setSouls] = useState<SoulRecord[]>([]);
+  const [teams, setTeams] = useState<Array<Record<string, unknown>>>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const [soulsResult, teamResult] = await Promise.all([
+          listSouls({ scope: defaultOpsScope(screen.scope), perPage: 200 }),
+          listTeamAssignments({ scope: defaultOpsScope(screen.scope), perPage: 200, filter: { status: 'active' } }),
+        ]);
+        if (cancelled) return;
+        setSouls(soulsResult.items);
+        setTeams(teamResult.items as Array<Record<string, unknown>>);
+      } catch (reason) {
+        if (cancelled) return;
+        setSouls([]);
+        setTeams([]);
+        setError(operationsErrorMessage(reason, 'Unable to load distribution data.'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, screen.scope]);
+
+  if (live) {
+    const grouped = teams.reduce<Record<string, number>>((acc, row) => {
+      const key = String(row.role_code ?? 'unassigned').replace(/_/g, ' ');
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+    const donutItems = Object.entries(grouped).map(([label, count]) => `${label} — ${count}`);
+    const recent = teams.slice(0, 8);
+    return (
+      <div className="mission-distribution">
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+          {error ?? 'Distribution is derived from live souls and active mission team assignments.'}
+        </p>
+        <MissionMetrics metrics={[
+          { label: 'Souls', value: String(souls.length) },
+          { label: 'Active Team Assignments', value: String(teams.length) },
+          { label: 'Teams', value: String(Object.keys(grouped).length) },
+          { label: 'Unassigned Souls', value: String(Math.max(souls.length - teams.length, 0)) },
+        ]}/>
+        <div className="mission-analytics-grid">
+          <MissionDonut title={t('mission.distributionByTeam', { defaultMessage: 'Distribution by Team' })} center={String(teams.length)} items={donutItems.length > 0 ? donutItems : ['No assignments — 0']} />
+          <article className="mission-panel">
+            <header>
+              <h3>{t('mission.recentDistributions', { defaultMessage: 'Recent Distributions' })}</h3>
+            </header>
+            <div className="mission-compact-table">
+              {recent.length === 0 ? <p>No team assignments in this scope.</p> : recent.map((row) => (
+                <div key={String(row.id)}>
+                  <b>{String(row.role_code ?? 'Team')}</b>
+                  <span>{String(row.person_name ?? 'Member')}</span>
+                  <strong>{String(row.crusade_name ?? 'Crusade')}</strong>
+                  <small>{String(row.assigned_at ? new Date(String(row.assigned_at)).toLocaleDateString() : '—')}</small>
+                </div>
+              ))}
+            </div>
+          </article>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mission-distribution">
       <MissionMetrics metrics={screen.metrics}/>
@@ -898,6 +1216,80 @@ function DistributionView({ screen }: { screen: AdminScreen }) {
       </div>
       <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>
     </div>
+  );
+}
+
+function PartnersView({ screen }: { screen: AdminScreen }) {
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
+  const [rows, setRows] = useState<Array<{ partner: string; crusades: number; invitations: number; status: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('Loading partner signals…');
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const result = await listMissionInvitations({ scope: defaultOpsScope(screen.scope), perPage: 200 });
+        if (cancelled) return;
+        const grouped = result.items.reduce<Record<string, { crusades: Set<string>; invitations: number }>>((acc, item) => {
+          const name = String(item.requested_location_name ?? item.requester_name ?? 'Unknown partner');
+          if (!acc[name]) acc[name] = { crusades: new Set<string>(), invitations: 0 };
+          acc[name].invitations += 1;
+          if (item.crusade_name) acc[name].crusades.add(String(item.crusade_name));
+          return acc;
+        }, {});
+        const derived = Object.entries(grouped).map(([partner, data]) => ({
+          partner,
+          crusades: data.crusades.size,
+          invitations: data.invitations,
+          status: 'Operational',
+        }));
+        setRows(derived);
+        setMessage(
+          derived.length === 0
+            ? 'No partner registry exists yet; no invitation-derived partner signals in this scope.'
+            : `Showing ${derived.length} invitation-derived partner signal(s).`,
+        );
+      } catch (reason) {
+        if (cancelled) return;
+        setRows([]);
+        setError(operationsErrorMessage(reason, 'Unable to load mission partner signals.'));
+        setMessage('Live mission partner data unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, screen.scope]);
+
+  if (!live) return <><MissionMetrics metrics={screen.metrics}/><MissionTable screen={screen}/></>;
+
+  return (
+    <section className="mission-table-card">
+      <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+        {error ?? 'No dedicated partner model exists yet. This view derives operational partner signals from mission invitations.'}
+      </p>
+      <div className="mission-table-scroll">
+        <table className="mission-table">
+          <thead><tr><th>Partner</th><th>Crusades</th><th>Invitations</th><th>Status</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4}>{message}</td></tr>
+            ) : rows.map((row) => (
+              <tr key={row.partner}>
+                <td><span className="mission-primary-cell"><i aria-hidden="true">{row.partner.slice(0, 1)}</i><b>{row.partner}</b></span></td>
+                <td>{row.crusades}</td>
+                <td>{row.invitations}</td>
+                <td><MissionStatus value={row.status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <footer className="mission-table-footer"><span>{message}</span></footer>
+    </section>
   );
 }
 
@@ -959,6 +1351,39 @@ function FollowUpView({ screen }: { screen: AdminScreen }) {
 
 function GapDashboard({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = shouldUseOperationsLiveData();
+  const [gaps, setGaps] = useState<Record<string, number> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void fetchFollowUpGaps(defaultOpsScope(screen.scope))
+      .then((result) => {
+        if (!cancelled) setGaps(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(operationsErrorMessage(err, 'Unable to load follow-up gaps.'));
+      });
+    return () => { cancelled = true; };
+  }, [live, screen.scope]);
+
+  if (live) {
+    const metrics = [
+      { label: 'Unassigned', value: String(gaps?.unassigned ?? 0) },
+      { label: 'Never contacted', value: String(gaps?.never_contacted ?? 0) },
+      { label: 'Overdue', value: String(gaps?.overdue ?? 0) },
+      { label: 'Stalled', value: String(gaps?.stalled ?? 0) },
+    ];
+    return (
+      <div className="mission-gap-dashboard">
+        {error ? <p role="alert" style={{ color: '#dc2626' }}>{error}</p> : <p role="status">Live follow-up gap counts for the current scope and SLA (7 days).</p>}
+        <MissionMetrics metrics={metrics}/>
+        <p><Link href="/admin/mission/souls">Open souls queue</Link> · <Link href="/admin/mission/follow-up">Open follow-up</Link></p>
+      </div>
+    );
+  }
+
   const items = screen.items ?? [];
   const midpoint = Math.ceil(items.length / 2);
   return (
@@ -969,15 +1394,69 @@ function GapDashboard({ screen }: { screen: AdminScreen }) {
           <h3>{screen.id === 'I-19' ? t('mission.gapByCrusade', { defaultMessage: 'Gap by Crusade' }) : t('mission.followUpCoverageByCrusade', { defaultMessage: 'Follow-Up Coverage by Crusade' })}</h3>
           <MissionBars items={items.slice(0, midpoint)}/>
         </article>
-        <MissionDonut title={t('mission.gapByDays', { defaultMessage: 'Gap by Days' })} center="768" items={items.slice(midpoint)}/>
+        <MissionDonut title={t('mission.gapByDays', { defaultMessage: 'Gap by Days' })} center="0" items={items.slice(midpoint)}/>
       </div>
-      {screen.action && <button className="mission-primary-button mission-full-action" type="button">{screen.action}</button>}
     </div>
   );
 }
 
 function PartnerDetail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
+  const [stats, setStats] = useState<{ invitations: number; crusades: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const invitations = await listMissionInvitations({ scope: defaultOpsScope(screen.scope), perPage: 200 });
+        if (cancelled) return;
+        const crusadeSet = new Set<string>();
+        invitations.items.forEach((item) => {
+          if (item.crusade_name) crusadeSet.add(String(item.crusade_name));
+        });
+        setStats({ invitations: invitations.items.length, crusades: crusadeSet.size });
+      } catch (reason) {
+        if (cancelled) return;
+        setStats(null);
+        setError(operationsErrorMessage(reason, 'Unable to load partner detail.'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, screen.scope]);
+
+  if (live) {
+    return (
+      <div className="mission-partner-detail">
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+          {error ?? 'Partner detail is currently invitation-derived because no dedicated mission partner registry is available.'}
+        </p>
+        <MissionDetailHero screen={screen}/>
+        <div className="mission-partner-grid">
+          <article className="mission-panel mission-partner-profile">
+            <div className="mission-partner-logo">{screen.title.split(' ').map((part) => part[0]).slice(0, 2).join('')}</div>
+            <h3>{screen.title}</h3>
+            <p>Invitation-linked partner profile.</p>
+            <div><MissionStatus value="Operational"/></div>
+          </article>
+          <article className="mission-panel">
+            <h3>Operational footprint</h3>
+            <MissionDefinitionList details={{
+              Invitations: String(stats?.invitations ?? 0),
+              Crusades: String(stats?.crusades ?? 0),
+              Status: 'Derived from mission invitations',
+            }}/>
+          </article>
+        </div>
+      </div>
+    );
+  }
+
   const details = Object.entries(screen.details ?? {});
   return (
     <div className="mission-partner-detail">
@@ -1007,7 +1486,65 @@ function PartnerDetail({ screen }: { screen: AdminScreen }) {
 
 function ReportsView({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
-  const items = screen.items ?? [];
+  const live = !shouldUseDesignFixtures() && shouldUseOperationsLiveData();
+  const [metrics, setMetrics] = useState<Metric[]>(screen.metrics ?? []);
+  const [items, setItems] = useState<string[]>(screen.items ?? []);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      try {
+        const [crusades, souls, invitations, teams] = await Promise.all([
+          listCrusades({ scope: defaultOpsScope(screen.scope), perPage: 200 }),
+          listSouls({ scope: defaultOpsScope(screen.scope), perPage: 200 }),
+          listMissionInvitations({ scope: defaultOpsScope(screen.scope), perPage: 200 }),
+          listTeamAssignments({ scope: defaultOpsScope(screen.scope), perPage: 200 }),
+        ]);
+        if (cancelled) return;
+        const withMentor = souls.items.filter((soul) => Boolean(soul.mentor_assignment_id)).length;
+        setMetrics([
+          { label: 'Crusades', value: String(crusades.pagination.total) },
+          { label: 'Souls Captured', value: String(souls.pagination.total) },
+          { label: 'Invitations', value: String(invitations.pagination.total) },
+          { label: 'Mentor Coverage', value: souls.items.length === 0 ? '0%' : `${Math.round((withMentor / souls.items.length) * 100)}%` },
+        ]);
+        setItems([
+          `Team assignments — ${teams.items.length}`,
+          `Active souls — ${souls.items.filter((soul) => (soul.status ?? '').toLowerCase() !== 'completed').length}`,
+          `Completed follow-up — ${souls.items.filter((soul) => Boolean(soul.follow_up_completed_at)).length}`,
+          `Distinct crusades — ${new Set(souls.items.map((soul) => soul.crusade_name).filter(Boolean)).size}`,
+        ]);
+      } catch (reason) {
+        if (cancelled) return;
+        setError(operationsErrorMessage(reason, 'Unable to load mission reports.'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [live, screen.scope]);
+
+  if (live) {
+    return (
+      <div className="mission-reports">
+        <p className="maps-settings-lead" role={error ? 'alert' : 'status'} style={error ? { color: '#dc2626' } : undefined}>
+          {error ?? 'Mission reports are generated from live crusade, soul, invitation, and team-assignment datasets.'}
+        </p>
+        <MissionMetrics metrics={metrics} />
+        <div className="mission-report-grid">
+          <article className="mission-panel">
+            <h3>{t('mission.popularReports', { defaultMessage: 'Popular Reports' })}</h3>
+            {items.map((item) => <button type="button" key={item}><span>▧</span><b>{item}</b><i>→</i></button>)}
+          </article>
+        </div>
+      </div>
+    );
+  }
+
+  const fixtureItems = screen.items ?? [];
   const reportDates = [
     t('mission.reportDateMay15', { defaultMessage: 'May 15, 2024' }),
     t('mission.reportDateMay13', { defaultMessage: 'May 13, 2024' }),
@@ -1019,11 +1556,11 @@ function ReportsView({ screen }: { screen: AdminScreen }) {
       <div className="mission-report-grid">
         <article className="mission-panel">
           <h3>{t('mission.popularReports', { defaultMessage: 'Popular Reports' })}</h3>
-          {items.slice(0, 7).map(item => <button type="button" key={item}><span>▧</span><b>{item}</b><i>→</i></button>)}
+          {fixtureItems.slice(0, 7).map(item => <button type="button" key={item}><span>▧</span><b>{item}</b><i>→</i></button>)}
         </article>
         <article className="mission-panel">
           <h3>{t('mission.recentReports', { defaultMessage: 'Recent Reports' })}</h3>
-          {items.slice(7).map((item, index) => (
+          {fixtureItems.slice(7).map((item, index) => (
             <div className="mission-report-item" key={item}>
               <span>▤</span>
               <div><b>{item}</b><small>{reportDates[index]}</small></div>
@@ -1039,36 +1576,71 @@ function ReportsView({ screen }: { screen: AdminScreen }) {
 
 function MissionAssistant({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
-  const suggestions = (screen.items ?? []).slice(0, 4);
-  const insight = (screen.items ?? [])[4]?.replace('AI Insight — ', '');
+  const live = shouldUseOperationsLiveData();
+  const [prompt, setPrompt] = useState('');
+  const [gaps, setGaps] = useState<Record<string, number> | null>(null);
+  const [reply, setReply] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void fetchFollowUpGaps(defaultOpsScope(screen.scope))
+      .then((result) => { if (!cancelled) setGaps(result); })
+      .catch(() => { if (!cancelled) setGaps(null); });
+    return () => { cancelled = true; };
+  }, [live, screen.scope]);
+
+  async function onAsk(event: FormEvent) {
+    event.preventDefault();
+    if (!live || !prompt.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await requestMissionAdvisory(prompt.trim(), {
+        source_route: screen.route,
+        unassigned: gaps?.unassigned ?? 0,
+        overdue: gaps?.overdue ?? 0,
+        stalled: gaps?.stalled ?? 0,
+        never_contacted: gaps?.never_contacted ?? 0,
+      }, defaultOpsScope(screen.scope));
+      const recommendation = typeof response.recommendation === 'string' ? response.recommendation : 'Advisory returned without a recommendation.';
+      setReply(`${recommendation} Human confirmation is required before any assignment, conversion, or contact.`);
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Mission advisory is unavailable.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mission-ai">
       <section className="mission-ai-hero">
         <div className="mission-ai-orb">✦</div>
         <h2>{t('mission.assistantHeadline', { defaultMessage: 'How can I help your mission today?' })}</h2>
-        <p>{t('mission.assistantCopy', { defaultMessage: 'Ask for performance insights, projections, follow-up opportunities, or partner recommendations.' })}</p>
-        <div className="mission-ai-chips">{suggestions.map(item => <button type="button" key={item}>{item}</button>)}</div>
+        <p>Recommendations only. The assistant cannot approve missions, declare conversions, assign people, or send messages.</p>
       </section>
       <article className="mission-ai-insight">
         <header>
           <span aria-hidden="true">✦</span>
           <div>
             <small>{t('mission.aiInsight', { defaultMessage: 'AI Insight' })}</small>
-            <strong>{t('mission.followUpOpportunity', { defaultMessage: 'Follow-up opportunity detected' })}</strong>
+            <strong>Follow-up gaps (live counts)</strong>
           </div>
-          <MissionStatus value="Live"/>
+          <MissionStatus value={live ? 'Live' : 'Fixture'}/>
         </header>
-        <p>{insight}</p>
+        <p>{error ?? reply ?? 'Ask a question grounded in the scoped gap counts below. Restricted soul, prayer, and safeguarding details are never sent as context.'}</p>
         <div className="mission-ai-numbers">
-          <span><b>312</b> {t('mission.soulsOverdue', { defaultMessage: 'souls overdue' })}</span>
-          <span><b>6</b> {t('mission.mentorsAvailable', { defaultMessage: 'mentors available' })}</span>
-          <span><b>+18%</b> {t('mission.potentialLift', { defaultMessage: 'potential lift' })}</span>
+          <span><b>{gaps?.overdue ?? 0}</b> overdue</span>
+          <span><b>{gaps?.unassigned ?? 0}</b> unassigned</span>
+          <span><b>{gaps?.stalled ?? 0}</b> stalled</span>
         </div>
-        <button className="mission-secondary-button" type="button">{t('common.viewDetails', { defaultMessage: 'View Details' })}</button>
+        <Link className="mission-secondary-button" href="/admin/mission/follow-up">Review follow-up queue</Link>
       </article>
-      <form className="mission-ai-composer" aria-label={t('mission.aiPromptAria', { defaultMessage: '{mission} AI prompt', vars: { mission: t('nav.mission') } })}>
-        <input aria-label={t('mission.askMissionAi', { defaultMessage: 'Ask {mission} AI', vars: { mission: t('nav.mission') } })} placeholder={t('mission.askAnythingPlaceholder', { defaultMessage: 'Ask anything about missions...' })}/>
-        <button type="submit" aria-label={t('common.sendMessage', { defaultMessage: 'Send message' })}>↑</button>
+      <form className="mission-ai-composer" onSubmit={(event) => void onAsk(event)} aria-label={t('mission.aiPromptAria', { defaultMessage: '{mission} AI prompt', vars: { mission: t('nav.mission') } })}>
+        <input value={prompt} onChange={(event) => setPrompt(event.target.value)} aria-label={t('mission.askMissionAi', { defaultMessage: 'Ask {mission} AI', vars: { mission: t('nav.mission') } })} placeholder={t('mission.askAnythingPlaceholder', { defaultMessage: 'Ask anything about missions...' })}/>
+        <button type="submit" disabled={busy || !live} aria-label={t('common.sendMessage', { defaultMessage: 'Send message' })}>↑</button>
       </form>
     </div>
   );
@@ -1105,17 +1677,6 @@ function GenericDetail({ screen }: { screen: AdminScreen }) {
 }
 
 export function MissionScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
-  const stubIds = new Set(['I-07', 'I-09', 'I-12', 'I-15', 'I-17', 'I-19', 'I-20']);
-  if (!shouldUseDesignFixtures() && stubIds.has(screen.id)) {
-    return (
-      <article className="mission-panel">
-        <h2>{screen.title}</h2>
-        <p className="maps-settings-lead" role="status">
-          No live list or settings API for this mission screen. Use Crusades, Souls, Invitations, and Follow-up for operational work.
-        </p>
-      </article>
-    );
-  }
   switch (screen.id) {
     case 'I-01': return <MissionDashboard screen={screen} requestedScope={requestedScope} />;
     case 'I-03': return <CrusadeDetail screen={screen}/>;
@@ -1137,7 +1698,7 @@ export function MissionScreenContent({ screen, requestedScope }: { screen: Admin
     case 'I-10':
     case 'I-13':
     case 'I-16':
-    case 'I-18': return <><MissionMetrics metrics={screen.metrics}/><MissionTable screen={screen}/></>;
+    case 'I-18': return <MissionTable screen={screen}/>;
     default: return <GenericDetail screen={screen}/>;
   }
 }

@@ -24,6 +24,7 @@ const DELETABLE_ROUTE_PATTERNS: RegExp[] = [
   /^\/admin\/kca\/lecturers/,
   /^\/admin\/kca\/mentors/,
   /\/content\/.*items/,
+  /^\/admin\/press\/publications/,
 ];
 
 /** Routes where Laravel exposes create/update style mutations usable from Edit. */
@@ -54,6 +55,8 @@ const EDITABLE_ROUTE_PATTERNS: RegExp[] = [
   /\/attendance/,
   /^\/admin\/people$/,
   /^\/admin\/mission\/crusades/,
+  /^\/admin\/press\/publications/,
+  /^\/admin\/press\/authors/,
   /^\/admin\/mission\/souls/,
 ];
 

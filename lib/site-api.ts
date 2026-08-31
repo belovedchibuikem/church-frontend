@@ -58,6 +58,12 @@ export type PublicChurch = {
   location: PublicLocation;
   published_at?: string | null;
   image_url?: string | null;
+  home_churches?: Array<{
+    id: string;
+    name: string;
+    status?: string | null;
+    meeting_schedules?: Array<{ day?: string; time?: string; activity?: string }>;
+  }>;
 };
 
 export type PublicEvent = {
@@ -76,12 +82,15 @@ export type PublicPressPublication = {
   title: string;
   subtitle?: string | null;
   description?: string | null;
+  summary?: string | null;
   category?: string | null;
   format?: string | null;
+  publication_type?: string | null;
   availability?: string | null;
   publisher?: string | null;
   published_at?: string | null;
   image_url?: string | null;
+  type_metadata?: Record<string, unknown> | null;
 };
 
 export type PublicCrusade = {
@@ -102,6 +111,16 @@ export type PublicMissionLocation = {
   country?: { code: string; name: string } | null;
 };
 
+export const FAMILY_HOUSE_HOME_CHURCH_PREFIX = 'Family House Home Church';
+
+export function composeHomeChurchName(familyName: string): string {
+  const family = familyName.trim().replace(/\s+/g, ' ');
+  if (!family) return FAMILY_HOUSE_HOME_CHURCH_PREFIX;
+  return `${FAMILY_HOUSE_HOME_CHURCH_PREFIX} @ ${family} Residence`;
+}
+
+export type HomeChurchMeetingSchedule = { day: string; time: string; activity: string };
+
 export type HomeChurchApplicationPayload = {
   church_id: string;
   location_id: string;
@@ -113,9 +132,11 @@ export type HomeChurchApplicationPayload = {
     preferred_name?: string | null;
   };
   proposed_name: string;
+  residence_family_name: string;
   expected_participants: number;
   meeting_day: string;
   meeting_time: string;
+  meeting_schedules: HomeChurchMeetingSchedule[];
   contact_email: string;
   contact_phone: string;
   guidelines_agreed: boolean | string;
@@ -187,7 +208,7 @@ export function churchToCard(church: PublicChurch): ContentCard {
     meta: church.location.country?.name ? `Church · ${church.location.country.name}` : 'Church',
     status: 'Published',
     icon: '⛪',
-    action: 'View',
+    action: 'Join',
     image: church.image_url ?? undefined,
   };
 }
@@ -214,9 +235,9 @@ export function eventToItem(event: PublicEvent): EventItem {
 export function pressToCard(publication: PublicPressPublication): ContentCard {
   return {
     title: publication.title,
-    body: publication.subtitle || publication.description || 'Family House Press resource.',
+    body: publication.subtitle || publication.summary || publication.description || 'Family House Press resource.',
     href: `/press/${publication.id}`,
-    meta: [publication.format, publication.category].filter(Boolean).join(' · ') || 'Press',
+    meta: [publication.publication_type, publication.format, publication.category].filter(Boolean).join(' · ') || 'Press',
     status: publication.availability ?? undefined,
     icon: '📘',
     action: 'Read',
@@ -540,9 +561,11 @@ export async function submitHomeChurchApplication(
       preferred_name: payload.applicant.preferred_name ?? null,
     },
     proposed_name: payload.proposed_name,
+    residence_family_name: payload.residence_family_name,
     expected_participants: payload.expected_participants,
     meeting_day: payload.meeting_day,
     meeting_time: payload.meeting_time,
+    meeting_schedules: payload.meeting_schedules,
     contact_email: payload.contact_email,
     contact_phone: payload.contact_phone,
     guidelines_agreed: payload.guidelines_agreed === true || payload.guidelines_agreed === 'yes' || payload.guidelines_agreed === 'true' || payload.guidelines_agreed === '1',
@@ -603,10 +626,18 @@ export function draftToHomeChurchPayload(draft: Record<string, string>): HomeChu
   const unitId = draft['administrative_unit_id'];
   const given = draft['applicant.given_name'];
   const family = draft['applicant.family_name'];
-  const proposed = draft['proposed_name'];
+  const familyResidence = (draft['residence_family_name'] ?? '').trim();
+  const proposed = familyResidence ? composeHomeChurchName(familyResidence) : (draft['proposed_name'] ?? '').trim();
   const participants = Number(draft['expected_participants'] ?? '');
-  const meetingDay = draft['meeting_day'];
-  const meetingTime = draft['meeting_time'];
+  let schedules: HomeChurchMeetingSchedule[] = [];
+  try {
+    const parsed = JSON.parse(draft['meeting_schedules'] ?? '[]') as HomeChurchMeetingSchedule[];
+    if (Array.isArray(parsed)) schedules = parsed.filter((row) => row?.day && row?.time);
+  } catch {
+    schedules = [];
+  }
+  const meetingDay = schedules[0]?.day ?? draft['meeting_day'];
+  const meetingTime = schedules[0]?.time ?? draft['meeting_time'];
   const email = draft['contact_email'];
   const phone = draft['contact_phone'];
   const guidelines = draft['guidelines_agreed'] ?? 'yes';
@@ -627,9 +658,11 @@ export function draftToHomeChurchPayload(draft: Record<string, string>): HomeChu
       preferred_name: draft['applicant.preferred_name'] || null,
     },
     proposed_name: proposed,
+    residence_family_name: familyResidence || family,
     expected_participants: participants,
     meeting_day: meetingDay,
     meeting_time: meetingTime,
+    meeting_schedules: schedules.length > 0 ? schedules : [{ day: meetingDay, time: meetingTime, activity: 'Gathering' }],
     contact_email: email,
     contact_phone: phone,
     guidelines_agreed: guidelines,

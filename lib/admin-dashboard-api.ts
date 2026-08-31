@@ -7,13 +7,15 @@ export type AdminDashboardModule =
   | 'geography'
   | 'home-churches'
   | 'church'
+  | 'people'
   | 'kca'
   | 'mission'
   | 'press'
   | 'finance'
   | 'communications'
   | 'reports'
-  | 'security';
+  | 'security'
+  | 'safeguarding';
 
 export type DashboardBreakdownItem = {
   label: string;
@@ -44,6 +46,25 @@ export type AdminDashboardData = {
   recent_activities?: DashboardActivity[];
   recent_rows?: Array<Record<string, string>>;
   donut?: DashboardDonut;
+  definitions?: string[];
+  period?: {
+    from: string;
+    to: string;
+    preset: string;
+    label: string;
+  };
+  currency?: string;
+  scope?: {
+    type: string;
+    id: string;
+  };
+};
+
+export type DashboardQuery = {
+  preset?: string;
+  from?: string;
+  to?: string;
+  currency?: string;
 };
 
 export class AdminDashboardApiError extends Error {
@@ -97,9 +118,16 @@ export async function fetchAdminDashboard(
   module: AdminDashboardModule,
   scope?: ApiAdminScope,
   signal?: AbortSignal,
+  query?: DashboardQuery,
 ): Promise<AdminDashboardData> {
+  const search = new URLSearchParams();
+  if (query?.preset) search.set('preset', query.preset);
+  if (query?.from) search.set('from', query.from);
+  if (query?.to) search.set('to', query.to);
+  if (query?.currency) search.set('currency', query.currency);
+  const suffix = search.size ? `?${search.toString()}` : '';
   const envelope = await apiRequest<ApiSuccessEnvelope<AdminDashboardData>>(
-    `admin/dashboards/${module}`,
+    `admin/dashboards/${module}${suffix}`,
     { scope, signal },
   );
   return envelope.data;
@@ -133,6 +161,7 @@ export const SCREEN_DASHBOARD_MODULES: Record<string, AdminDashboardModule> = {
   'C-01': 'geography',
   'D-01': 'home-churches',
   'E-01': 'church',
+  'F-17': 'people',
   'G-01': 'kca',
   'I-01': 'mission',
   'J-01': 'press',
@@ -143,7 +172,7 @@ export const SCREEN_DASHBOARD_MODULES: Record<string, AdminDashboardModule> = {
   'N-01': 'reports',
   'N-02': 'church',
   'N-03': 'home-churches',
-  'N-04': 'church',
+  'N-04': 'people',
   'N-05': 'church',
   'N-06': 'church',
   'N-07': 'mission',
@@ -157,7 +186,7 @@ export const SCREEN_DASHBOARD_MODULES: Record<string, AdminDashboardModule> = {
   'N-15': 'reports',
   'N-16': 'press',
   'O-01': 'security',
-  'O-08': 'security',
+  'O-08': 'safeguarding',
 };
 
 export function dashboardModuleForScreen(screenId: string): AdminDashboardModule | null {

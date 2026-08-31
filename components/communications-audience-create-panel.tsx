@@ -65,7 +65,7 @@ export function CommunicationsAudienceCreatePanel({ screen }: { screen: AdminScr
         <div className="platform-form-grid">
           <label>
             <span>{t('admin.code', { defaultMessage: 'Code' })}</span>
-            <input name="code" required placeholder="all_members" defaultValue={screen.details?.Code ?? ''} />
+            <input name="code" required placeholder="audience.all_members" defaultValue={screen.details?.Code ?? 'audience.all_members'} />
           </label>
           <label>
             <span>{t('admin.name', { defaultMessage: 'Name' })}</span>

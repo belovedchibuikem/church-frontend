@@ -34,6 +34,7 @@ export function BrandingSettingsPanel() {
       defaultMessage: 'Upload a logo and favicon once. Admin, member, and public sites all use the same branding.',
     }),
   );
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fixtures = designFixturesEnabled();
 
@@ -41,6 +42,7 @@ export function BrandingSettingsPanel() {
     if (fixtures) {
       setStatus(emptyBranding);
       setAppName(emptyBranding.app_name);
+      setError(null);
       setMessage(
         t('settings.branding.fixturesDisabled', {
           defaultMessage: 'Design fixtures enabled — branding uploads are not calling the live API.',
@@ -49,6 +51,7 @@ export function BrandingSettingsPanel() {
       return;
     }
     if (!platformApiConfigured()) {
+      setError(null);
       setMessage(
         t('settings.branding.apiUrlRequired', {
           defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL so branding can be loaded and saved.',
@@ -61,6 +64,7 @@ export function BrandingSettingsPanel() {
       const data = await getPlatformBranding();
       setStatus(data);
       setAppName(data.app_name);
+      setError(null);
       setMessage(
         data.logo_url || data.favicon_url
           ? t('settings.branding.published', {
@@ -70,10 +74,10 @@ export function BrandingSettingsPanel() {
               defaultMessage: 'No logo or favicon yet. PNG, JPG, WEBP, SVG, or ICO up to 5 MB.',
             }),
       );
-    } catch (error) {
-      setMessage(
+    } catch (caught) {
+      setError(
         platformErrorMessage(
-          error,
+          caught,
           t('errors.brandingLoad', {
             defaultMessage: 'Could not load branding. Sign in as a platform admin with recent MFA.',
           }),
@@ -97,16 +101,17 @@ export function BrandingSettingsPanel() {
       setStatus(data);
       setAppName(data.app_name);
       await refresh();
+      setError(null);
       setMessage(
         t('settings.branding.nameSaved', {
           defaultMessage: 'Display name saved as {name}.',
           vars: { name: data.app_name },
         }),
       );
-    } catch (error) {
-      setMessage(
+    } catch (caught) {
+      setError(
         platformErrorMessage(
-          error,
+          caught,
           t('errors.brandingSaveName', { defaultMessage: 'Could not save the display name.' }),
         ),
       );
@@ -122,6 +127,7 @@ export function BrandingSettingsPanel() {
       const data = await uploadPlatformBrandAsset(kind, file);
       setStatus(data);
       await refresh();
+      setError(null);
       setMessage(
         kind === 'logo'
           ? t('settings.branding.logoPublished', {
@@ -131,10 +137,10 @@ export function BrandingSettingsPanel() {
               defaultMessage: 'Favicon published across admin, member, and public sites.',
             }),
       );
-    } catch (error) {
-      setMessage(
+    } catch (caught) {
+      setError(
         platformErrorMessage(
-          error,
+          caught,
           t('errors.brandingUpload', {
             defaultMessage: 'Could not upload the {kind}. Use PNG, JPG, WEBP, SVG, or ICO.',
             vars: { kind },
@@ -153,6 +159,7 @@ export function BrandingSettingsPanel() {
       const data = await removePlatformBrandAsset(kind);
       setStatus(data);
       await refresh();
+      setError(null);
       setMessage(
         kind === 'logo'
           ? t('settings.branding.logoRemoved', {
@@ -162,10 +169,10 @@ export function BrandingSettingsPanel() {
               defaultMessage: 'Favicon removed. Sites will use the default mark until you upload another.',
             }),
       );
-    } catch (error) {
-      setMessage(
+    } catch (caught) {
+      setError(
         platformErrorMessage(
-          error,
+          caught,
           t('errors.brandingRemove', {
             defaultMessage: 'Could not remove the {kind}.',
             vars: { kind },
@@ -179,9 +186,11 @@ export function BrandingSettingsPanel() {
 
   return (
     <div className="card settings-card ministry-settings branding-settings">
-      <p className="maps-settings-lead" role="status">
-        {message}
-      </p>
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : (
+        <p className="maps-settings-lead" role="status">
+          {message}
+        </p>
+      )}
       <form className="form-grid" onSubmit={onSaveName}>
         <label className="full">
           <span>{t('settings.branding.applicationName', { defaultMessage: 'Application name' })}</span>

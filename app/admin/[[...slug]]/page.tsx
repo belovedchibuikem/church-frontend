@@ -31,7 +31,8 @@ export default async function AdminPage({
   const screen = getAdminScreen(route);
   if (!screen) notFound();
 
-  const requestedScope = query.scope ?? (screen.scope === 'global' ? 'global' : 'country:nigeria');
+  const requestedScope = query.scope
+    ?? (context.scopes.includes('global') || screen.scope === 'global' ? 'global' : (context.scopes[0] ?? 'global'));
   const decision = evaluateAccess(screen, context, requestedScope);
   const guestLogin = resolveAdminGuestLoginRedirect({
     authenticated: context.authenticated,

@@ -8,8 +8,9 @@ import {
   formatUserApiError,
   isNotFoundError,
   isPaymentGovernanceDenied,
-  KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE,
   requestChurchMembership,
+  submitKcaEvidence,
+  submitMissionInvitation,
 } from '../lib/user-api.ts';
 
 process.env.FHC_LARAVEL_API_URL ??= 'http://example.test/api/v1';
@@ -68,9 +69,54 @@ function installFetch(handler: (call: FetchCall) => Response): FetchCall[] {
   return fetchCalls;
 }
 
-test('user-api keeps OD-008 evidence submit gated', () => {
-  assert.match(KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE, /OD-008/);
-  assert.doesNotMatch(KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE, /submitted successfully/i);
+test('submitKcaEvidence posts to /user/kca/assignments/{id}/evidence', async () => {
+  installFetch((call) => {
+    if (call.url.includes('/auth/csrf-cookie')) {
+      return new Response(JSON.stringify({ data: { csrf_cookie: true, csrf_token: 'test-csrf' }, meta: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    assert.match(call.url, /\/user\/kca\/assignments\/01ARZ3NDEKTSV4RRFFQ69G5FAV\/evidence$/);
+    assert.equal(call.method, 'POST');
+    assert.match(String(call.body), /file_asset_id/);
+    return new Response(
+      JSON.stringify({
+        data: { id: '01ARZ3NDEKTSV4RRFFQ69G5FBW', submitted_at: '2026-08-31T00:00:00Z' },
+        meta: {},
+        correlation_id: 'corr-ev',
+      }),
+      { status: 201, headers: { 'content-type': 'application/json' } },
+    );
+  });
+
+  const result = await submitKcaEvidence('01ARZ3NDEKTSV4RRFFQ69G5FAV', '01ARZ3NDEKTSV4RRFFQ69G5FCX');
+  assert.equal(result.id, '01ARZ3NDEKTSV4RRFFQ69G5FBW');
+});
+
+test('submitMissionInvitation posts to /user/mission/invitations', async () => {
+  installFetch((call) => {
+    if (call.url.includes('/auth/csrf-cookie')) {
+      return new Response(JSON.stringify({ data: { csrf_cookie: true, csrf_token: 'test-csrf' }, meta: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    assert.match(call.url, /\/user\/mission\/invitations$/);
+    assert.equal(call.method, 'POST');
+    assert.match(String(call.body), /Tamale Outreach/);
+    return new Response(
+      JSON.stringify({
+        data: { id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', status: 'received' },
+        meta: {},
+        correlation_id: 'corr-invite',
+      }),
+      { status: 201, headers: { 'content-type': 'application/json' } },
+    );
+  });
+
+  const result = await submitMissionInvitation({ title: 'Tamale Outreach', details: 'We can host.' });
+  assert.equal(result.status, 'received');
 });
 
 test('formatUserApiError and not-found helpers stay honest', () => {

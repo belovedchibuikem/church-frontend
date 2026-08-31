@@ -10,6 +10,11 @@ export type AdminCountry = {
   id: string;
   iso_code: string;
   name: string;
+  local_name?: string | null;
+  calling_code?: string | null;
+  currency_code?: string | null;
+  default_timezone?: string | null;
+  locale?: string | null;
   created_at: string | null;
 };
 
@@ -47,7 +52,15 @@ export type AdminLocation = {
   created_at: string | null;
 };
 
-export type CreateCountryInput = { iso_code: string; name: string };
+export type CreateCountryInput = {
+  iso_code: string;
+  name: string;
+  local_name?: string | null;
+  calling_code?: string | null;
+  currency_code?: string | null;
+  default_timezone?: string | null;
+  locale?: string | null;
+};
 export type CreateLevelInput = { code: string; name: string; sort_order: number };
 export type CreateUnitInput = {
   country_id: string;
@@ -84,6 +97,9 @@ export type OrganizationListQuery = {
   parentId?: string;
   administrativeUnitId?: string;
   timezone?: string;
+  root?: boolean;
+  nested?: boolean;
+  hasCoordinates?: boolean;
   sort?: string;
   page?: number;
   perPage?: number;
@@ -146,6 +162,9 @@ function listQueryParams(query: OrganizationListQuery = {}): Record<string, stri
     'filter[parent_id]': query.parentId,
     'filter[administrative_unit_id]': query.administrativeUnitId,
     'filter[timezone]': query.timezone,
+    'filter[root]': query.root ? '1' : undefined,
+    'filter[nested]': query.nested ? '1' : undefined,
+    'filter[has_coordinates]': query.hasCoordinates ? '1' : undefined,
     sort: query.sort,
     page: query.page,
     per_page: query.perPage ?? 100,
@@ -447,6 +466,159 @@ export function locationsToSelectOptions(locations: AdminLocation[]) {
   }));
 }
 
+export type GeographyStats = {
+  units?: number;
+  root_units?: number;
+  locations?: number;
+  churches?: number;
+  home_churches?: number;
+  members?: number;
+  children?: number;
+  timezone?: string | null;
+};
+
+export type AdminCountryDetail = AdminCountry & {
+  stats?: GeographyStats;
+  timezone?: string | null;
+};
+
+export type AdminUnitDetail = AdminAdministrativeUnit & { stats?: GeographyStats };
+export type AdminLocationDetail = AdminLocation & { stats?: GeographyStats };
+
+export type GeographyTreeNode = {
+  id: string;
+  label: string;
+  level: string;
+  code: string;
+  kind?: string;
+  parent?: string;
+  churches?: number;
+  homeChurches?: number;
+  children?: GeographyTreeNode[];
+};
+
+export async function getCountry(
+  id: string,
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<AdminCountryDetail> {
+  const envelope = await organizationRequest<AdminCountryDetail>(
+    `admin/organization/countries/${encodeURIComponent(id)}`,
+    options,
+  );
+  return envelope.data;
+}
+
+export async function updateCountry(
+  id: string,
+  body: {
+    name: string;
+    local_name?: string | null;
+    calling_code?: string | null;
+    currency_code?: string | null;
+    default_timezone?: string | null;
+    locale?: string | null;
+  },
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<AdminCountry> {
+  const envelope = await organizationRequest<AdminCountry>(
+    `admin/organization/countries/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: body as unknown as JsonObject, ...options },
+  );
+  return envelope.data;
+}
+
+export async function getUnit(
+  id: string,
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<AdminUnitDetail> {
+  const envelope = await organizationRequest<AdminUnitDetail>(
+    `admin/organization/units/${encodeURIComponent(id)}`,
+    options,
+  );
+  return envelope.data;
+}
+
+export async function updateUnit(
+  id: string,
+  body: { name: string; reference_code?: string | null },
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<AdminAdministrativeUnit> {
+  const envelope = await organizationRequest<AdminAdministrativeUnit>(
+    `admin/organization/units/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: body as unknown as JsonObject, ...options },
+  );
+  return envelope.data;
+}
+
+export async function getLocation(
+  id: string,
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<AdminLocationDetail> {
+  const envelope = await organizationRequest<AdminLocationDetail>(
+    `admin/organization/locations/${encodeURIComponent(id)}`,
+    options,
+  );
+  return envelope.data;
+}
+
+export async function updateLocation(
+  id: string,
+  body: CreateLocationInput,
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<AdminLocation> {
+  const envelope = await organizationRequest<AdminLocation>(
+    `admin/organization/locations/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      body: {
+        administrative_unit_id: body.administrative_unit_id ?? null,
+        name: body.name,
+        timezone: body.timezone,
+        address_line_one: body.address_line_one ?? null,
+        address_line_two: body.address_line_two ?? null,
+        locality: body.locality ?? null,
+        postal_code: body.postal_code ?? null,
+        latitude: body.latitude ?? null,
+        longitude: body.longitude ?? null,
+      },
+      ...options,
+    },
+  );
+  return envelope.data;
+}
+
+export async function listMapLocations(
+  query: OrganizationListQuery = {},
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<OrganizationPage<AdminLocation>> {
+  return listOrganizationPage<AdminLocation>('admin/organization/map', { sort: 'name', perPage: 100, ...query }, options);
+}
+
+export async function listTerritoryReport(
+  query: OrganizationListQuery = {},
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<OrganizationPage<AdminUnitDetail>> {
+  return listOrganizationPage<AdminUnitDetail>(
+    'admin/organization/territory-report',
+    { sort: 'name', perPage: 25, ...query },
+    options,
+  );
+}
+
+export async function fetchChurchTree(
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<GeographyTreeNode[]> {
+  const envelope = await organizationRequest<GeographyTreeNode[]>('admin/organization/church-tree', options);
+  return envelope.data ?? [];
+}
+
+export async function fetchHomeChurchTree(
+  options: Pick<OrganizationRequestOptions, 'scope' | 'signal'> = {},
+): Promise<GeographyTreeNode[]> {
+  const envelope = await organizationRequest<GeographyTreeNode[]>('admin/organization/home-church-tree', options);
+  return envelope.data ?? [];
+}
+
 export function levelsToSelectOptions(levels: AdminAdministrativeLevel[]) {
   return levels.map((level) => ({
     value: level.id,
@@ -459,6 +631,9 @@ export function organizationErrorMessage(error: unknown): string {
   if (error instanceof OrganizationApiError) {
     if (error.needsMfa) {
       return 'Recent MFA is required for organization APIs. Complete MFA, then retry.';
+    }
+    if (error.status === 409) {
+      return error.message || 'This geography record is retained for history and cannot be deleted.';
     }
     if (error.status === 401) {
       return 'Sign in as an admin with organization permissions and a recent MFA challenge.';

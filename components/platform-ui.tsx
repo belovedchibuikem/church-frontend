@@ -13,6 +13,7 @@ import {
 } from '../lib/admin-catalog-api';
 import {
   defaultAdminScope,
+  exportAdminAuditCsv,
   formatTimestamp,
   listAdminAccessDecisions,
   listAdminAuditEvents,
@@ -30,6 +31,7 @@ import {
   enableFeatureFlag,
   getDemoDataset,
   getObjectStorage,
+  isPlatformResourceMissing,
   listConfigurations,
   listFeatureFlags,
   listMediaAttachments,
@@ -54,14 +56,15 @@ import type { JsonValue } from '../lib/api-types.ts';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { MapsSettingsPanel } from './maps-settings-panel';
+import { PressPublicationCreateForm, PressPublicationDetail } from './press-ui';
 import { PaymentsSettingsPanel } from './payments-settings-panel';
 import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { CommunicationsComposePanel } from './communications-compose-panel';
 import { CommunicationsAudienceCreatePanel } from './communications-audience-create-panel';
 import { FinanceTransactionDetail } from './finance-transaction-detail';
 import { SafeguardingCaseDetail } from './safeguarding-case-detail';
+import { AuditEventDetail } from './audit-event-detail';
 import { DataClassificationPanel } from './data-classification-panel';
-import { ReportsAiPanel } from './reports-ai-panel';
 import { ChurchSettingsPanel } from './church-settings-panel';
 import { DomainSettingsLinksPanel, LanguagesSettingsPanel } from './domain-settings-panels';
 import { BrandingSettingsPanel } from './branding-settings-panel';
@@ -76,6 +79,7 @@ import {
   dashboardModuleForScreen,
 } from '../lib/admin-dashboard-api';
 import { useAdminDashboard } from '../lib/use-admin-dashboard';
+import { DashboardQuickLinks, DashboardShell, LinkedMetricCards } from './admin-dashboard-chrome';
 import {
   defaultOpsScope,
   loadOpsDataset,
@@ -100,21 +104,154 @@ function Metrics({ metrics = [] }: { metrics?: Metric[] }) {
 
 function Bars({ compact = false, series }: { compact?: boolean; series?: Array<{ label: string; value: number }> }) {
   const { t } = useLocale();
-  const max = Math.max(1, ...(series?.map((point) => point.value) ?? [1]));
-  const values = series?.length
-    ? series.map((point) => Math.max(8, Math.round((point.value / max) * 100)))
-    : [32, 54, 45, 71, 63, 88, 56, 76, 91, 68, 82, 96];
-  return <div className={`platform-bars ${compact?'compact':''}`} role="img" aria-label={t('admin.performanceTrendChart', { defaultMessage: 'Performance trend chart' })}>{values.map((height,index)=><i style={{height:`${height}%`}} key={index}/>)}</div>;
+  const points = series ?? [];
+  const max = Math.max(1, ...points.map((point) => point.value));
+  const values = points.map((point) => Math.round((point.value / max) * 100));
+  if (points.length === 0) {
+    return <p className="maps-settings-lead">{t('admin.noSeries', { defaultMessage: 'No series values in this period.' })}</p>;
+  }
+  return <div className={`platform-bars ${compact?'compact':''}`} role="img" aria-label={t('admin.performanceTrendChart', { defaultMessage: 'Performance trend chart' })}>{values.map((height,index)=><i style={{height:`${height}%`}} key={points[index]?.label ?? index}/>)}</div>;
 }
 
-function Donut({ value = '12,842' }: { value?: string }) {
+function Donut({ value = '0', label }: { value?: string; label?: string }) {
   const { t } = useLocale();
-  return <div className="platform-donut" role="img" aria-label={t('admin.categoryDistributionTotal', { defaultMessage: 'Category distribution total {value}', vars: { value } })}><div><strong>{value}</strong><span>{t('admin.total', { defaultMessage: 'Total' })}</span></div></div>;
+  const caption = label || t('admin.total', { defaultMessage: 'Total' });
+  return <div className="platform-donut" role="img" aria-label={t('admin.categoryDistributionTotal', { defaultMessage: 'Category distribution total {value}', vars: { value } })}><div><strong>{value}</strong><span>{caption}</span></div></div>;
+}
+
+function downloadDashboardCsv(title: string, metrics: Metric[], breakdownItems: string[]) {
+  const lines = [['Section', 'Label', 'Value']];
+  for (const metric of metrics) {
+    lines.push(['Metric', metric.label, String(metric.value)]);
+  }
+  for (const item of breakdownItems) {
+    const [label, value] = item.split(' — ');
+    lines.push(['Category', label ?? item, value ?? '']);
+  }
+  const csv = lines.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'report'}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function FilterBar({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   return <div className="platform-filter-bar"><button type="button">{t('admin.allStatus', { defaultMessage: 'All Status⌄' })}</button><button type="button">{t('admin.allCategories', { defaultMessage: 'All Categories⌄' })}</button><label><span aria-hidden="true">⌕</span><input aria-label={t('admin.searchAria', { defaultMessage: 'Search {title}', vars: { title: screen.title } })} placeholder={t('admin.searchPlaceholder', { defaultMessage: 'Search {title}...', vars: { title: screen.title.toLowerCase() } })}/></label><button type="button">{t('admin.filtersButton', { defaultMessage: '☷ Filters' })}</button></div>;
+}
+
+const FINANCE_STATUS_OPTIONS = [
+  { value: 'succeeded', label: 'Succeeded' },
+  { value: 'pending_provider', label: 'Pending provider' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'expired', label: 'Expired' },
+];
+const RECONCILIATION_STATUS_OPTIONS = [
+  { value: 'matched', label: 'Matched' },
+  { value: 'mismatch', label: 'Mismatch' },
+];
+const REFUND_STATUS_OPTIONS = [{ value: 'requested', label: 'Requested' }];
+const DELIVERY_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'succeeded', label: 'Delivered' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'suppressed', label: 'Suppressed' },
+];
+const BROADCAST_STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'prepared', label: 'Prepared' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+const FINANCE_CATEGORY_OPTIONS = [
+  { value: 'tithe', label: 'Tithe' },
+  { value: 'offering', label: 'Offering' },
+  { value: 'missions', label: 'Missions' },
+  { value: 'projects', label: 'Projects' },
+  { value: 'donation', label: 'Donation' },
+  { value: 'event_payment', label: 'Event payment' },
+  { value: 'kca', label: 'KCA' },
+  { value: 'publication', label: 'Publication' },
+];
+
+function catalogStatusOptions(dataset: string | null): Array<{ value: string; label: string }> {
+  if (dataset === 'finance.payment_transactions' || dataset === 'finance.payment_intents') return FINANCE_STATUS_OPTIONS;
+  if (dataset === 'finance.payment_reconciliations') return RECONCILIATION_STATUS_OPTIONS;
+  if (dataset === 'finance.payment_refunds') return REFUND_STATUS_OPTIONS;
+  if (dataset === 'finance.payment_disputes') return DISPUTE_STATUS_OPTIONS;
+  if (dataset === 'communications.deliveries') return DELIVERY_STATUS_OPTIONS;
+  if (dataset === 'communications.broadcasts') return BROADCAST_STATUS_OPTIONS;
+  return [];
+}
+
+function CatalogFilterBar({
+  screen,
+  dataset,
+  search,
+  status,
+  category,
+  lockedPurpose,
+  onSearchChange,
+  onStatusChange,
+  onCategoryChange,
+}: {
+  screen: AdminScreen;
+  dataset: string | null;
+  search: string;
+  status: string;
+  category: string;
+  lockedPurpose?: string;
+  onSearchChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
+  onCategoryChange: (value: string) => void;
+}) {
+  const { t } = useLocale();
+  const statuses = catalogStatusOptions(dataset);
+  const showCategories = Boolean(dataset?.startsWith('finance.payment_')) && !lockedPurpose;
+  return (
+    <form className="platform-filter-bar" onSubmit={(event) => event.preventDefault()}>
+      {statuses.length > 0 ? (
+        <select
+          aria-label={t('admin.allStatus', { defaultMessage: 'All Status' })}
+          value={status}
+          onChange={(event) => onStatusChange(event.target.value)}
+        >
+          <option value="">{t('admin.allStatus', { defaultMessage: 'All Status' })}</option>
+          {statuses.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      ) : (
+        <button type="button">{t('admin.allStatus', { defaultMessage: 'All Status⌄' })}</button>
+      )}
+      {showCategories ? (
+        <select
+          aria-label={t('admin.allCategories', { defaultMessage: 'All Categories' })}
+          value={category}
+          onChange={(event) => onCategoryChange(event.target.value)}
+        >
+          <option value="">{t('admin.allCategories', { defaultMessage: 'All Categories' })}</option>
+          {FINANCE_CATEGORY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      ) : (
+        <button type="button">{t('admin.allCategories', { defaultMessage: 'All Categories⌄' })}</button>
+      )}
+      <label>
+        <span aria-hidden="true">⌕</span>
+        <input
+          aria-label={t('admin.searchAria', { defaultMessage: 'Search {title}', vars: { title: screen.title } })}
+          placeholder={t('admin.searchPlaceholder', { defaultMessage: 'Search {title}...', vars: { title: screen.title.toLowerCase() } })}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
+      </label>
+    </form>
+  );
 }
 
 function PlatformTabs({ tabs = [] }: { tabs?: string[] }) {
@@ -148,10 +285,21 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
             screen.route === '/admin/finance/alerts' ||
             screen.route === '/admin/security/alerts'
           ? 'Resolve Alert'
-          : undefined;
+          : screen.route === '/admin/security/data-deletion-requests'
+            ? 'Record Policy Denial'
+            : undefined;
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
   const [message, setMessage] = useState(() => t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState(() => (screen.route === '/admin/communications/failed' ? 'failed' : ''));
+  const [category, setCategory] = useState('');
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
 
   useEffect(() => {
     if (!dataset) return;
@@ -161,7 +309,12 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
       setError(null);
       setMessage(t('admin.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
       try {
-        const result = await listCatalogDomain(dataset, { perPage: 25, purpose });
+        const result = await listCatalogDomain(dataset, {
+          perPage: 25,
+          purpose: purpose ?? (category || undefined),
+          status: status || undefined,
+          search: search || undefined,
+        });
         if (cancelled) return;
         stashAdminRecords(result.items as Array<Record<string, unknown>>);
         setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns));
@@ -180,11 +333,21 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
     return () => {
       cancelled = true;
     };
-  }, [columnKey, dataset, purpose, t]);
+  }, [category, columnKey, dataset, purpose, search, status, t]);
 
   return (
     <article className="platform-card platform-table-card">
-      <FilterBar screen={screen} />
+      <CatalogFilterBar
+        screen={screen}
+        dataset={dataset}
+        search={searchInput}
+        status={status}
+        category={category}
+        lockedPurpose={purpose}
+        onSearchChange={setSearchInput}
+        onStatusChange={setStatus}
+        onCategoryChange={setCategory}
+      />
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       <div className="platform-table-scroll">
         <table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
@@ -213,8 +376,12 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                             <i>{value.slice(0, 2).toUpperCase()}</i>
                             {screen.route === '/admin/finance/transactions' && row.__id ? (
                               <b><Link href={`/admin/finance/transactions/${row.__id}`}>{value}</Link></b>
+                            ) : screen.route === '/admin/press/publications' && row.__id ? (
+                              <b><Link href={`/admin/press/publications/${row.__id}`}>{value}</Link></b>
                             ) : screen.route === '/admin/security/safeguarding/cases' && row.__id ? (
                               <b><Link href={`/admin/security/safeguarding/cases/${row.__id}`}>{value}</Link></b>
+                            ) : screen.route === '/admin/security/audit-logs' && row.__id ? (
+                              <b><Link href={`/admin/security/audit-logs/${row.__id}`}>{value}</Link></b>
                             ) : (
                               <b>{value}</b>
                             )}
@@ -271,25 +438,42 @@ function IdentitySecurityLiveTable({
       setError(null);
       try {
         if (kind === 'sessions') {
-          const result = await listAdminSecuritySessions({ scope: defaultAdminScope(), perPage: 25 });
+          const [result, denied] = await Promise.all([
+            listAdminSecuritySessions({ scope: defaultAdminScope(), perPage: 25 }),
+            listAdminAccessDecisions({ scope: defaultAdminScope(), perPage: 25, allowed: false }),
+          ]);
           if (cancelled) return;
-          setRows(
-            result.data.map((session) => {
+          const sessionRows = result.data.map((session) => {
               const mapped: Record<string, string> = {};
               for (const column of columns) {
                 if (column === 'Date & Time') mapped[column] = formatTimestamp(session.started_at ?? session.occurred_at);
                 else if (column === 'User') mapped[column] = session.user_name ?? session.actor_user_id ?? '—';
                 else if (column === 'Status') mapped[column] = session.status ?? '—';
-                else if (column === 'IP Address') mapped[column] = '—';
-                else if (column === 'Location') mapped[column] = '—';
+                else if (column === 'IP Address') mapped[column] = session.ip_address ?? '—';
+                else if (column === 'Location') mapped[column] = session.location ?? '—';
                 else if (column === 'Device') mapped[column] = session.device ?? '—';
                 else mapped[column] = '—';
               }
               mapped.__id = session.id;
               return mapped;
-            }),
-          );
-          setMessage(t('admin.showingSessions', { defaultMessage: 'Showing {shown} of {total} sessions', vars: { shown: result.data.length, total: result.pagination.total } }));
+            });
+          const deniedRows = denied.data.map((decision) => {
+            const mapped: Record<string, string> = {};
+            for (const column of columns) {
+              if (column === 'Date & Time') mapped[column] = formatTimestamp(decision.decided_at);
+              else if (column === 'User') mapped[column] = decision.actor_user_id ?? '—';
+              else if (column === 'Status') mapped[column] = t('admin.statusDenied', { defaultMessage: 'Denied' });
+              else if (column === 'IP Address' || column === 'Location' || column === 'Device') mapped[column] = '—';
+              else mapped[column] = decision.permission_code;
+            }
+            mapped.__id = `denied-${decision.id}`;
+            return mapped;
+          });
+          setRows([...deniedRows, ...sessionRows]);
+          setMessage(t('admin.showingLoginHistory', {
+            defaultMessage: 'Showing {denied} denied access decisions and {sessions} sessions',
+            vars: { denied: denied.pagination.total, sessions: result.pagination.total },
+          }));
         } else if (kind === 'audit') {
           const result = await listAdminAuditEvents({
             scope: defaultAdminScope(),
@@ -349,9 +533,27 @@ function IdentitySecurityLiveTable({
     };
   }, [columns, kind, t, targetTypes]);
 
+  function downloadAuditCsv() {
+    void exportAdminAuditCsv(defaultAdminScope()).then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'audit-events.csv';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
   return (
     <article className="platform-card platform-table-card">
-      <FilterBar screen={screen} />
+      <div className="table-toolbar">
+        <FilterBar screen={screen} />
+        {kind === 'audit' ? (
+          <button type="button" className="ghost-button" data-interaction-native="true" onClick={downloadAuditCsv}>
+            {t('admin.exportCsv', { defaultMessage: 'Export CSV' })}
+          </button>
+        ) : null}
+      </div>
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       <div className="platform-table-scroll">
         <table aria-label={t('admin.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
@@ -378,7 +580,11 @@ function IdentitySecurityLiveTable({
                         {columnIndex === 0 ? (
                           <span className="platform-leading">
                             <i>{value.slice(0, 2).toUpperCase()}</i>
-                            <b>{value}</b>
+                            {kind === 'audit' && row.__id ? (
+                              <b><Link href={`/admin/security/audit-logs/${row.__id}`}>{value}</Link></b>
+                            ) : (
+                              <b>{value}</b>
+                            )}
                           </span>
                         ) : /status|priority/i.test(column) ? (
                           <Badge value={value} />
@@ -556,8 +762,13 @@ function PlatformOpsLiveTable({ screen, dataset }: { screen: AdminScreen; datase
 function Dashboard({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   const { t } = useLocale();
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
-  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
-  const listItems = dashboard.live ? breakdownToItems(dashboard.data?.breakdown) : (screen.items ?? []);
+  const channelItems = breakdownToItems(dashboard.data?.breakdown);
+  const campaignItems = (dashboard.data?.recent_rows ?? []).map((row) => {
+    const title = row.Campaign ?? row.Title ?? row.Message ?? 'Campaign';
+    const status = row.Status ?? row.Channel ?? '';
+    return status ? `${title} — ${status}` : title;
+  });
+  const listItems = campaignItems.length > 0 ? campaignItems : channelItems;
   const chartTitle = screen.batch === 'K'
     ? t('admin.incomeOverview', { defaultMessage: 'Income Overview' })
     : screen.batch === 'M'
@@ -575,20 +786,21 @@ function Dashboard({ screen, requestedScope }: { screen: AdminScreen; requestedS
     : screen.batch === 'O'
       ? t('admin.recentSecurityAlerts', { defaultMessage: 'Recent Security Alerts' })
       : t('admin.topResults', { defaultMessage: 'Top Results' });
-  const quickActions = [
-    t('admin.createRecord', { defaultMessage: 'Create Record' }),
-    t('admin.openQueue', { defaultMessage: 'Open Queue' }),
-    t('admin.generateReport', { defaultMessage: 'Generate Report' }),
-    t('admin.viewAnalytics', { defaultMessage: 'View Analytics' }),
-  ];
-  return <div className="platform-dashboard">
-    {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
-    {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
-    <Metrics metrics={metrics}/><div className="platform-dashboard-grid"><article className="platform-card platform-chart"><header><h2>{chartTitle}</h2><button type="button">{t('admin.thisMonth', { defaultMessage: 'This Month⌄' })}</button></header><Bars series={dashboard.data?.series}/></article><article className="platform-card platform-chart platform-donut-card"><h2>{donutTitle}</h2><div><Donut value={dashboard.data?.donut?.value ?? metrics?.[0]?.value}/><ul>{listItems.slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></li>)}</ul></div></article></div><div className="platform-bottom-grid"><article className="platform-card platform-list"><header><h2>{listTitle}</h2><button type="button">{t('admin.viewAll', { defaultMessage: 'View all' })}</button></header>{listItems.slice(0,6).map((item,index)=><div key={item}><span className="platform-list-icon">{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article><article className="platform-card platform-actions"><h2>{t('admin.quickActions', { defaultMessage: 'Quick Actions' })}</h2>{quickActions.map((item,index)=><button type="button" key={item}><span>{['＋','▣','▤','◇'][index]}</span>{item}</button>)}</article></div></div>;
+  const listHref = screen.batch === 'K' ? '/admin/finance/transactions' : screen.batch === 'M' ? '/admin/communications/broadcasts' : screen.batch === 'O' ? '/admin/security/alerts' : '/admin/press/publications';
+  return <DashboardShell screenId={screen.id} href={screen.route} data={dashboard.data} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.retry} preset={dashboard.preset} onPresetChange={dashboard.setPreset}>
+    <div className="platform-dashboard">
+    <LinkedMetricCards screenId={screen.id} metrics={dashboard.metrics} />
+    <div className="platform-dashboard-grid"><article className="platform-card platform-chart"><header><h2>{chartTitle}</h2></header><Bars series={dashboard.data?.series}/></article><article className="platform-card platform-chart platform-donut-card"><h2>{donutTitle}</h2><div><Donut value={dashboard.data?.donut?.value ?? dashboard.metrics?.[0]?.value ?? '0'}/><ul>{channelItems.slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><strong>{item.split(' — ')[1]}</strong></li>)}</ul></div></article></div>
+    <div className="platform-bottom-grid"><article className="platform-card platform-list"><header><h2>{listTitle}</h2><Link href={listHref}>{t('admin.viewAll', { defaultMessage: 'View all' })}</Link></header>{listItems.length === 0 ? <p className="maps-settings-lead">No results in this period.</p> : listItems.slice(0,6).map((item,index)=><div key={item}><span className="platform-list-icon">{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article><DashboardQuickLinks screenId={screen.id} className="platform-card platform-actions" /></div>
+  </div>
+  </DashboardShell>;
 }
 
 function Detail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  if (/^\/admin\/security\/audit-logs\//.test(screen.route) && !shouldUseDesignFixtures()) {
+    return <AuditEventDetail screen={screen} />;
+  }
   if (/^\/admin\/finance\/transactions\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
     return <FinanceTransactionDetail screen={screen} />;
   }
@@ -740,7 +952,21 @@ export function KcaSettingsPanel() {
   );
 }
 
-function ConfigurationsSettingsPanel() {
+function configurationMatchesSecurityTab(key: string, tab: string): boolean {
+  const normalized = key.toLowerCase();
+  const theme = tab.toLowerCase();
+  if (!theme || theme === 'authentication') {
+    return /mfa|totp|password|session|ip|allowlist|auth|login/.test(normalized) || theme === '';
+  }
+  if (theme.includes('password')) return normalized.includes('password');
+  if (theme.includes('mfa')) return /mfa|totp/.test(normalized);
+  if (theme.includes('session')) return normalized.includes('session');
+  if (theme.includes('ip')) return /ip|allowlist/.test(normalized);
+  if (theme.includes('data')) return /encrypt|privacy|classif|retention/.test(normalized);
+  return true;
+}
+
+function ConfigurationsSettingsPanel({ variant = 'platform' }: { variant?: 'platform' | 'security' | 'ai' }) {
   const { t } = useLocale();
   const [items, setItems] = useState<PlatformConfiguration[]>([]);
   const [message, setMessage] = useState(() => t('admin.loadingConfigurations', { defaultMessage: 'Loading platform configurations…' }));
@@ -804,11 +1030,19 @@ function ConfigurationsSettingsPanel() {
     }
   }
 
+  const visibleItems = items.filter((item) => configurationMatchesSecurityTab(item.key, typeof window === 'undefined' ? '' : (new URL(window.location.href).searchParams.get('tab') ?? '')));
   return (
     <form className="card settings-card ministry-settings" onSubmit={onSave}>
-      <p className="maps-settings-lead">{message}</p>
+      <p className="maps-settings-lead" role="status">{message}</p>
+      <p className="maps-settings-lead">
+        {variant === 'security'
+          ? t('admin.securityConfigTabs', { defaultMessage: 'MFA, password, session, and IP tabs filter these platform configuration keys. There is no dedicated security-settings API.' })
+          : variant === 'ai'
+            ? t('admin.aiConfigKeys', { defaultMessage: 'Advisory AI keys and flags are stored as platform configurations. There is no separate AI-settings CRUD API.' })
+            : t('admin.platformConfigKeys', { defaultMessage: 'Keyed platform configurations (not a second settings store). Confidential values stay masked.' })}
+      </p>
       <div className="platform-setting-row" style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
-        {items.map((item) => (
+        {(visibleItems.length ? visibleItems : items).map((item) => (
           <div key={item.id} className="platform-setting-row">
             <span>{item.key}</span>
             <b>
@@ -1097,18 +1331,27 @@ function DemoDatasetPanel() {
   const [message, setMessage] = useState('Loading demo dataset status…');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!platformApiConfigured()) {
+      setUnavailable(false);
       setMessage('Configure the admin API base URL to manage the demo dataset.');
       return;
     }
     try {
       const data = await getDemoDataset();
+      setUnavailable(false);
       setStatus(data);
       setMessage(data.seeded ? 'Demonstration data is currently loaded.' : 'No demonstration dataset is loaded.');
     } catch (error) {
       setStatus(null);
+      if (isPlatformResourceMissing(error)) {
+        setUnavailable(true);
+        setMessage('Demo dataset tools are disabled in this environment. Production APIs do not expose wipe.');
+        return;
+      }
+      setUnavailable(false);
       setMessage(platformErrorMessage(error, 'Unable to load demo dataset status.'));
     }
   }, []);
@@ -1137,6 +1380,15 @@ function DemoDatasetPanel() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (unavailable) {
+    return (
+      <article className="card settings-card demo-wipe-card">
+        <h2>Demonstration data</h2>
+        <p className="maps-settings-lead" role="status">{message}</p>
+      </article>
+    );
   }
 
   return (
@@ -1373,7 +1625,7 @@ function MediaLibraryPanel() {
   );
 }
 
-function Settings({ screen }: { screen: AdminScreen }) {
+export function PlatformSettingsScreen({ screen }: { screen: AdminScreen }) {
   const fixtures = designFixturesEnabled();
   const route = screen.route;
 
@@ -1427,7 +1679,7 @@ function Settings({ screen }: { screen: AdminScreen }) {
               Authentication and protection settings are stored as platform configurations (no separate security-settings CRUD API).
             </p>
           ) : null}
-          <ConfigurationsSettingsPanel />
+          <ConfigurationsSettingsPanel variant={route.includes('/security/configuration') ? 'security' : route.includes('/settings/ai-api') ? 'ai' : 'platform'} />
         </>
       );
     }
@@ -1513,16 +1765,70 @@ function Operations({ screen }: { screen: AdminScreen }) {
 }
 
 function Analytics({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  const { t } = useLocale();
   if (screen.nav === 'report-ai') {
     return <ReportsAiPanel screen={screen} requestedScope={requestedScope} />;
   }
   const dashboard = useAdminDashboard(dashboardModuleForScreen(screen.id), requestedScope);
-  const metrics = dashboard.live ? dashboard.metrics : screen.metrics;
-  const listItems = dashboard.live ? breakdownToItems(dashboard.data?.breakdown) : (screen.items ?? []);
-  return <div className="platform-analytics">
-    {dashboard.loading ? <p className="maps-settings-lead" role="status">Loading live dashboard data…</p> : null}
-    {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
-    <Metrics metrics={metrics}/><div className="platform-analytics-grid"><article className="platform-card platform-chart"><h2>Performance Trend</h2><Bars series={dashboard.data?.series}/></article><article className="platform-card platform-chart"><h2>By Category</h2><div className="platform-chart-split"><Donut value={dashboard.data?.donut?.value ?? metrics?.[0]?.value}/><ul>{listItems.slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b></li>)}</ul></div></article><article className="platform-card platform-list wide"><h2>Top Results</h2>{listItems.map((item,index)=><div key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}</article></div></div>;
+  const listItems = breakdownToItems(dashboard.data?.breakdown);
+  const donutValue = dashboard.data?.donut?.value ?? dashboard.metrics?.[0]?.value ?? '0';
+  const donutLabel = dashboard.data?.donut?.label;
+  const categoryEmpty = listItems.length === 0 && !dashboard.loading;
+  return <DashboardShell screenId={screen.id} href={screen.route} data={dashboard.data} loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.retry} preset={dashboard.preset} onPresetChange={dashboard.setPreset}>
+    <div className="platform-analytics">
+    <div className="table-toolbar">
+      <p className="maps-settings-lead">{screen.subtitle}</p>
+      <button
+        type="button"
+        className="ghost-button"
+        disabled={!dashboard.data || dashboard.loading}
+        onClick={() => downloadDashboardCsv(screen.title, dashboard.metrics ?? [], listItems)}
+      >
+        {t('admin.exportCsv', { defaultMessage: 'Export CSV' })}
+      </button>
+    </div>
+    <LinkedMetricCards screenId={screen.id} metrics={dashboard.metrics} />
+    {dashboard.data?.definitions?.length ? (
+      <p className="maps-settings-lead">{dashboard.data.definitions.join(' ')}</p>
+    ) : null}
+    <div className="platform-analytics-grid">
+      <article className="platform-card platform-chart">
+        <h2>{t('admin.performanceTrend', { defaultMessage: 'Performance Trend' })}</h2>
+        <Bars series={dashboard.data?.series}/>
+      </article>
+      <article className="platform-card platform-chart">
+        <h2>{t('admin.byCategory', { defaultMessage: 'By Category' })}</h2>
+        <div className="platform-chart-split">
+          <Donut value={donutValue} label={donutLabel}/>
+          {categoryEmpty
+            ? <p className="maps-settings-lead">{t('admin.noCategoryBreakdown', { defaultMessage: 'No category breakdown in this period.' })}</p>
+            : <ul>{listItems.slice(0,5).map((item,index)=><li key={item}><i className={`tone-${index}`}/><span>{item.split(' — ')[0]}</span><b>{item.split(' — ')[1]}</b></li>)}</ul>}
+        </div>
+      </article>
+      <article className="platform-card platform-list wide">
+        <h2>{t('admin.topResults', { defaultMessage: 'Top Results' })}</h2>
+        {listItems.length === 0
+          ? <p className="maps-settings-lead">{t('admin.noResultsPeriod', { defaultMessage: 'No results in this period.' })}</p>
+          : listItems.map((item,index)=><div key={item}><span>{index+1}</span><b>{item.split(' — ')[0]}</b><strong>{item.split(' — ')[1]}</strong></div>)}
+      </article>
+    </div>
+    <DashboardQuickLinks screenId={screen.id} />
+  </div>
+  </DashboardShell>;
+}
+
+function SecurityUnavailablePanel({ screen, copy }: { screen: AdminScreen; copy: string }) {
+  return (
+    <div className="platform-restricted">
+      <div className="platform-restricted-banner">
+        <span>🔒</span>
+        <div>
+          <strong>{screen.title}</strong>
+          <p>{copy}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Restricted({ screen }: { screen: AdminScreen }) {
@@ -1543,10 +1849,16 @@ export function PlatformScreenContent({ screen, requestedScope }: { screen: Admi
         content = <><Metrics metrics={screen.metrics}/><DenseTable screen={screen}/></>;
       }
       break;
-    case 'detail': case 'profile': return <Detail screen={screen}/>;
+    case 'detail': case 'profile':
+      if (!shouldUseDesignFixtures() && /^\/admin\/press\/publications\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
+        return <PressPublicationDetail screen={screen} />;
+      }
+      return <Detail screen={screen}/>;
     case 'workflow': case 'approval': content=<Workflow screen={screen}/>; break;
     case 'form': case 'wizard':
-      if (screen.route === '/admin/communications/audiences/create') {
+      if (screen.route === '/admin/press/publications/create') {
+        content = <PressPublicationCreateForm screen={screen} />;
+      } else if (screen.route === '/admin/communications/audiences/create') {
         content = <CommunicationsAudienceCreatePanel screen={screen} />;
       } else if (screen.route.startsWith('/admin/communications/') && !screen.route.includes('/settings')) {
         content = <CommunicationsComposePanel screen={screen} />;
@@ -1554,7 +1866,7 @@ export function PlatformScreenContent({ screen, requestedScope }: { screen: Admi
         content = <Form screen={screen} />;
       }
       break;
-    case 'settings': content=<Settings screen={screen}/>; break;
+    case 'settings': content=<PlatformSettingsScreen screen={screen}/>; break;
     case 'operations': content=<Operations screen={screen}/>; break;
     case 'reports':
     case 'finance': {
@@ -1568,7 +1880,20 @@ export function PlatformScreenContent({ screen, requestedScope }: { screen: Admi
       break;
     }
     case 'feed': content=<DenseTable screen={{...screen,columns:CATALOG_FEED_COLUMNS}} rows={screen.rows} columns={CATALOG_FEED_COLUMNS}/>; break;
-    case 'restricted': content=<Restricted screen={screen}/>; break;
+    case 'restricted':
+      if (screen.route === '/admin/security/pastoral-records' && !shouldUseDesignFixtures()) {
+        content = (
+          <>
+            <p className="maps-settings-lead" role="status">
+              Counselling cases are restricted by design. Client identity stays on People counselling; this list is the same live counselling catalog.
+            </p>
+            <Restricted screen={screen} />
+          </>
+        );
+      } else {
+        content = <Restricted screen={screen} />;
+      }
+      break;
     default: content=<Analytics screen={screen}/>;
   }
   const needsTabs = Boolean(screen.tabs?.length && ['operations','feed','restricted','table','reports','finance'].includes(screen.kind));

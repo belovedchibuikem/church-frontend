@@ -354,6 +354,14 @@ export function AdminInteractionShell({ children, route, title, permission, scop
           navigate(`/admin/home-churches/applications/${recordId}/decision`);
           return;
         }
+        if (route === '/admin/security/audit-logs') {
+          navigate(`/admin/security/audit-logs/${recordId}`);
+          return;
+        }
+        if (route === '/admin/security/safeguarding/cases') {
+          navigate(`/admin/security/safeguarding/cases/${recordId}`);
+          return;
+        }
       }
       if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey, details: getAdminRecordDetails(record) });
       else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey, details: getAdminRecordDetails(record) });

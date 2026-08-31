@@ -9,7 +9,20 @@ import {
   readGivingReceiptSnapshot,
   GIVING_DRAFT_KEY,
   GIVING_RECEIPT_KEY,
+  GIVING_FUNDS,
+  givingFundToPurpose,
+  isManualGivingMethod,
 } from '../lib/giving-flow.ts';
+
+test('tithe and offering are distinct giving purposes', () => {
+  assert.equal(givingFundToPurpose('Tithe'), 'tithe');
+  assert.equal(givingFundToPurpose('Offering'), 'offering');
+  assert.notEqual(givingFundToPurpose('Tithe'), givingFundToPurpose('Offering'));
+  assert.ok(GIVING_FUNDS.includes('Tithe'));
+  assert.ok(GIVING_FUNDS.includes('Offering'));
+  assert.equal(isManualGivingMethod('Bank Transfer'), true);
+  assert.equal(isManualGivingMethod('Card'), false);
+});
 
 test('parseGivingAmountMajor rejects empty and non-positive values', () => {
   assert.equal(parseGivingAmountMajor(''), null);

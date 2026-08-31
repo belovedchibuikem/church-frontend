@@ -81,7 +81,7 @@ export function GeographySelect({
     const controller = new AbortController();
     setLoadingStates(true);
     setStatesError(null);
-    void fetchStates(countryName, controller.signal)
+    void fetchStates(country, controller.signal)
       .then((list) => {
         if (!controller.signal.aborted) setStates(list);
       })
@@ -98,7 +98,7 @@ export function GeographySelect({
         if (!controller.signal.aborted) setLoadingStates(false);
       });
     return () => controller.abort();
-  }, [countryName, t]);
+  }, [country, t]);
 
   useEffect(() => {
     if (!countryName || !region) {
@@ -108,7 +108,7 @@ export function GeographySelect({
     const controller = new AbortController();
     setLoadingCities(true);
     setCitiesError(null);
-    void fetchCities(countryName, region, controller.signal)
+    void fetchCities(country, region, controller.signal)
       .then((list) => {
         if (!controller.signal.aborted) setCities(list);
       })
@@ -125,7 +125,7 @@ export function GeographySelect({
         if (!controller.signal.aborted) setLoadingCities(false);
       });
     return () => controller.abort();
-  }, [countryName, region, t]);
+  }, [country, region, t]);
 
   const stateOptions = useMemo(() => namesToOptions(states), [states]);
   const cityOptions = useMemo(() => namesToOptions(cities), [cities]);

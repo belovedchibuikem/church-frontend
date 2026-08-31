@@ -291,7 +291,8 @@ export const sectionCards: Record<string, ContentCard[]> = {
   Press: pressResources,
   Events: events,
   Giving: [
-    { title: 'Tithes & Offerings', body: 'Honour God and support local church work.', href: '/give', icon: '✝' },
+    { title: 'Tithe', body: 'Honour God with the first fruits of your increase.', href: '/give', icon: '✝' },
+    { title: 'Offering', body: 'Sow into local church work as a distinct gift.', href: '/give', icon: '❤' },
     { title: 'Mission Giving', body: 'Fuel crusades, projects, and field workers.', href: '/mission/giving', icon: '🌍' },
     { title: 'Recurring Giving', body: 'Set a faithful monthly seed.', href: '/account/giving/recurring', icon: '↻' },
     { title: 'Special Projects', body: 'Partner with a specific Kingdom assignment.', href: '/mission/projects', icon: '🎯' },
@@ -360,9 +361,7 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Meeting Location', name: 'location_id', type: 'search-select', catalog: 'location', value: '01JLOCADENIYI', wide: true },
   ];
   if (path.includes('/start-home-church/apply/meeting')) return [
-    { label: 'Proposed Home Church Name', name: 'proposed_name', value: 'Hope Home Church', wide: true },
-    { label: 'Meeting Day', name: 'meeting_day', type: 'select', options: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], value: 'sunday' },
-    { label: 'Meeting Time', name: 'meeting_time', type: 'time', value: '17:00' },
+    { label: 'Family name for the residence', name: 'residence_family_name', value: 'Onyeuwaoma John', wide: true },
     { label: 'Expected Participants', name: 'expected_participants', type: 'number', value: '25' },
   ];
   if (path.includes('/start-home-church/apply/participants')) return [
@@ -419,12 +418,10 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Guardian consent is required only where applicable.', name: 'guardian_consent', type: 'checkbox', wide: true },
   ];
   if (path.includes('/kca/apply/recommendation')) return [
-    { label: 'Recommender full name', name: 'recommender_name', value: '' },
-    { label: 'Position / ministry role', name: 'recommender_position', value: '' },
-    { label: 'Recommender phone number', name: 'recommender_phone', type: 'tel', value: '' },
-    { label: 'Recommender email address', name: 'recommender_email', type: 'email', value: '' },
-    { label: 'Recommendation', name: 'recommendation', type: 'textarea', value: '', wide: true },
-    { label: 'Additional comments', name: 'recommendation_comments', type: 'textarea', value: '', wide: true },
+      { label: 'Recommender full name', name: 'recommender_name', value: '' },
+      { label: 'Position / ministry role', name: 'recommender_position', value: '' },
+      { label: 'Recommender phone number', name: 'recommender_phone', type: 'tel', value: '' },
+      { label: 'Recommender email address', name: 'recommender_email', type: 'email', value: '' },
   ];
   if (path.includes('/events/') && path.includes('/register')) return [
     { label: 'Full Name', name: 'fullName', value: 'John Chinedu Doe' },
@@ -444,7 +441,7 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'What can we improve?', name: 'improve', type: 'textarea', value: 'More breakout sessions for first-timers.', wide: true },
   ];
   if (path.includes('/give')) return [
-    { label: 'Give To', name: 'fund', type: 'select', options: ['General Offering', 'Mission Care Fund', 'Building Hope Church', 'KCA Scholarship'], value: 'Mission Care Fund' },
+    { label: 'Give To', name: 'fund', type: 'select', options: ['Tithe', 'Offering', 'Mission Care Fund', 'Building Hope Church', 'KCA Scholarship'], value: 'Tithe' },
     { label: 'Amount (₦)', name: 'amount', type: 'number', value: '5100' },
     { label: 'Payment Method', name: 'method', type: 'select', options: ['Card', 'Bank Transfer', 'USSD', 'Wallet'], value: 'Card' },
     { label: 'Dedication / Note', name: 'note', type: 'textarea', value: 'For Kingdom advancement.', wide: true },
@@ -472,11 +469,11 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Message', name: 'message', type: 'textarea', value: 'I would like to learn more about joining a Family House church in my city.', wide: true },
   ];
   if (path.includes('/mission/crusades/invite') || path.includes('/mission/support')) return [
-    { label: 'Event / Project Title', name: 'title', value: 'City-Wide Harvest Crusade' },
+    { label: 'Event / Project Title', name: 'title', value: '' },
     { label: 'Event Type', name: 'type', type: 'select', options: ['Crusade', 'Outreach', 'Conference', 'Medical Mission'], value: 'Crusade' },
-    { label: 'Preferred Start Date', name: 'start', type: 'date', value: '2024-08-15' },
-    { label: 'Location', name: 'location', value: 'Lagos, Nigeria' },
-    { label: 'Request Details', name: 'details', type: 'textarea', value: 'We are requesting evangelism support, worship team, and follow-up materials.', wide: true },
+    { label: 'Preferred Start Date', name: 'start', type: 'date', value: '' },
+    { label: 'Location', name: 'location', value: '' },
+    { label: 'Request Details', name: 'details', type: 'textarea', value: '', wide: true },
   ];
   if (path.includes('/online-church/altar-call')) return [
     { label: 'I have decided to', name: 'decision', type: 'select', options: ['Accept Jesus Christ as Lord and Saviour', 'Rededicate my life to Christ', 'Request baptism', 'Join a church'], value: 'Accept Jesus Christ as Lord and Saviour' },
@@ -510,7 +507,7 @@ export const listingFor = (section: string, path: string): ContentCard[] => {
   if (path.includes('/press')) return pressResources;
   if (path.includes('/account/giving')) return [
     { title: 'Mission Care Fund', body: 'May 18, 2024 · One-time · Receipt ready', href: '/give/receipt', meta: '₦5,000', status: 'Completed', icon: '🧾' },
-    { title: 'General Offering', body: 'May 5, 2024 · Recurring · Grace Home Church', href: '/account/giving', meta: '₦10,000', status: 'Completed', icon: '🧾' },
+    { title: 'Offering', body: 'May 5, 2024 · Recurring · Grace Home Church', href: '/account/giving', meta: '₦10,000', status: 'Completed', icon: '🧾' },
     { title: 'Building Hope Church', body: 'Apr 22, 2024 · Special Project', href: '/mission/projects/building-hope-church', meta: '₦15,000', status: 'Completed', icon: '🧾' },
   ];
   if (path.includes('/account/kca/modules')) return kcaModules;

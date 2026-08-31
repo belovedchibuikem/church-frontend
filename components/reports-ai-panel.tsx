@@ -107,6 +107,9 @@ export function ReportsAiPanel({ screen, requestedScope }: { screen: AdminScreen
         <h2>{t('admin.insights', { defaultMessage: 'Insights' })}</h2>
         {dashboard.loading ? <p className="maps-settings-lead" role="status">{t('admin.loadingDashboard', { defaultMessage: 'Loading dashboard…' })}</p> : null}
         {dashboard.error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{dashboard.error}</p> : null}
+        {!dashboard.loading && insightItems.length === 0 ? (
+          <p className="maps-settings-lead">{t('admin.noAiInsights', { defaultMessage: 'No dashboard categories yet to ground an advisory prompt.' })}</p>
+        ) : null}
         <div className="platform-ai-grid">
           {insightItems.slice(0, 4).map((item, index) => (
             <article key={item}>

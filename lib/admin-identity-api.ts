@@ -1,4 +1,4 @@
-import { ApiError, apiRequest } from './api-client.ts';
+import { ApiError, apiRequest, apiRequestResponse } from './api-client.ts';
 import { resolveApiV1BaseUrl } from './api-config.ts';
 import type { ApiAdminScope, ApiSuccessEnvelope, JsonObject } from './api-types.ts';
 
@@ -22,6 +22,12 @@ export type AdminUser = {
   suspended_at?: string | null;
   reactivated_at?: string | null;
   created_at?: string | null;
+  profile?: {
+    given_name?: string | null;
+    middle_name?: string | null;
+    family_name?: string | null;
+    preferred_name?: string | null;
+  } | null;
   roles?: Array<{
     assignment_id: string;
     code: string;
@@ -73,6 +79,8 @@ export type AdminRole = {
   id: string;
   code: string;
   name: string;
+  assignment_count?: number;
+  is_system?: boolean;
   permissions?: Array<{ id: string; code: string }>;
 };
 
@@ -484,6 +492,8 @@ export type AdminSecuritySession = {
   user_name?: string | null;
   status?: string | null;
   device?: string | null;
+  ip_address?: string | null;
+  location?: string | null;
   started_at?: string | null;
   last_seen_at?: string | null;
   occurred_at?: string | null;
@@ -513,6 +523,32 @@ export function listAdminAuditEvents(options: {
       to: options.to,
     },
   });
+}
+
+export async function getAdminAuditEvent(
+  id: string,
+  scope?: AdminScopeHeaders,
+): Promise<AdminAuditEvent> {
+  const envelope = await identityRequest<AdminAuditEvent>(
+    `admin/security/audit-events/${encodeURIComponent(id)}`,
+    { method: 'GET', scope: scope ?? DEFAULT_SCOPE },
+  );
+  return envelope.data;
+}
+
+export async function exportAdminAuditEventCsv(
+  id: string,
+  scope?: AdminScopeHeaders,
+): Promise<Blob> {
+  const headers = scope ?? DEFAULT_SCOPE;
+  const response = await apiRequestResponse(
+    `admin/security/audit-events/${encodeURIComponent(id)}?format=csv`,
+    { method: 'GET', scope: headers },
+  );
+  if (!response.ok) {
+    throw new AdminIdentityApiError(response.status, 'Unable to download this audit event.');
+  }
+  return response.blob();
 }
 
 export function listAdminSecuritySessions(options: {
@@ -565,8 +601,172 @@ export function formatAccountStatus(status: string): string {
 }
 
 export function formatTimestamp(value?: string | null): string {
-  if (!value) return '—';
+  if (!value || value === '—') return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  } catch {
+    return date.toLocaleString();
+  }
+}
+
+export async function createAdminUser(
+  input: {
+    email: string;
+    profile: {
+      given_name: string;
+      family_name: string;
+      middle_name?: string | null;
+      preferred_name?: string | null;
+      country?: string | null;
+      region?: string | null;
+      locality?: string | null;
+    };
+    role_id?: string | null;
+  },
+  scope?: AdminScopeHeaders,
+): Promise<AdminUser> {
+  const envelope = await identityRequest<AdminUser>('admin/users', {
+    method: 'POST',
+    scope,
+    body: JSON.stringify(input),
+  });
+  return envelope.data;
+}
+
+export async function updateAdminUser(
+  userId: string,
+  input: { name?: string; profile?: { given_name: string; family_name: string; middle_name?: string | null; preferred_name?: string | null } },
+  scope?: AdminScopeHeaders,
+): Promise<AdminUser> {
+  const envelope = await identityRequest<AdminUser>(`admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    scope,
+    body: JSON.stringify(input),
+  });
+  return envelope.data;
+}
+
+export async function requestAdminUserPasswordReset(userId: string, scope?: AdminScopeHeaders): Promise<AdminUser> {
+  const envelope = await identityRequest<AdminUser>(`admin/users/${encodeURIComponent(userId)}/password-reset`, {
+    method: 'POST',
+    scope,
+  });
+  return envelope.data;
+}
+
+export async function getAdminRole(roleId: string, scope?: AdminScopeHeaders): Promise<AdminRole> {
+  const envelope = await identityRequest<AdminRole>(`admin/access/roles/${encodeURIComponent(roleId)}`, { scope });
+  return envelope.data;
+}
+
+export async function createAdminRole(input: { code: string; name: string }, scope?: AdminScopeHeaders): Promise<AdminRole> {
+  const envelope = await identityRequest<AdminRole>('admin/access/roles', {
+    method: 'POST',
+    scope,
+    body: JSON.stringify(input),
+  });
+  return envelope.data;
+}
+
+export async function updateAdminRole(roleId: string, name: string, scope?: AdminScopeHeaders): Promise<AdminRole> {
+  const envelope = await identityRequest<AdminRole>(`admin/access/roles/${encodeURIComponent(roleId)}`, {
+    method: 'PATCH',
+    scope,
+    body: JSON.stringify({ name }),
+  });
+  return envelope.data;
+}
+
+export async function archiveAdminRole(roleId: string, scope?: AdminScopeHeaders): Promise<void> {
+  await identityRequest<unknown>(`admin/access/roles/${encodeURIComponent(roleId)}`, {
+    method: 'DELETE',
+    scope,
+  });
+}
+
+export type AdminWorkItem = {
+  id: string;
+  title: string;
+  body?: string | null;
+  status: string;
+  priority: string;
+  due_at?: string | null;
+  closed_at?: string | null;
+  created_at?: string | null;
+  assigned_to?: { id: string; name: string; email: string } | null;
+  created_by?: { id: string; name: string } | null;
+};
+
+export function listAdminWorkItems(options: {
+  scope?: AdminScopeHeaders;
+  page?: number;
+  perPage?: number;
+  sort?: string;
+  search?: string;
+  status?: string;
+  assignedTo?: string;
+} = {}): Promise<AdminListResult<AdminWorkItem>> {
+  return listResource<AdminWorkItem>('admin/administration/work-items', {
+    scope: options.scope,
+    page: options.page,
+    perPage: options.perPage,
+    sort: options.sort ?? '-created_at',
+    filter: { search: options.search, status: options.status, assigned_to: options.assignedTo },
+  });
+}
+
+export async function createAdminWorkItem(
+  input: { title: string; body?: string | null; priority?: string; due_at?: string | null; assigned_to_user_id?: string | null },
+  scope?: AdminScopeHeaders,
+): Promise<AdminWorkItem> {
+  const envelope = await identityRequest<AdminWorkItem>('admin/administration/work-items', {
+    method: 'POST',
+    scope,
+    body: JSON.stringify(input),
+  });
+  return envelope.data;
+}
+
+export async function updateAdminWorkItem(
+  id: string,
+  input: Partial<{ title: string; body: string | null; priority: string; due_at: string | null; assigned_to_user_id: string | null; status: string }>,
+  scope?: AdminScopeHeaders,
+): Promise<AdminWorkItem> {
+  const envelope = await identityRequest<AdminWorkItem>(`admin/administration/work-items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    scope,
+    body: JSON.stringify(input),
+  });
+  return envelope.data;
+}
+
+export async function archiveAdminWorkItem(id: string, scope?: AdminScopeHeaders): Promise<AdminWorkItem> {
+  const envelope = await identityRequest<AdminWorkItem>(`admin/administration/work-items/${encodeURIComponent(id)}/archive`, {
+    method: 'POST',
+    scope,
+  });
+  return envelope.data;
+}
+
+export async function exportAdminAuditCsv(scope?: AdminScopeHeaders): Promise<Blob> {
+  const headers = scope ?? DEFAULT_SCOPE;
+  const response = await apiRequestResponse('admin/security/audit-events?format=csv', {
+    method: 'GET',
+    scope: headers,
+  });
+  if (!response.ok) {
+    throw new AdminIdentityApiError(response.status, 'Unable to export audit events.');
+  }
+  return response.blob();
+}
+
+export function identityErrorMessage(error: unknown): string {
+  if (error instanceof AdminIdentityApiError) {
+    if (error.status === 401) return 'Sign in with an admin session to load this directory.';
+    if (error.status === 403) return error.message || 'Permission or recent MFA verification required for this action.';
+    return error.message + (error.correlationId ? ` (${error.correlationId})` : '');
+  }
+  return 'Unable to reach the admin identity API.';
 }

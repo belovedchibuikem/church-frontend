@@ -645,6 +645,13 @@ export async function queryPlatformSearch(
   );
 }
 
+export function isPlatformResourceMissing(error: unknown): boolean {
+  if (error instanceof AdminPlatformApiError || error instanceof ApiError) {
+    return error.status === 404 || error.code === 'RESOURCE_NOT_FOUND';
+  }
+  return false;
+}
+
 export function platformErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof AdminPlatformApiError) {
     return error.code ? `${error.message} (${error.code})` : error.message;

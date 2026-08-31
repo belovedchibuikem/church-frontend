@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ApiError } from '@/lib/api-client';
 import type { SiteRoute } from '@/lib/site-routes';
 import { isMemberNavActive, memberNavGroups } from '@/lib/site-routes';
 import { AppBrand } from './app-brand';
 import { useBranding } from './branding-provider';
 import { GiveReceiptScreen, GiveRecurringScreen, GiveScreen } from '@/components/give-ui';
+import { givingFundToPurpose } from '@/lib/giving-flow';
 import {
   LiveAccountCalendar,
   LiveAttendancePage,
@@ -48,8 +50,10 @@ import {
 import {
   clearHomeChurchDraft,
   cmsListingLoader,
+  composeHomeChurchName,
   designFixturesEnabled,
   draftToHomeChurchPayload,
+  FAMILY_HOUSE_HOME_CHURCH_PREFIX,
   loadAboutPage,
   loadCmsPageMeta,
   loadCmsPageCards,
@@ -79,7 +83,6 @@ import {
 } from '@/lib/site-api';
 import {
   createGivingIntent,
-  completeGivingIntent,
   createUserMessageConversation,
   createUserNeed,
   createUserPrayer,
@@ -93,9 +96,17 @@ import {
   fetchKcaAssignments,
   fetchKcaAttendance,
   fetchKcaDashboard,
+  fetchKcaMe,
+  fetchKcaCurrentApplication,
   fetchKcaMentor,
   fetchKcaModule,
   fetchKcaModules,
+  fetchKcaLesson,
+  fetchKcaAssignment,
+  submitKcaEvidence,
+  downloadKcaCertificatePdf,
+  completeKcaLesson,
+  type KcaLessonDetail,
   fetchUserConsents,
   fetchUserConversationMessages,
   fetchUserDevices,
@@ -118,17 +129,19 @@ import {
   isLocalManualGivingProvider,
   isPaymentGovernanceDenied,
   isRecentMfaRequiredError,
-  KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE,
   markUserNotificationRead,
   PAYMENT_GOVERNANCE_DENIED_MESSAGE,
   recordEventFeedback,
   registerForEvent,
   requestChurchMembership,
+  requestHomeChurchMembership,
   revokeUserDevice,
   revokeUserSecuritySession,
   sendUserConversationMessage,
   storeUserFile,
   submitKcaApplication,
+  submitMissionInvitation,
+  submitMissionSupportRequest,
   submitUserDataSubjectRequest,
   updateUserProfile,
   updateUserPreferences,
@@ -139,6 +152,7 @@ import {
   type EventTicket,
   type KcaAssignmentSummary,
   type KcaDashboard,
+  type KcaAccess,
   type KcaModuleSummary,
   type UserConsent,
   type UserDevice,
@@ -153,6 +167,7 @@ import {
   type UserSyncChange,
 } from '@/lib/user-api';
 import { flowNext, successHref, heroPrimaryHref, kcaApplySteps, homeChurchSteps } from '@/lib/site-flow';
+import { kcaHrefForDestination, kcaIsActivatedStudent, kcaPrimaryCta } from '@/lib/kca-access';
 import { LiveWatchExperience } from '@/components/live-watch';
 import { fetchCurrentLivestream } from '@/lib/livestream-api';
 import { SearchSelect } from '@/components/search-select';
@@ -1217,20 +1232,62 @@ function FindChurchLanding({ route }: { route: SiteRoute }) {
 }
 
 function KcaGate() {
+  const router = useRouter();
+  const [state, setState] = useState<'loading' | 'guest' | 'ready'>('loading');
+  const [access, setAccess] = useState<KcaAccess | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaMe()
+      .then((data) => {
+        if (cancelled) return;
+        setAccess(data);
+        if (data.destination && data.destination !== 'overview') {
+          const href = kcaHrefForDestination(data.destination);
+          if (href !== '/kca' && href !== '/kca/gate') {
+            router.replace(href);
+            return;
+          }
+        }
+        setState('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setState('guest');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (state === 'loading') return <p className="panel">Resolving your KCA status…</p>;
+
+  const destination = access?.destination ?? 'overview';
+  const applyHref = destination === 'resume_application' ? '/kca/apply/church' : '/kca/enrol';
+  const cta = kcaPrimaryCta(destination);
+
   return (
     <div className="split-panel">
-      <Link className="panel" href="/kca/enrol" style={{ textDecoration: 'none' }}>
+      <Link className="panel" href={applyHref} style={{ textDecoration: 'none' }}>
         <span className="card-icon">🎓</span>
-        <h2>Enroll Now</h2>
-        <p>Begin your Kingdom Change Agents application and start the journey of formation.</p>
-        <span className="ghost-link">Start Application</span>
+        <h2>{cta.label}</h2>
+        <p>{access?.next_step ?? 'Begin your Kingdom Change Agents application and start the journey of formation.'}</p>
+        <span className="ghost-link">{access?.label ?? 'Start Application'}</span>
       </Link>
-      <Link className="panel" href="/account/kca" style={{ textDecoration: 'none' }}>
-        <span className="card-icon">📊</span>
-        <h2>Continue to Dashboard</h2>
-        <p>Already enrolled? Open your student dashboard for modules, assignments, and mentorship.</p>
-        <span className="ghost-link">Open Dashboard</span>
-      </Link>
+      {kcaIsActivatedStudent(destination) ? (
+        <Link className="panel" href="/account/kca" style={{ textDecoration: 'none' }}>
+          <span className="card-icon">📊</span>
+          <h2>Continue to Dashboard</h2>
+          <p>Open your student dashboard for modules, assignments, and mentorship.</p>
+          <span className="ghost-link">Open Dashboard</span>
+        </Link>
+      ) : (
+        <Link className="panel" href="/kca/apply/status" style={{ textDecoration: 'none' }}>
+          <span className="card-icon">📋</span>
+          <h2>Admission progress</h2>
+          <p>Track your application without starting a second form.</p>
+          <span className="ghost-link">View status</span>
+        </Link>
+      )}
     </div>
   );
 }
@@ -1465,7 +1522,7 @@ function listingLoaderFor(route: SiteRoute): (() => Promise<{ data: ContentCard[
 
       const txCards: ContentCard[] = transactions.map((tx) => ({
         title: 'Gift recorded',
-        body: `${tx.occurred_at ?? tx.created_at ?? ''} · Intent ${tx.payment_intent_id ?? '—'}`.trim(),
+        body: `${formatTimestamp(tx.occurred_at ?? tx.created_at)} · ${tx.purpose_code ?? 'Gift'}`,
         href: `/account/giving#tx-${tx.id ?? tx.public_id ?? 'unknown'}`,
         meta: formatMoneyMinor(tx.amount_minor, tx.currency ?? 'NGN'),
         status: tx.status ?? 'Recorded',
@@ -1475,7 +1532,7 @@ function listingLoaderFor(route: SiteRoute): (() => Promise<{ data: ContentCard[
 
       const intentCards: ContentCard[] = intents.map((intent) => ({
         title: intent.purpose_code ?? 'Giving intent',
-        body: `${intent.status ?? 'Pending'} · ${intent.created_at ?? ''}`.trim(),
+        body: `${intent.status ?? 'Pending'} · ${formatTimestamp(intent.created_at)}`,
         href: `/account/giving#intent-${intent.id ?? intent.public_id ?? 'unknown'}`,
         meta: formatMoneyMinor(intent.amount_minor, intent.currency ?? 'NGN'),
         status: intent.status ?? 'Pending',
@@ -1639,6 +1696,10 @@ function Listing({ route }: { route: SiteRoute }) {
                 {registerHref ? (
                   <Link className="ghost-link" href={registerHref}>
                     Register
+                  </Link>
+                ) : (row.action ?? '').toLowerCase() === 'join' ? (
+                  <Link className="ghost-link" href={detailPrimaryHref({ ...route, path: row.href, action: 'Join' })} aria-label={`Join ${row.title}`}>
+                    + Join
                   </Link>
                 ) : (
                   <Link className="ghost-link" href={row.href}>
@@ -1808,7 +1869,7 @@ function Detail({ route }: { route: SiteRoute }) {
               </button>
             ) : (
               <Link className="site-button" href={detailPrimaryHref(route)}>
-                {route.action ?? 'Join Church'}
+                {route.action?.toLowerCase().includes('join') ? '+ Join' : (route.action ?? 'Join Church')}
               </Link>
             )}
             {route.section === 'Church' ? (
@@ -1866,6 +1927,30 @@ function Detail({ route }: { route: SiteRoute }) {
 
 function KcaEnrolStart() {
   const { t } = useLocale();
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaMe()
+      .then((access) => {
+        if (cancelled) return;
+        if (access.destination && access.destination !== 'overview' && access.destination !== 'resume_application') {
+          router.replace(kcaHrefForDestination(access.destination));
+          return;
+        }
+        setChecking(false);
+      })
+      .catch(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (checking) return <p className="panel">Checking application status…</p>;
+
   const bullets = [
     { icon: '📚', key: 'member.kca.twelveModules', fallback: '12 Powerful Modules' },
     { icon: '👥', key: 'member.kca.mentorshipAccountability', fallback: 'Mentorship & Accountability' },
@@ -1934,9 +2019,12 @@ function FormScreen({ route }: { route: SiteRoute }) {
   const fields = formFieldsForRoute(route.path);
   const isAuth = route.surface === 'auth';
   const isHomeChurchStep = route.path.includes('/start-home-church/apply');
+  const isHomeChurchMeeting = route.path.includes('/start-home-church/apply/meeting');
   const isHomeChurchReview = route.path.includes('/start-home-church/apply/review');
   const isKcaApply = route.path.includes('/kca/apply/');
   const isKcaApplyReview = route.path === '/kca/apply/review';
+  const isMissionInvite = route.path.includes('/mission/crusades/invite');
+  const isMissionSupport = route.path.includes('/mission/support');
   const isCertVerify = route.path.includes('/kca/certificates/verify');
   const isGive = route.path === '/give' || route.path.startsWith('/give/');
   const isEventRegister = route.path.includes('/events/') && route.path.includes('/register');
@@ -1951,6 +2039,34 @@ function FormScreen({ route }: { route: SiteRoute }) {
   useEffect(() => {
     if (isHomeChurchReview) setDraftSummary(readHomeChurchDraft());
   }, [isHomeChurchReview]);
+
+  useEffect(() => {
+    if (!isKcaApply) return;
+    let cancelled = false;
+    void fetchKcaCurrentApplication()
+      .then((current) => {
+        if (cancelled || !current) return;
+        const status = String(current.status ?? '');
+        if (status && status !== 'draft' && status !== 'information_required') {
+          router.replace('/kca/apply/status');
+          return;
+        }
+        const answers = current.application_data;
+        if (answers && typeof answers === 'object') {
+          const draftKey = 'fhc.kca-application.draft';
+          try {
+            const existing = JSON.parse(window.localStorage.getItem(draftKey) ?? '{}') as Record<string, string>;
+            window.localStorage.setItem(draftKey, JSON.stringify({ ...existing, ...(answers as Record<string, string>) }));
+          } catch {
+            window.localStorage.setItem(draftKey, JSON.stringify(answers));
+          }
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isKcaApply, router]);
 
   if (route.path === '/kca/enrol') {
     return <KcaEnrolStart />;
@@ -2066,24 +2182,13 @@ function FormScreen({ route }: { route: SiteRoute }) {
         const intent = await createGivingIntent({
           amount_minor: Math.round(amountMajor * 100),
           currency: 'NGN',
-          fund: values.fund || null,
+          fund: values.fund || 'Offering',
+          purpose_code: givingFundToPurpose(values.fund || 'Offering'),
           note: values.note || null,
         });
         const intentId = intent.id ?? intent.public_id;
-        // local_manual only — DenyAll is 422 above; other providers must not fake paid success.
         if (isLocalManualGivingProvider(intent.provider_code) && intentId) {
-          const completed = await completeGivingIntent(intentId);
-          const receiptId = completed.receipt?.id ?? completed.receipt?.public_id;
-          if (receiptId) {
-            try {
-              await fetchUserPaymentReceipt(receiptId);
-            } catch {
-              // Receipt show is best-effort; history still lists transactions/intents.
-            }
-          }
-          setDone(true);
-          const receiptQuery = receiptId ? `?receipt=${encodeURIComponent(receiptId)}` : '';
-          window.setTimeout(() => router.push(`/give/receipt${receiptQuery}`), 450);
+          setError('Upload a payment receipt on the Give payment page to complete a manual gift.');
           return;
         }
 
@@ -2171,10 +2276,38 @@ function FormScreen({ route }: { route: SiteRoute }) {
       const homeChurchId = (values.home_church_id ?? '').trim();
       setBusy(true);
       try {
-        await requestChurchMembership(churchId, homeChurchId ? { home_church_id: homeChurchId } : {});
+        const join = async (confirm = false) => {
+          if (homeChurchId && ULID_RE.test(homeChurchId) && !churchId) {
+            await requestHomeChurchMembership(homeChurchId, { confirm_transfer: confirm });
+            return;
+          }
+          await requestChurchMembership(churchId, {
+            ...(homeChurchId && ULID_RE.test(homeChurchId) ? { home_church_id: homeChurchId } : {}),
+            ...(confirm ? { confirm_transfer: true } : {}),
+          });
+        };
+        await join(false);
         setDone(true);
         window.setTimeout(() => router.push(flowNext[route.path] ?? '/account/church'), 450);
       } catch (err) {
+        if (err instanceof ApiError && err.code === 'MEMBERSHIP_TRANSFER_REQUIRED') {
+          if (window.confirm(err.message || 'You already belong to another church. Confirm to move your membership?')) {
+            try {
+              await requestChurchMembership(churchId, {
+                ...(homeChurchId && ULID_RE.test(homeChurchId) ? { home_church_id: homeChurchId } : {}),
+                confirm_transfer: true,
+              });
+              setDone(true);
+              window.setTimeout(() => router.push(flowNext[route.path] ?? '/account/church'), 450);
+              return;
+            } catch (retryErr) {
+              setError(formatUserApiError(retryErr, 'Unable to move your church membership.'));
+              return;
+            }
+          }
+          setError(err.message);
+          return;
+        }
         setError(formatUserApiError(err, 'Unable to request church membership.'));
       } finally {
         setBusy(false);
@@ -2267,9 +2400,18 @@ function FormScreen({ route }: { route: SiteRoute }) {
         } catch {
           // An invalid local draft must not prevent the applicant from continuing.
         }
-        window.localStorage.setItem(draftKey, JSON.stringify({ ...existing, ...values }));
-        setDone(true);
-        window.setTimeout(() => router.push(flowNext[route.path] ?? '/kca/apply/status'), 450);
+        const merged = { ...existing, ...values };
+        window.localStorage.setItem(draftKey, JSON.stringify(merged));
+        setBusy(true);
+        try {
+          await submitKcaApplication(merged, { finalize: false });
+          setDone(true);
+          window.setTimeout(() => router.push(flowNext[route.path] ?? '/kca/apply/status'), 450);
+        } catch (err) {
+          setError(formatUserApiError(err, 'Unable to save your KCA application draft.'));
+        } finally {
+          setBusy(false);
+        }
         return;
       }
       let applicationData: Record<string, string> = {};
@@ -2279,18 +2421,67 @@ function FormScreen({ route }: { route: SiteRoute }) {
         setError('Your saved application draft is invalid. Return to the first step and enter your details again.');
         return;
       }
+      applicationData = { ...applicationData, ...values };
       if (Object.keys(applicationData).length === 0) {
         setError('Complete your application details before submitting.');
         return;
       }
       setBusy(true);
       try {
-        await submitKcaApplication(applicationData);
+        await submitKcaApplication(applicationData, { finalize: true });
         window.localStorage.removeItem(draftKey);
         setDone(true);
         router.push(flowNext[route.path] ?? '/kca/apply/status');
       } catch (err) {
         setError(formatUserApiError(err, 'Unable to submit your KCA application.'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (isMissionInvite) {
+      const title = (values.title ?? '').trim();
+      if (!title) {
+        setError('Enter an event or project title.');
+        return;
+      }
+      setBusy(true);
+      try {
+        await submitMissionInvitation({
+          title,
+          type: values.type,
+          start: values.start,
+          location: values.location,
+          details: values.details,
+        });
+        setDone(true);
+        window.setTimeout(() => router.push(flowNext[route.path] ?? '/mission/crusades/request/status'), 450);
+      } catch (err) {
+        setError(formatUserApiError(err, 'Unable to submit the mission invitation. Sign in as a member and try again.'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (isMissionSupport) {
+      const title = (values.title ?? '').trim();
+      if (!title) {
+        setError('Enter a support request title.');
+        return;
+      }
+      setBusy(true);
+      try {
+        await submitMissionSupportRequest({
+          title,
+          details: values.details,
+          category: values.type,
+        });
+        setDone(true);
+        window.setTimeout(() => router.push(flowNext[route.path] ?? '/mission'), 450);
+      } catch (err) {
+        setError(formatUserApiError(err, 'Unable to submit the support request. Sign in as a member and try again.'));
       } finally {
         setBusy(false);
       }
@@ -2358,6 +2549,7 @@ function FormScreen({ route }: { route: SiteRoute }) {
           <Field key={field.name} field={field} />
         ))}
       </div>
+      {isHomeChurchMeeting ? <HomeChurchScheduleFields /> : null}
       {error ? (
         <p className="panel" role="alert" data-giving-error={isGive ? 'true' : undefined}>
           {error}
@@ -2415,6 +2607,99 @@ function FormScreen({ route }: { route: SiteRoute }) {
         </ul>
       </aside>
       {form}
+    </div>
+  );
+}
+
+function HomeChurchScheduleFields() {
+  const days = [
+    ['sunday', 'Sun', 'Main service'],
+    ['monday', 'Mon', 'Gathering'],
+    ['tuesday', 'Tue', 'Gathering'],
+    ['wednesday', 'Wed', 'Midweek service'],
+    ['thursday', 'Thu', 'Gathering'],
+    ['friday', 'Fri', 'Prayer meeting'],
+    ['saturday', 'Sat', 'Fellowship'],
+  ] as const;
+  const times = ['09:00', '10:00', '17:00', '18:00', '19:00', '20:00'];
+  const activities = ['Main service', 'Midweek service', 'Prayer meeting', 'Fellowship', 'Bible study', 'Gathering'];
+  const draft = typeof window === 'undefined' ? {} : readHomeChurchDraft();
+  let initial: Array<{ day: string; time: string; activity: string }> = [{ day: 'sunday', time: '09:00', activity: 'Main service' }];
+  try {
+    const parsed = JSON.parse(draft.meeting_schedules ?? '[]') as Array<{ day: string; time: string; activity: string }>;
+    if (Array.isArray(parsed) && parsed.length > 0) initial = parsed;
+  } catch {
+    /* keep default */
+  }
+  const [rows, setRows] = useState(initial);
+  const previewFamily = draft.residence_family_name || 'Onyeuwaoma John';
+
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <p className="field-help">
+        Default name (not editable): <b>{FAMILY_HOUSE_HOME_CHURCH_PREFIX}</b>
+      </p>
+      <p>
+        Combined name: <b>{composeHomeChurchName(previewFamily)}</b>
+      </p>
+      <h4 style={{ marginTop: 18 }}>Meeting days and times</h4>
+      <p className="field-help">Select each gathering day and give it its own activity and time.</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '12px 0' }}>
+        {days.map(([value, label, activity]) => {
+          const selected = rows.some((row) => row.day === value);
+          return (
+            <button
+              type="button"
+              key={value}
+              className={selected ? 'site-button' : 'site-button secondary'}
+              onClick={() => {
+                setRows((current) =>
+                  selected
+                    ? current.filter((row) => row.day !== value)
+                    : [...current, { day: value, time: value === 'sunday' ? '09:00' : '18:00', activity }],
+                );
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {rows.map((row) => (
+        <div key={row.day} className="form-grid" style={{ marginBottom: 12 }}>
+          <label>
+            <span>{row.day}</span>
+            <select
+              value={row.activity}
+              onChange={(event) =>
+                setRows((current) => current.map((item) => (item.day === row.day ? { ...item, activity: event.target.value } : item)))
+              }
+            >
+              {activities.map((activity) => (
+                <option key={activity} value={activity}>
+                  {activity}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Time</span>
+            <select
+              value={row.time}
+              onChange={(event) =>
+                setRows((current) => current.map((item) => (item.day === row.day ? { ...item, time: event.target.value } : item)))
+              }
+            >
+              {times.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ))}
+      <input name="meeting_schedules" type="hidden" value={JSON.stringify(rows)} />
     </div>
   );
 }
@@ -2491,22 +2776,17 @@ function KcaUnavailable({ title = 'KCA learning', message }: { title?: string; m
   );
 }
 
-function KcaStudentDashboard() {
-  if (designFixturesEnabled()) return <KcaFixtureDashboard />;
-  return <KcaLiveStudentDashboard />;
-}
-
-function KcaLiveStudentDashboard() {
+function KcaOrientationMember() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [dashboard, setDashboard] = useState<KcaDashboard | null>(null);
+  const [access, setAccess] = useState<KcaAccess | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchKcaDashboard()
+    void fetchKcaMe()
       .then((data) => {
         if (cancelled) return;
-        setDashboard(data);
+        setAccess(data);
         setState('ready');
       })
       .catch((err) => {
@@ -2519,6 +2799,70 @@ function KcaLiveStudentDashboard() {
     };
   }, []);
 
+  if (state === 'loading') return <p className="panel">Loading orientation…</p>;
+  if (state === 'error') return <KcaUnavailable title="KCA Orientation" message={error ?? undefined} />;
+
+  if (access?.destination !== 'orientation' && access?.destination !== 'student_dashboard') {
+    return (
+      <section className="panel">
+        <h3>KCA Orientation</h3>
+        <p>{access?.next_step ?? 'Orientation is scheduled after interview or orientation is assigned.'}</p>
+        <Link className="site-button" href={kcaHrefForDestination(access?.destination)}>
+          View current status
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel">
+      <h3>KCA Orientation</h3>
+      <p>{access?.next_step ?? 'Complete orientation requirements before admission continues.'}</p>
+      <ul className="check-list">
+        {(access?.timeline ?? []).map((event, index) => (
+          <li key={`${String(event.at ?? index)}`}>{String(event.action ?? 'update')}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function KcaStudentDashboard() {
+  if (designFixturesEnabled()) return <KcaFixtureDashboard />;
+  return <KcaLiveStudentDashboard />;
+}
+
+function KcaLiveStudentDashboard() {
+  const router = useRouter();
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [dashboard, setDashboard] = useState<KcaDashboard | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const access = await fetchKcaMe();
+        if (cancelled) return;
+        if (!kcaIsActivatedStudent(access.destination)) {
+          router.replace(kcaHrefForDestination(access.destination));
+          return;
+        }
+        const data = await fetchKcaDashboard();
+        if (cancelled) return;
+        setDashboard(data);
+        setState('ready');
+      } catch (err) {
+        if (cancelled) return;
+        setError(formatUserApiError(err));
+        setState('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   if (state === 'loading') return <p className="panel">Loading KCA dashboard…</p>;
   if (state === 'error') return <KcaUnavailable title="KCA Student Dashboard" message={error ?? undefined} />;
 
@@ -2529,35 +2873,18 @@ function KcaLiveStudentDashboard() {
     ? `${String(dashboard.mentor.preferred_name ?? dashboard.mentor.given_name ?? 'Mentor')} ${String(dashboard.mentor.family_name ?? '')}`.trim()
     : 'Unassigned';
 
-  const enrolled = dashboard?.enrolled === true;
-
   return (
     <>
       <div className="welcome">
         <div>
           <span className="eyebrow">KCA STUDENT</span>
           <h2>KCA Student Dashboard</h2>
-          <p>
-            {enrolled
-              ? 'Continue learning and track your formation journey.'
-              : 'Begin your KCA application or browse published modules while admissions completes.'}
-          </p>
+          <p>Continue learning and track your formation journey.</p>
         </div>
         <div className="member-hero-actions">
-          {enrolled ? (
-            <Link className="site-button" href="/account/kca/modules">
-              Continue Learning
-            </Link>
-          ) : (
-            <>
-              <Link className="site-button" href="/kca/enrol">
-                Enroll Now
-              </Link>
-              <Link className="site-button secondary" href="/account/kca/modules">
-                Browse Modules
-              </Link>
-            </>
-          )}
+          <Link className="site-button" href="/account/kca/modules">
+            Continue Learning
+          </Link>
         </div>
       </div>
       <section className="panel kca-progress">
@@ -2587,14 +2914,6 @@ function KcaLiveStudentDashboard() {
           </Link>
         ))}
       </div>
-      {!enrolled ? (
-        <section className="panel kca-enrol-callout">
-          <p>
-            You are not enrolled yet. Published modules remain browsable; assignments, attendance, and mentor access
-            unlock after admissions activates your enrollment.
-          </p>
-        </section>
-      ) : null}
       {dashboard?.certificate ? (
         <Link className="panel" href="/account/kca/certificate" style={{ display: 'block', textDecoration: 'none' }}>
           <span className="eyebrow">CERTIFICATE</span>
@@ -2768,9 +3087,6 @@ function KcaLiveAssignmentsList() {
           </div>
         );
       })}
-      <p className="panel" style={{ marginTop: 12 }}>
-        {KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE}
-      </p>
     </section>
   );
 }
@@ -2992,13 +3308,174 @@ function KcaLiveModuleDetail({ route }: { route: SiteRoute }) {
                   {lesson.code ? `${lesson.code} · ` : ''}
                   {lesson.title}
                 </b>
-                <small>Lesson {lesson.sequence ?? '—'}</small>
+                <small>
+                  Lesson {lesson.sequence ?? '—'}
+                  {lesson.unlocked === false ? ' · Locked' : ''}
+                </small>
               </div>
+              {lesson.id && lesson.unlocked !== false ? (
+                <Link className="ghost-link" href={`/account/kca/lessons/${lesson.id}`}>
+                  Open
+                </Link>
+              ) : null}
             </div>
           ))
         )}
       </section>
     </>
+  );
+}
+
+function KcaLessonPlayer({ route }: { route: SiteRoute }) {
+  const lessonId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lesson, setLesson] = useState<KcaLessonDetail | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaLesson(lessonId)
+      .then((data) => {
+        if (!cancelled) {
+          setLesson(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(formatUserApiError(err));
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  async function onComplete() {
+    if (!lesson?.id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completeKcaLesson(lesson.id, {
+        acknowledged: true,
+        unlockToken: lesson.unlock_token ?? undefined,
+      });
+      setDone(true);
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <p className="panel">Loading lesson…</p>;
+  if (error && !lesson) return <KcaUnavailable title={route.title} message={error} />;
+
+  return (
+    <>
+      <div className="welcome">
+        <div>
+          <span className="eyebrow">KCA LESSON</span>
+          <h2>{lesson?.title ?? route.title}</h2>
+          <p>{lesson?.summary ?? 'Published lesson body from the API.'}</p>
+        </div>
+        <Link className="site-button" href="/account/kca/modules">
+          Modules
+        </Link>
+      </div>
+      <section className="panel">
+        {lesson?.content_url ? (
+          <p>
+            <a href={lesson.content_url} rel="noreferrer" target="_blank">
+              Open linked resource
+            </a>
+          </p>
+        ) : null}
+        <div style={{ whiteSpace: 'pre-wrap' }}>{lesson?.body || 'This lesson has no body yet.'}</div>
+        {error ? <p role="alert">{error}</p> : null}
+        {done ? <p>Lesson marked complete.</p> : null}
+        <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>
+          {busy ? 'Saving…' : 'Mark complete'}
+        </button>
+      </section>
+    </>
+  );
+}
+
+function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
+  const assignmentId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
+  const [title, setTitle] = useState(route.title);
+  const [stateLabel, setStateLabel] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaAssignment(assignmentId)
+      .then((row) => {
+        if (cancelled) return;
+        setTitle(row.title ?? route.title);
+        setStateLabel(row.state ?? null);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(formatUserApiError(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [assignmentId, route.title]);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const input = event.currentTarget.elements.namedItem('evidence') as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (!file) {
+      setError('Choose a file to upload as evidence.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const form = new FormData();
+      form.set('file', file);
+      form.set('purpose', 'kca.evidence');
+      form.set('classification', 'confidential');
+      const asset = await storeUserFile(form);
+      const assetId = asset.id ?? asset.public_id;
+      if (!assetId) throw new Error('File upload did not return an id.');
+      await submitKcaEvidence(assignmentId, assetId);
+      setMessage('Evidence submitted.');
+      setStateLabel('submitted');
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error && !stateLabel) return <KcaUnavailable title={route.title} message={error} />;
+
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
+      <p>Status: {stateLabel ?? 'assigned'}</p>
+      <form onSubmit={(event) => void onSubmit(event)}>
+        <label>
+          Evidence file
+          <input name="evidence" type="file" required />
+        </label>
+        <button className="site-button" type="submit" disabled={busy}>
+          {busy ? 'Submitting…' : 'Submit evidence'}
+        </button>
+      </form>
+      {error ? <p role="alert">{error}</p> : null}
+      {message ? <p role="status">{message}</p> : null}
+    </section>
   );
 }
 
@@ -3330,19 +3807,16 @@ function Dashboard({ route }: { route: SiteRoute }) {
   if (route.path === '/account/kca/mentor') return <KcaMentorPanel />;
   if (route.path === '/account/kca/attendance') return <KcaAttendanceList />;
   if (route.path.startsWith('/account/kca/modules/')) return <KcaModuleDetail route={route} />;
-  if (route.path.startsWith('/account/kca/assignments/')) {
-    if (!designFixturesEnabled()) {
-      return (
-        <KcaUnavailable title={route.title} message={KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE} />
-      );
-    }
-  }
+  if (route.path.startsWith('/account/kca/assignments/')) return <KcaAssignmentDetail route={route} />;
+  if (route.path.startsWith('/account/kca/lessons/')) return <KcaLessonPlayer route={route} />;
+  if (route.path === '/account/kca/certificate') return <LiveCertificateDocument route={route} />;
+  if (route.path === '/account/kca/orientation') return <KcaOrientationMember />;
   if (route.path.startsWith('/account/kca')) {
     if (!designFixturesEnabled()) {
       const message = route.path.includes('/certificate')
-        ? 'Certificate download stays unavailable until member issuance delivery is approved (OD-008).'
+        ? undefined
         : route.path.includes('/lessons/')
-          ? 'Individual lesson players are not exposed on the member API yet. Open the parent module for published lessons.'
+          ? undefined
           : undefined;
       return <KcaUnavailable title={route.title} message={message} />;
     }
@@ -4706,6 +5180,9 @@ function Document({ route }: { route: SiteRoute }) {
   if (route.path.includes('/kca/certificates/verify')) {
     return <FormScreen route={{ ...route, kind: 'form', action: 'Verify Certificate' }} />;
   }
+  if (route.path === '/kca/admission-letter') {
+    return <KcaAdmissionLetterDocument />;
+  }
   if (route.path.includes('/events/') && route.path.includes('/ticket')) {
     if (designFixturesEnabled()) return <FixtureCertificateDocument route={route} />;
     return <LiveEventTicket route={route} />;
@@ -4735,6 +5212,66 @@ function FixtureCertificateDocument({ route }: { route: SiteRoute }) {
       <button className="site-button" type="button" onClick={() => setDownloaded(true)}>
         {downloaded ? 'Download started (preview)' : (route.action ?? 'Download')}
       </button>
+    </div>
+  );
+}
+
+function KcaAdmissionLetterDocument() {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [access, setAccess] = useState<KcaAccess | null>(null);
+  const [holder, setHolder] = useState('Applicant');
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([fetchKcaMe(), fetchCurrentUser().catch(() => null)])
+      .then(([me, user]) => {
+        if (cancelled) return;
+        setAccess(me);
+        if (user) setHolder(displayNameFromUser(user) || 'Applicant');
+        setState('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatUserApiError(err, 'Unable to load admission letter.'));
+        setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state === 'loading') return <p className="panel">Loading admission letter…</p>;
+  if (state === 'error') return <KcaUnavailable title="Admission letter" message={error ?? undefined} />;
+
+  if (access?.destination !== 'admission_letter' && access?.destination !== 'student_dashboard') {
+    return (
+      <section className="panel">
+        <h3>Admission letter</h3>
+        <p>{access?.next_step ?? 'An admission letter is issued after you are admitted.'}</p>
+        <Link className="site-button" href={kcaHrefForDestination(access?.destination)}>
+          View current status
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <div className="document-wrap">
+      <div className="document">
+        <span>⬡</span>
+        <h5><BrandName /></h5>
+        <h2>Admission Letter</h2>
+        <p>Dear {holder},</p>
+        <p>
+          You have been admitted to Kingdom Change Agents. Learning unlocks after your enrollment is
+          activated by admissions.
+        </p>
+        <div className="signatures">
+          <i>{String(access?.application?.id ?? 'Application on file')}</i>
+          <i>{access?.label ?? 'Admitted'}</i>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4848,6 +5385,7 @@ function LiveCertificateDocument({ route }: { route: SiteRoute }) {
   const [holder, setHolder] = useState('Member');
   const [certNumber, setCertNumber] = useState<string | null>(null);
   const [issuedAt, setIssuedAt] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -4891,8 +5429,7 @@ function LiveCertificateDocument({ route }: { route: SiteRoute }) {
       <section className="panel">
         <h3>{route.title}</h3>
         <p>
-          No KCA certificate is on file for your enrollment. Issuance remains gated by OD-008
-          governance — this screen does not invent a certificate.
+          No KCA certificate is on file for your enrollment.
         </p>
         <Link className="site-button" href="/account/kca">
           Back to KCA
@@ -4916,14 +5453,126 @@ function LiveCertificateDocument({ route }: { route: SiteRoute }) {
         </div>
       </div>
       <p className="panel">
-        Download/print of signed PDF remains unavailable until certificate delivery APIs are approved.
+        <button
+          className="site-button"
+          type="button"
+          onClick={() => {
+            void (async () => {
+              setDownloadError(null);
+              try {
+                const response = await downloadKcaCertificatePdf();
+                if (!response.ok) {
+                  setDownloadError('Certificate PDF is not available.');
+                  return;
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'kca-certificate.pdf';
+                link.click();
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                setDownloadError(formatUserApiError(err, 'Unable to download certificate PDF.'));
+              }
+            })();
+          }}
+        >
+          Download PDF
+        </button>
       </p>
+      {downloadError ? <p className="panel" role="alert">{downloadError}</p> : null}
     </div>
+  );
+}
+
+function KcaAdmissionProgress() {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [access, setAccess] = useState<KcaAccess | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaMe()
+      .then((data) => {
+        if (cancelled) return;
+        if (kcaIsActivatedStudent(data.destination)) {
+          router.replace('/account/kca');
+          return;
+        }
+        if (data.destination === 'overview') {
+          router.replace('/kca');
+          return;
+        }
+        if (data.destination === 'resume_application') {
+          router.replace('/kca/apply/church');
+          return;
+        }
+        setAccess(data);
+        setState('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatUserApiError(err, 'Unable to load admission progress.'));
+        setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (state === 'loading') return <p className="panel">Loading admission progress…</p>;
+  if (state === 'error') return <KcaUnavailable title="Admission progress" message={error ?? undefined} />;
+
+  const cta = kcaPrimaryCta(access?.destination);
+  const timeline = access?.timeline ?? [];
+  const application = access?.application;
+
+  return (
+    <section className="panel">
+      <span className="eyebrow">{access?.label ?? 'Application'}</span>
+      <h2>Admission progress</h2>
+      <p>{access?.next_step}</p>
+      {application ? (
+        <dl>
+          <div>
+            <dt>Reference</dt>
+            <dd>{String(application.id ?? 'Not provided')}</dd>
+          </div>
+          <div>
+            <dt>Submitted</dt>
+            <dd>{application.received_at ? String(application.received_at) : 'Not provided'}</dd>
+          </div>
+          <div>
+            <dt>Stage</dt>
+            <dd>{String(application.label ?? application.status ?? 'Not provided')}</dd>
+          </div>
+        </dl>
+      ) : null}
+      <h3>Timeline</h3>
+      {timeline.length === 0 ? (
+        <p>No admission events recorded yet.</p>
+      ) : (
+        <ul className="check-list">
+          {timeline.map((event, index) => (
+            <li key={`${String(event.at ?? index)}-${String(event.action ?? index)}`}>
+              {String(event.action ?? 'update')}
+              {event.at ? ` · ${String(event.at)}` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link className="site-button" href={cta.href}>
+        {cta.label}
+      </Link>
+    </section>
   );
 }
 
 function Success({ route }: { route: SiteRoute }) {
   if (route.path === '/give/receipt') return <GiveReceiptScreen route={route} />;
+  if (route.path === '/kca/apply/status') return <KcaAdmissionProgress />;
   return (
     <div className="success-card">
       <span>✓</span>
@@ -5022,7 +5671,7 @@ function Landing({ route }: { route: SiteRoute }) {
   if (route.path === '/faq') return <FaqLanding />;
   if (route.path === '/search') return <SearchLanding />;
   if (route.path === '/find-church') return <FindChurchLanding route={route} />;
-  if (route.path === '/kca/gate') return <KcaGateLanding route={route} />;
+  if (route.path === '/kca' || route.path === '/kca/gate') return <KcaGateLanding route={route} />;
   if (route.path === '/prayer') return <PrayerLanding route={route} />;
   return <SectionHeroLanding route={route} />;
 }

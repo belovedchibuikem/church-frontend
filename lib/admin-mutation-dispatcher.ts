@@ -28,6 +28,9 @@ import {
   completeFollowUpTask,
   completeSoulFollowUp,
   createChurch,
+  createHomeChurch,
+  createTeamAssignment,
+  endTeamAssignment,
   updateChurch,
   deleteChurch,
   defaultOpsScope,
@@ -62,7 +65,7 @@ import {
 export { GLOBAL_ADMIN_SCOPE };
 
 export const UNREGISTERED_ADMIN_ACTION_MESSAGE =
-  'This action is not wired to a Laravel mutation for this screen yet. Use View to inspect the selected record; Edit/Delete only work where an API endpoint exists.';
+  'No Laravel operation is registered for this action. Use View to inspect the selected record; Edit/Delete only work where an API endpoint exists.';
 
 export class UnregisteredAdminActionError extends Error {
   constructor(message = UNREGISTERED_ADMIN_ACTION_MESSAGE) {
@@ -179,6 +182,15 @@ function jsonBody(entries: Record<string, JsonValue | undefined>): JsonObject {
     if (value !== undefined) body[key] = value;
   }
   return body;
+}
+
+function pressTypeMetadata(payload: Record<string, string>): JsonObject {
+  return jsonBody({
+    speaker: field(payload, 'speaker', 'preacher'),
+    preached_date: field(payload, 'preached_date'),
+    reflection: field(payload, 'reflection', 'body'),
+    passage: field(payload, 'passage'),
+  });
 }
 
 function looksLikeCode(value?: string): boolean {
@@ -306,14 +318,18 @@ function splitPersonName(payload: Record<string, string>): { given_name?: string
 
 /** Next workflow status for Press publication stage screens / approve actions. */
 function nextPressPublicationStatus(route: string, label: string): string {
+  if (labelIs(label, /unpublish/)) return 'unpublished';
+  if (labelIs(label, /archive/)) return 'archived';
+  if (labelIs(label, /reject/)) return 'rejected';
+  if (labelIs(label, /changes requested|request revision/)) return 'changes_requested';
   if (route.includes('/editorial-review')) return 'theological_review';
   if (route.includes('/theological-review')) return 'copy_editing';
   if (route.includes('/copy-editing')) return 'design';
-  if (route.includes('/design')) return 'isbn_assignment';
+  if (route.includes('/design')) return 'publication_approval';
   if (route.includes('/isbn')) return 'publication_approval';
   if (route.includes('/approval') || labelIs(label, /publish|publication/)) return 'published';
   if (labelIs(label, /continue|approv/)) return 'editorial_review';
-  return 'published';
+  return 'editorial_review';
 }
 
 function routeIncludesComposeChannel(route: string): boolean {
@@ -666,6 +682,22 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       { ...opts, method: 'DELETE' },
     );
   }
+  if (
+    route === '/admin/home-churches' &&
+    labelIs(label, /create home church|add home church|register home church|save|submit/) &&
+    !labelIs(label, /application/)
+  ) {
+    return createHomeChurch(
+      {
+        church_id: requireId(firstUlid(payload.church_id), 'church'),
+        leader_person_id: requireId(firstUlid(payload.leader_person_id, payload.person_id, payload.owner_id), 'leader'),
+        location_id: requireId(firstUlid(payload.location_id), 'location'),
+        administrative_unit_id: requireId(firstUlid(payload.administrative_unit_id), 'administrative unit'),
+        name: field(payload, 'name', 'proposed_name') ?? '',
+      },
+      opts.scope,
+    );
+  }
   if (routeStarts(route, '/admin/home-churches/applications') && labelIs(label, /new application|create application|submit application|add application/)) {
     return mutate(
       'admin/church/home-church-applications',
@@ -965,6 +997,58 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
+  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /create crusade|save crusade|submit crusade/) && !labelIs(label, /invitation|soul|invite/)) {
+    return mutate(
+      'admin/mission/crusades',
+      {
+        name: field(payload, 'name', 'title', 'crusade_name') ?? '',
+        code: field(payload, 'code') ?? null,
+        theme: field(payload, 'theme') ?? null,
+        purpose: field(payload, 'purpose') ?? null,
+        description: field(payload, 'description') ?? null,
+        timezone: field(payload, 'timezone') ?? null,
+        location_id: firstUlid(payload.location_id) ?? null,
+        starts_at: field(payload, 'starts_at', 'startDate', 'start') ?? null,
+        ends_at: field(payload, 'ends_at', 'endDate', 'end') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /transition crusade|submit for review|approve crusade|start planning|schedule crusade|activate crusade|complete crusade|report crusade|postpone|cancel crusade/)) {
+    const status =
+      field(payload, 'status') ??
+      (labelIs(label, /submit for review/)
+        ? 'submitted'
+        : labelIs(label, /approve crusade/)
+          ? 'approved'
+          : labelIs(label, /planning/)
+            ? 'planning'
+            : labelIs(label, /schedule/)
+              ? 'scheduled'
+              : labelIs(label, /activate/)
+                ? 'active'
+                : labelIs(label, /complete/)
+                  ? 'completed'
+                  : labelIs(label, /report/)
+                    ? 'reported'
+                    : labelIs(label, /postpone/)
+                      ? 'postponed'
+                      : labelIs(label, /cancel/)
+                        ? 'cancelled'
+                        : 'submitted');
+    return mutate(
+      `admin/mission/crusades/${encodeURIComponent(requireId(firstUlid(payload.crusade_id, ctx.recordId), 'crusade'))}/transitions`,
+      { status, reason_code: reasonCode(payload) ?? null },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /archive crusade/)) {
+    return mutate(
+      `admin/mission/crusades/${encodeURIComponent(requireId(firstUlid(payload.crusade_id, ctx.recordId), 'crusade'))}/archive`,
+      { reason_code: reasonCode(payload, 'archived') ?? 'archived' },
+      opts,
+    );
+  }
   if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /invitation|invite/) && labelIs(label, /create|add|submit|save|send/)) {
     return mutate(
       'admin/mission/invitations',
@@ -976,12 +1060,21 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/mission') && labelIs(label, /transition invitation|approv.*invitation|reject.*invitation/)) {
+  if (routeStarts(route, '/admin/mission') && labelIs(label, /transition invitation|approv.*invitation|reject.*invitation|decline.*invitation|request more info|defer invitation/)) {
+    const status =
+      field(payload, 'status') ??
+      (labelIs(label, /reject|decline/)
+        ? 'declined'
+        : labelIs(label, /request more info|information/)
+          ? 'information_required'
+          : labelIs(label, /defer/)
+            ? 'deferred'
+            : 'approved');
     return mutate(
       `admin/mission/invitations/${encodeURIComponent(requireId(pickRecord(ctx, 'invitation_id', 'id'), 'invitation'))}/transitions`,
       {
-        status: field(payload, 'status') ?? (labelIs(label, /reject/) ? 'rejected' : 'accepted'),
-        reason_code: reasonCode(payload) ?? null,
+        status,
+        reason_code: reasonCode(payload) ?? (status === 'approved' ? null : 'review_decision'),
       },
       opts,
     );
@@ -1029,6 +1122,20 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       scope,
     );
   }
+  if (route.includes('/teams') && labelIs(label, /add team|create team|assign team|add member|assign member|save|submit/)) {
+    return createTeamAssignment(
+      {
+        crusade_id: requireId(firstUlid(payload.crusade_id, ctx.recordId), 'crusade'),
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
+        role_code: field(payload, 'role_code', 'team', 'name', 'title') ?? 'counselling',
+        assigned_at: field(payload, 'assigned_at', 'startDate') ?? null,
+      },
+      scope,
+    );
+  }
+  if (route.includes('/teams') && labelIs(label, /end assignment|remove member|end team|unassign/)) {
+    return endTeamAssignment(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'team assignment'), scope);
+  }
 
   // --- KCA ---
   if (routeStarts(route, '/admin/kca/years') && labelIs(label, /create|add|save|submit/)) {
@@ -1052,9 +1159,18 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         name: field(payload, 'name', 'title') ?? '',
         starts_on: field(payload, 'starts_on', 'starts_at', 'startDate') ?? '',
         ends_on: field(payload, 'ends_on', 'ends_at', 'endDate') ?? '',
+        timezone: field(payload, 'timezone') || 'UTC',
       },
       opts,
     );
+  }
+  if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /map learning days|map days|day map/)) {
+    const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
+    return mutate(`admin/kca/modules/${encodeURIComponent(moduleId)}/day-map`, {}, opts);
+  }
+  if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /publish module/)) {
+    const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
+    return mutate(`admin/kca/modules/${encodeURIComponent(moduleId)}/publish`, {}, opts);
   }
   if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /create module|add module|save|submit/) && !labelIs(label, /lesson/)) {
     return mutate(
@@ -1063,6 +1179,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         code: field(payload, 'code') ?? '',
         title: field(payload, 'title', 'name') ?? '',
         sequence: asInt(field(payload, 'sequence')) ?? 1,
+        duration_days: asInt(field(payload, 'duration_days')) ?? 1,
       },
       opts,
     );
@@ -1075,8 +1192,31 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         code: field(payload, 'code') ?? '',
         title: field(payload, 'title', 'name') ?? '',
         sequence: asInt(field(payload, 'sequence')) ?? 1,
+        day_index: asInt(field(payload, 'day_index')) ?? 1,
+        lesson_type: field(payload, 'lesson_type') || 'text',
+        summary: field(payload, 'summary') || '',
+        body: field(payload, 'body') || '',
+        content_url: field(payload, 'content_url') || '',
       },
       opts,
+    );
+  }
+  if (route.includes('/prerequisites') && labelIs(label, /add prerequisite|create prerequisite|save prerequisite|save|submit/)) {
+    const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
+    return mutate(
+      `admin/kca/modules/${encodeURIComponent(moduleId)}/prerequisites`,
+      {
+        prerequisite_module_id: requireId(firstUlid(payload.prerequisite_module_id, payload.prerequisite_id, payload.linked_module_id), 'prerequisite module'),
+        requirement: field(payload, 'requirement') ?? 'previous_module_complete',
+      },
+      opts,
+    );
+  }
+  if (route.includes('/prerequisites') && labelIs(label, /remove prerequisite|delete prerequisite|unlink prerequisite|remove/)) {
+    return mutate(
+      `admin/kca/prerequisites/${encodeURIComponent(requireId(pickRecord(ctx, 'prerequisite_id', 'id'), 'prerequisite'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
     );
   }
   if (routeStarts(route, '/admin/kca') && labelIs(label, /record attendance|mark attendance/)) {
@@ -1091,18 +1231,26 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
+  if (route.includes('/leadership-recommendation') && labelIs(label, /verify/)) {
+    const recommendationId = requireId(firstUlid(payload.recommendation_id, ctx.recordId), 'recommendation');
+    return mutate(`admin/kca/recommendations/${encodeURIComponent(recommendationId)}/verify`, {}, opts);
+  }
   if (routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') && labelIs(label, /transition|approv|defer|accept|reject|not accepted|decision|submit/)) {
     const status =
       field(payload, 'status') ??
-      (labelIs(label, /provisionally/)
-        ? 'provisionally_accepted'
-        : labelIs(label, /not accepted|reject/)
-          ? 'not_accepted'
-          : labelIs(label, /defer/)
-            ? 'deferred'
-            : labelIs(label, /accept|approv/)
-              ? 'accepted'
-              : 'reviewed');
+      (labelIs(label, /request info|information required/)
+        ? 'information_required'
+        : labelIs(label, /interview|orientation/)
+          ? 'interview'
+          : labelIs(label, /provisionally/)
+            ? 'provisionally_accepted'
+            : labelIs(label, /not accepted|reject/)
+              ? 'not_accepted'
+              : labelIs(label, /defer/)
+                ? 'deferred'
+                : labelIs(label, /accept|approv|admit/)
+                  ? 'accepted'
+                  : 'reviewed');
     return mutate(
       `admin/kca/applications/${encodeURIComponent(requireId(pickRecord(ctx, 'application_id', 'id'), 'application'))}/transitions`,
       { status, reason_code: reasonCode(payload) ?? null },
@@ -1168,22 +1316,51 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     if (!labelIs(label, /isbn|contributor|translation|transition|approv|publish/)) {
       return mutate(
         'admin/press/publications',
-        {
+        jsonBody({
           title: field(payload, 'title', 'name') ?? '',
           publisher_name: field(payload, 'publisher_name') ?? 'Kingdom Press',
           language_code: field(payload, 'language_code', 'language') ?? 'en',
           format: (field(payload, 'format') ?? 'print').toLowerCase(),
+          publication_type: (field(payload, 'publication_type', 'type') ?? 'book').toLowerCase().replace(/\s+/g, '_'),
           subtitle: field(payload, 'subtitle') ?? null,
+          summary: field(payload, 'summary') ?? null,
           edition: field(payload, 'edition') ?? null,
           publication_date: field(payload, 'publication_date') ?? null,
           category: field(payload, 'category') ?? null,
           description: field(payload, 'description') ?? null,
+          as_draft: field(payload, 'as_draft') === 'true' || field(payload, 'as_draft') === 'on' ? true : undefined,
           price_minor: asInt(field(payload, 'price_minor') ?? undefined) ?? null,
           currency_code: field(payload, 'currency_code') ?? null,
-        },
+          type_metadata: pressTypeMetadata(payload),
+        }),
         { ...opts, idempotent: true },
       );
     }
+  }
+  if (routeStarts(route, '/admin/press/publications') && labelIs(label, /edit|update|save publication/) && pickRecord(ctx, 'publication_id', 'id')) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}`,
+      jsonBody({
+        title: field(payload, 'title', 'name') ?? '',
+        publisher_name: field(payload, 'publisher_name') ?? 'Kingdom Press',
+        language_code: field(payload, 'language_code', 'language') ?? 'en',
+        format: (field(payload, 'format') ?? 'print').toLowerCase(),
+        publication_type: (field(payload, 'publication_type', 'type') ?? 'book').toLowerCase().replace(/\s+/g, '_'),
+        subtitle: field(payload, 'subtitle') ?? null,
+        summary: field(payload, 'summary') ?? null,
+        category: field(payload, 'category') ?? null,
+        description: field(payload, 'description') ?? null,
+        type_metadata: pressTypeMetadata(payload),
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/press/publications') && labelIs(label, /delete/) && pickRecord(ctx, 'publication_id', 'id')) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
+    );
   }
   if (routeStarts(route, '/admin/press') && labelIs(label, /isbn/)) {
     return mutate(
@@ -1195,7 +1372,18 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/press') && labelIs(label, /add contributor|assign contributor|add author/)) {
+  if (routeStarts(route, '/admin/press/authors') && labelIs(label, /add author|create author|save|submit/)) {
+    return mutate(
+      'admin/press/authors',
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.owner_id), 'person'),
+        display_name: field(payload, 'display_name', 'name', 'fullName') ?? '',
+        bio: field(payload, 'bio', 'about') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/press') && labelIs(label, /add contributor|assign contributor/)) {
     return mutate(
       `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/contributors`,
       {
@@ -1205,7 +1393,20 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts', '/admin/press/catalogue') && labelIs(label, /approv|publish|transition|continue/)) {
+  if (routeStarts(route, '/admin/press') && labelIs(label, /submit review|record review/)) {
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/reviews`,
+      jsonBody({
+        stage: field(payload, 'stage') ?? (route.includes('theological') ? 'theological' : route.includes('copy') ? 'copy' : route.includes('design') ? 'design' : 'editorial'),
+        decision: field(payload, 'decision') ?? (labelIs(label, /reject/) ? 'rejected' : 'approved'),
+        comments: field(payload, 'comments', 'comment') ?? null,
+        requested_changes: field(payload, 'requested_changes') ?? null,
+        reviewer_person_id: firstUlid(payload.reviewer_person_id, payload.person_id),
+      }),
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts', '/admin/press/catalogue') && labelIs(label, /approv|publish|transition|continue|unpublish|archive|reject/)) {
     return mutate(
       `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}/transitions`,
       {
@@ -1369,7 +1570,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         audience_id: requireId(firstUlid(payload.audience_id), 'audience'),
         kind: field(payload, 'kind') ?? 'broadcast',
         channel: field(payload, 'channel') ?? 'email',
-        purpose: field(payload, 'purpose', 'title', 'name') ?? 'admin_broadcast',
+        purpose: field(payload, 'purpose', 'title', 'name') ?? 'communications.ministry_updates',
         scheduled_at: field(payload, 'scheduled_at') ?? null,
       },
       { ...opts, idempotent: true },
@@ -1491,9 +1692,26 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     const requestId = requireId(pickRecord(ctx, 'data_subject_request_id', 'id'), 'data-subject request');
     return mutate(`admin/privacy/data-subject-requests/${encodeURIComponent(requestId)}/exports/expire`, undefined, opts);
   }
+  if (routeStarts(route, '/admin/security/data-deletion-requests', '/admin/security/privacy-requests') && labelIs(label, /execute deletion|erase|anonymize/)) {
+    const requestId = requireId(pickRecord(ctx, 'data_subject_request_id', 'id'), 'data-subject request');
+    return mutate(`admin/privacy/data-subject-requests/${encodeURIComponent(requestId)}/erasure`, undefined, opts);
+  }
+  if (routeStarts(route, '/admin/security/data-deletion-requests', '/admin/security/privacy-requests') && labelIs(label, /record policy denial|deny erasure|reject deletion/)) {
+    const requestId = requireId(pickRecord(ctx, 'data_subject_request_id', 'id'), 'data-subject request');
+    return mutate(`admin/privacy/data-subject-requests/${encodeURIComponent(requestId)}/erasure-denial`, undefined, opts);
+  }
 
   // --- Safeguarding ---
-  if (routeStarts(route, '/admin/security/safeguarding') && labelIs(label, /report|create|add|submit|save/) && !labelIs(label, /guardian/)) {
+  if (route.includes('/admin/security/safeguarding/cases') && labelIs(label, /add note|assign|change priority|close case/)) {
+    const incidentId = requireId(pickRecord(ctx, 'incident_id', 'id'), 'incident');
+    const body: Record<string, unknown> = {};
+    if (labelIs(label, /add note/)) body.note = field(payload, 'note', 'notes', 'restricted_summary', 'description') ?? '';
+    if (labelIs(label, /assign/)) body.assigned_to_user_id = requireId(firstUlid(payload.assigned_to_user_id, payload.user_id, payload.assignee_id), 'assignee');
+    if (labelIs(label, /change priority/)) body.severity = field(payload, 'severity', 'priority') ?? 'medium';
+    if (labelIs(label, /close case/)) body.status = 'closed';
+    return mutate(`admin/safeguarding/incidents/${encodeURIComponent(incidentId)}`, body, { ...opts, method: 'PATCH' });
+  }
+  if (routeStarts(route, '/admin/security') && !route.includes('guardian') && !route.includes('child-profiles') && !route.includes('communication-restrictions') && !route.includes('privacy') && !route.includes('data-export') && !route.includes('data-deletion') && !route.includes('configuration') && labelIs(label, /create record|report incident|\+ report incident/)) {
     return mutate(
       'admin/safeguarding/incidents',
       {
@@ -1506,7 +1724,33 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/security/guardian-consent', '/admin/security/child-profiles') && labelIs(label, /register|add|create|save|submit/)) {
+  if (routeStarts(route, '/admin/security/safeguarding') && labelIs(label, /report incident|\+ report incident/) && !labelIs(label, /guardian/)) {
+    return mutate(
+      'admin/safeguarding/incidents',
+      {
+        concern_type: field(payload, 'concern_type', 'category', 'name') ?? '',
+        severity: field(payload, 'severity', 'status') ?? 'medium',
+        restricted_summary: field(payload, 'restricted_summary', 'notes', 'description') ?? '',
+        subject_person_id: firstUlid(payload.subject_person_id, payload.person_id) ?? null,
+        occurred_at: field(payload, 'occurred_at', 'startDate') ?? null,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/security/child-profiles', '/admin/security/communication-restrictions') && labelIs(label, /register|add|create|save|submit|set restriction/)) {
+    return mutate(
+      'admin/safeguarding/child-profiles',
+      {
+        person_id: requireId(firstUlid(payload.person_id, payload.child_person_id, payload.owner_id), 'person'),
+        date_of_birth: field(payload, 'date_of_birth') ?? null,
+        minor_status: field(payload, 'minor_status') ?? 'confirmed_minor',
+        direct_communication_restricted: asBool(field(payload, 'direct_communication_restricted')) ?? true,
+        media_use_restricted: asBool(field(payload, 'media_use_restricted')) ?? true,
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/security/guardian-consent') && labelIs(label, /register|add|create|save|submit/)) {
     return mutate(
       'admin/safeguarding/guardian-relationships',
       {
@@ -1597,7 +1841,7 @@ export async function executeAdminAction(input: AdminActionInput): Promise<Admin
     route: input.route,
     label: normalizeLabel(input.label),
     payload: input.payload ?? {},
-    recordId: extractUlid(input.recordId) ?? extractUlid(input.payload?.id),
+    recordId: extractUlid(input.recordId) ?? extractUlid(input.payload?.id) ?? extractUlid(input.route),
     scope: resolveScope(input.scope),
   };
 

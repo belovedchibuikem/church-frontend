@@ -19,6 +19,7 @@ export type ListQuery = {
   perPage?: number;
   scope?: AdminScope;
   signal?: AbortSignal;
+  filter?: Record<string, string | undefined>;
 };
 
 export type ChurchRecord = {
@@ -37,6 +38,11 @@ export type ChurchRecord = {
   administrative_unit_name?: string | null;
   published_at?: string | null;
   created_at?: string | null;
+  status?: string | null;
+  home_churches_count?: number;
+  memberships_count?: number;
+  first_timers_count?: number;
+  applications_count?: number;
 };
 
 export type HomeChurchRecord = {
@@ -45,10 +51,17 @@ export type HomeChurchRecord = {
   church_name?: string | null;
   leader_person_id?: string | null;
   leader_name?: string | null;
+  location_id?: string | null;
+  location_name?: string | null;
+  administrative_unit_id?: string | null;
+  administrative_unit_name?: string | null;
   name: string;
   status: string;
+  members_count?: number;
   created_at?: string | null;
 };
+
+export type HomeChurchApplicationAction = { status: string; label: string; tone: string };
 
 export type HomeChurchApplicationRecord = {
   id: string;
@@ -63,6 +76,17 @@ export type HomeChurchApplicationRecord = {
   meeting_time?: string;
   status: string;
   status_changed_at?: string | null;
+  location_name?: string | null;
+  administrative_unit_name?: string | null;
+  allowed_actions?: HomeChurchApplicationAction[];
+  history?: Array<{
+    id: string;
+    from_status: string;
+    to_status: string;
+    reason_code: string;
+    notes?: string | null;
+    occurred_at?: string | null;
+  }>;
 };
 
 export type FirstTimerRecord = {
@@ -112,6 +136,8 @@ export type CrusadeRecord = {
   starts_at?: string | null;
   ends_at?: string | null;
   published_at?: string | null;
+  status?: string | null;
+  souls_count?: number;
 };
 
 export type SoulRecord = {
@@ -189,9 +215,31 @@ export type CreateChurchInput = {
   administrative_unit_id: string;
 };
 
+export type CreateHomeChurchInput = {
+  church_id: string;
+  leader_person_id: string;
+  location_id: string;
+  administrative_unit_id: string;
+  name: string;
+};
+
+export type TeamAssignmentRecord = {
+  id: string;
+  crusade_id?: string | null;
+  crusade_name?: string | null;
+  person_id?: string | null;
+  person_name?: string | null;
+  role_code?: string | null;
+  assigned_at?: string | null;
+  ended_at?: string | null;
+  status?: string | null;
+};
+
 export type TransitionApplicationInput = {
   status: string;
   reason_code: string;
+  notes?: string | null;
+  expected_status?: string | null;
 };
 
 export type RegisterFirstTimerInput = {
@@ -309,12 +357,20 @@ export function operationsErrorMessage(error: unknown, fallback: string): string
 }
 
 function listQuery(params: ListQuery = {}): Record<string, string | number | undefined> {
-  return {
+  const query: Record<string, string | number | undefined> = {
     'filter[search]': params.search,
-    'filter[status]': params.status,
+    'filter[status]': params.status ?? params.filter?.status,
     page: params.page,
     per_page: params.perPage ?? 25,
   };
+  if (params.filter) {
+    for (const [key, value] of Object.entries(params.filter)) {
+      if (key !== 'status' && value) {
+        query[`filter[${key}]`] = value;
+      }
+    }
+  }
+  return query;
 }
 
 function paginationFromMeta(meta: JsonObject | undefined): PaginationMeta {
@@ -376,6 +432,18 @@ export function listChurches(params: ListQuery = {}): Promise<OpsListResult<Chur
   return opsGetList<ChurchRecord>('admin/church/churches', params);
 }
 
+export async function getChurch(churchId: string, scope?: AdminScope, signal?: AbortSignal): Promise<ChurchRecord> {
+  try {
+    const envelope = await apiRequest<ApiSuccessEnvelope<ChurchRecord>>(
+      `admin/church/churches/${encodeURIComponent(churchId)}`,
+      { method: 'GET', scope: scope ?? GLOBAL_ADMIN_SCOPE, signal },
+    );
+    return envelope.data;
+  } catch (error) {
+    throw toOpsError(error, 'Unable to load church.');
+  }
+}
+
 export function createChurch(input: CreateChurchInput, scope?: AdminScope): Promise<ChurchRecord> {
   return opsMutate<ChurchRecord>('admin/church/churches', 'POST', input as unknown as JsonObject, { scope });
 }
@@ -388,6 +456,19 @@ export function updateChurch(
   return opsMutate<ChurchRecord>(
     `admin/church/churches/${encodeURIComponent(churchId)}`,
     'PUT',
+    input as unknown as JsonObject,
+    { scope },
+  );
+}
+
+export function updateChurchStatus(
+  churchId: string,
+  input: { status: string; reason: string },
+  scope?: AdminScope,
+): Promise<ChurchRecord> {
+  return opsMutate<ChurchRecord>(
+    `admin/church/churches/${encodeURIComponent(churchId)}/status`,
+    'POST',
     input as unknown as JsonObject,
     { scope },
   );
@@ -406,10 +487,77 @@ export function listHomeChurches(params: ListQuery = {}): Promise<OpsListResult<
   return opsGetList<HomeChurchRecord>('admin/church/home-churches', params);
 }
 
+export function createHomeChurch(input: CreateHomeChurchInput, scope?: AdminScope): Promise<HomeChurchRecord> {
+  return opsMutate<HomeChurchRecord>('admin/church/home-churches', 'POST', input as unknown as JsonObject, { scope });
+}
+
+export async function getHomeChurch(homeChurchId: string, scope?: AdminScope, signal?: AbortSignal): Promise<HomeChurchRecord> {
+  try {
+    const envelope = await apiRequest<ApiSuccessEnvelope<HomeChurchRecord>>(
+      `admin/church/home-churches/${encodeURIComponent(homeChurchId)}`,
+      { method: 'GET', scope: scope ?? GLOBAL_ADMIN_SCOPE, signal },
+    );
+    return envelope.data;
+  } catch (error) {
+    throw toOpsError(error, 'Unable to load home church.');
+  }
+}
+
+export function updateHomeChurch(
+  homeChurchId: string,
+  input: { name: string; leader_person_id: string },
+  scope?: AdminScope,
+): Promise<HomeChurchRecord> {
+  return opsMutate<HomeChurchRecord>(
+    `admin/church/home-churches/${encodeURIComponent(homeChurchId)}`,
+    'PUT',
+    input as unknown as JsonObject,
+    { scope },
+  );
+}
+
+export function updateHomeChurchStatus(
+  homeChurchId: string,
+  input: { status: string; reason: string },
+  scope?: AdminScope,
+): Promise<HomeChurchRecord> {
+  return opsMutate<HomeChurchRecord>(
+    `admin/church/home-churches/${encodeURIComponent(homeChurchId)}/status`,
+    'POST',
+    input as unknown as JsonObject,
+    { scope },
+  );
+}
+
 export function listHomeChurchApplications(
   params: ListQuery = {},
 ): Promise<OpsListResult<HomeChurchApplicationRecord>> {
   return opsGetList<HomeChurchApplicationRecord>('admin/church/home-church-applications', params);
+}
+
+export async function getHomeChurchApplication(
+  applicationId: string,
+  scope?: AdminScope,
+  signal?: AbortSignal,
+): Promise<HomeChurchApplicationRecord> {
+  try {
+    const envelope = await apiRequest<ApiSuccessEnvelope<HomeChurchApplicationRecord>>(
+      `admin/church/home-church-applications/${encodeURIComponent(applicationId)}`,
+      { method: 'GET', scope: scope ?? GLOBAL_ADMIN_SCOPE, signal },
+    );
+    return envelope.data;
+  } catch (error) {
+    throw toOpsError(error, 'Unable to load home church application.');
+  }
+}
+
+export function createHomeChurchApplication(input: JsonObject, scope?: AdminScope): Promise<HomeChurchApplicationRecord> {
+  return opsMutate<HomeChurchApplicationRecord>(
+    'admin/church/home-church-applications',
+    'POST',
+    input,
+    { scope },
+  );
 }
 
 export function transitionHomeChurchApplication(
@@ -431,6 +579,22 @@ export function listFirstTimers(params: ListQuery = {}): Promise<OpsListResult<F
 
 export function listMemberships(params: ListQuery = {}): Promise<OpsListResult<MembershipRecord>> {
   return opsGetList<MembershipRecord>('admin/church/memberships', params);
+}
+
+export function startMembership(
+  input: { person_id: string; church_id: string; home_church_id?: string | null; joined_at?: string | null },
+  scope?: AdminScope,
+): Promise<MembershipRecord> {
+  return opsMutate<MembershipRecord>('admin/church/memberships', 'POST', input as unknown as JsonObject, { scope });
+}
+
+export function endMembership(membershipId: string, input: JsonObject, scope?: AdminScope): Promise<MembershipRecord> {
+  return opsMutate<MembershipRecord>(
+    `admin/church/memberships/${encodeURIComponent(membershipId)}/end`,
+    'POST',
+    input,
+    { scope },
+  );
 }
 
 export type UpsertLivestreamInput = {
@@ -541,8 +705,58 @@ export function listPastoralNeeds(params: ListQuery = {}): Promise<OpsListResult
   return opsGetList<PastoralNeedRecord>('admin/church/pastoral-needs', params);
 }
 
+export function createFollowUpTask(input: JsonObject, scope?: AdminScope): Promise<FollowUpTaskRecord> {
+  return opsMutate<FollowUpTaskRecord>('admin/church/follow-up-tasks', 'POST', input, { scope });
+}
+
+export function createPrayerRequest(input: JsonObject, scope?: AdminScope): Promise<PrayerRequestRecord> {
+  return opsMutate<PrayerRequestRecord>('admin/church/prayer-requests', 'POST', input, { scope });
+}
+
+export function createPastoralNeed(input: JsonObject, scope?: AdminScope): Promise<PastoralNeedRecord> {
+  return opsMutate<PastoralNeedRecord>('admin/church/pastoral-needs', 'POST', input, { scope });
+}
+
 export function listPeopleDirectory(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
   return opsGetList('admin/church/people', params);
+}
+
+export function getPerson(id: string, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return apiRequest<ApiSuccessEnvelope<Record<string, unknown>>>(`admin/church/people/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    scope: scope ?? GLOBAL_ADMIN_SCOPE,
+  }).then((envelope) => envelope.data).catch((error) => {
+    throw toOpsError(error, 'Unable to load person.');
+  });
+}
+
+export function matchPeople(input: JsonObject, scope?: AdminScope): Promise<{ matches: Array<Record<string, unknown>> }> {
+  return opsMutate('admin/church/people/matches', 'POST', input, { scope });
+}
+
+export function createPerson(input: JsonObject, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return opsMutate('admin/church/people', 'POST', input, { scope });
+}
+
+export function mergePeople(canonicalId: string, sourcePersonId: string, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return opsMutate(`admin/church/people/${encodeURIComponent(canonicalId)}/merge`, 'POST', { source_person_id: sourcePersonId }, { scope });
+}
+
+export function archivePerson(id: string, reason: string, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return opsMutate(`admin/church/people/${encodeURIComponent(id)}/archive`, 'POST', { reason }, { scope });
+}
+
+export function updatePersonPhone(id: string, input: JsonObject, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return opsMutate(`admin/church/people/${encodeURIComponent(id)}`, 'PUT', input, { scope });
+}
+
+export function getCounsellingCase(id: string, scope?: AdminScope): Promise<Record<string, unknown>> {
+  return apiRequest<ApiSuccessEnvelope<Record<string, unknown>>>(`admin/church/counselling-cases/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    scope: scope ?? GLOBAL_ADMIN_SCOPE,
+  }).then((envelope) => envelope.data).catch((error) => {
+    throw toOpsError(error, 'Unable to load counselling case.');
+  });
 }
 
 export function listConverts(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
@@ -641,6 +855,79 @@ export function listMissionInvitations(
   return opsGetList<MissionInvitationRecord>('admin/mission/invitations', params);
 }
 
+export function listTeamAssignments(params: ListQuery = {}): Promise<OpsListResult<TeamAssignmentRecord>> {
+  return opsGetList<TeamAssignmentRecord>('admin/mission/team-assignments', params);
+}
+
+export function listMissionPartners(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/mission/partners', params);
+}
+
+export function listMissionSupportRequests(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/mission/support-requests', params);
+}
+
+export async function fetchFollowUpGaps(scope?: AdminScope): Promise<Record<string, number>> {
+  try {
+    const envelope = await apiRequest<ApiSuccessEnvelope<Record<string, number>>>('admin/mission/follow-up/gaps', {
+      method: 'GET',
+      scope: scope ?? GLOBAL_ADMIN_SCOPE,
+    });
+    return envelope.data;
+  } catch (error) {
+    throw toOpsError(error, 'Unable to load follow-up gaps.');
+  }
+}
+
+export function createCrusade(input: JsonObject, scope?: AdminScope): Promise<CrusadeRecord> {
+  return opsMutate<CrusadeRecord>('admin/mission/crusades', 'POST', input, { scope });
+}
+
+export function transitionMissionInvitation(
+  invitationId: string,
+  status: string,
+  reasonCode?: string | null,
+  scope?: AdminScope,
+): Promise<MissionInvitationRecord> {
+  return opsMutate<MissionInvitationRecord>(
+    `admin/mission/invitations/${encodeURIComponent(invitationId)}/transitions`,
+    'POST',
+    { status, reason_code: reasonCode ?? null },
+    { scope },
+  );
+}
+
+export function requestMissionAdvisory(
+  instruction: string,
+  context: JsonObject = {},
+  scope?: AdminScope,
+): Promise<Record<string, unknown>> {
+  return opsMutate('admin/platform/advisory/requests', 'POST', {
+    assistant: 'mission',
+    use_case: 'follow_up_gap_detection',
+    instruction,
+    context,
+  }, { scope });
+}
+
+export function createTeamAssignment(
+  input: { crusade_id: string; person_id: string; role_code: string; assigned_at?: string | null },
+  scope?: AdminScope,
+): Promise<TeamAssignmentRecord> {
+  return opsMutate<TeamAssignmentRecord>('admin/mission/team-assignments', 'POST', input as unknown as JsonObject, {
+    scope,
+  });
+}
+
+export function endTeamAssignment(assignmentId: string, scope?: AdminScope): Promise<TeamAssignmentRecord> {
+  return opsMutate<TeamAssignmentRecord>(
+    `admin/mission/team-assignments/${encodeURIComponent(assignmentId)}/end`,
+    'POST',
+    {},
+    { scope },
+  );
+}
+
 export function captureSoul(
   crusadeId: string,
   input: CaptureSoulInput,
@@ -718,6 +1005,9 @@ export type OpsDatasetKey =
   | 'crusades'
   | 'souls'
   | 'invitations'
+  | 'team-assignments'
+  | 'mission-partners'
+  | 'mission-support-requests'
   | 'prayer-requests'
   | 'pastoral-needs'
   | 'people'
@@ -760,9 +1050,12 @@ export function resolveOpsDataset(screen: {
   }
   if (id === 'F-04' || route === '/admin/people/follow-up') return 'follow-up-tasks';
   if (id === 'I-02' || route === '/admin/mission/crusades') return 'crusades';
+  if (id === 'I-08' || (route.includes('/teams') && !route.match(/\/teams\/[^/]+$/))) return 'team-assignments';
   if (id === 'I-10' || id === 'I-13' || route === '/admin/mission/souls' || route === '/admin/mission/mentor-assignments') {
     return 'souls';
   }
+  if (id === 'I-16' || route === '/admin/mission/partners') return 'mission-partners';
+  if (id === 'I-18' || route.includes('/support-requests')) return 'mission-support-requests';
   if (route.includes('/invitations')) return 'invitations';
   if (id === 'F-10' || route === '/admin/people/prayer-requests') return 'prayer-requests';
   if (id === 'F-11' || route === '/admin/people/needs') return 'pastoral-needs';
@@ -804,6 +1097,12 @@ export async function loadOpsDataset(
       return listSouls(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'invitations':
       return listMissionInvitations(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'team-assignments':
+      return listTeamAssignments(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'mission-partners':
+      return listMissionPartners(params) as Promise<OpsListResult<Record<string, unknown>>>;
+    case 'mission-support-requests':
+      return listMissionSupportRequests(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'prayer-requests':
       return listPrayerRequests(params) as Promise<OpsListResult<Record<string, unknown>>>;
     case 'pastoral-needs':
@@ -986,11 +1285,13 @@ export function opsRecordsToRows(
                   : column === 'End Date' || column === 'Ends'
                     ? shortDate(get('ends_at') === '—' ? null : get('ends_at'))
                     : column === 'Status'
-                      ? item.published_at
-                        ? 'Published'
-                        : 'Draft'
+                      ? get('status') === '—'
+                        ? item.published_at
+                          ? 'Published'
+                          : 'Draft'
+                        : get('status')
                       : column === 'Souls'
-                        ? '—'
+                        ? get('souls_count')
                         : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'souls':
@@ -1003,8 +1304,14 @@ export function opsRecordsToRows(
                   ? '—'
                   : column === 'Status'
                     ? get('status')
-                    : column === 'Captured' || column === 'Date'
-                      ? shortDate(get('captured_at') === '—' ? null : get('captured_at'))
+                    : column === 'Date Won' || column === 'Captured' || column === 'Date'
+                      ? shortDate(
+                          (column === 'Date Won' ? get('converted_at') : get('captured_at')) === '—'
+                            ? null
+                            : column === 'Date Won'
+                              ? get('converted_at')
+                              : get('captured_at'),
+                        )
                       : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'invitations':
@@ -1020,6 +1327,24 @@ export function opsRecordsToRows(
                     : column === 'Status'
                       ? get('status')
                       : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'team-assignments':
+          mapped[column] =
+            column === 'Team' || column === 'Role'
+              ? humanValue(item, 'role_code', 'name')
+              : column === 'Leader' || column === 'Member'
+                ? humanValue(item, 'person_name')
+                : column === 'Members'
+                  ? '—'
+                  : column === 'Size'
+                    ? '—'
+                    : column === 'Crusade'
+                      ? humanValue(item, 'crusade_name')
+                      : column === 'Status'
+                        ? get('status')
+                        : column === 'Assigned'
+                          ? shortDate(get('assigned_at') === '—' ? null : get('assigned_at'))
+                          : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'prayer-requests':
           mapped[column] =
@@ -1197,6 +1522,32 @@ export function opsRecordsToRows(
                     : column === 'Status'
                       ? get('status')
                       : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'mission-partners':
+          mapped[column] =
+            column === 'Partner Name' || column === 'Name'
+              ? humanValue(item, 'name')
+              : column === 'Type'
+                ? humanValue(item, 'partner_type')
+                : column === 'Location'
+                  ? humanValue(item, 'geography')
+                  : column === 'Relationship'
+                    ? humanValue(item, 'partner_type')
+                    : column === 'Status'
+                      ? get('status')
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+          break;
+        case 'mission-support-requests':
+          mapped[column] =
+            column === 'Request' || column === 'Title' || column === 'Name'
+              ? humanValue(item, 'title')
+              : column === 'Category'
+                ? humanValue(item, 'category')
+                : column === 'Priority'
+                  ? humanValue(item, 'priority')
+                  : column === 'Status'
+                    ? get('status')
+                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         default:
           mapped[column] = humanValue(item, column.toLowerCase().replaceAll(' ', '_'));

@@ -14,20 +14,52 @@ import { executeAdminAction } from '../lib/admin-mutation-dispatcher';
 import { SearchSelect } from './search-select';
 
 function channelForRoute(route: string): string {
-  if (route.includes('/email/')) return 'email';
   if (route.includes('/sms/')) return 'sms';
   if (route.includes('/whatsapp/')) return 'whatsapp';
   if (route.includes('/push/')) return 'push';
-  return 'in_app';
+  if (route.includes('/in-app/')) return 'in_app';
+  return 'email';
 }
+
+function kindForRoute(route: string): string {
+  if (route.includes('/announcements/')) return 'announcement';
+  if (route.includes('/newsletters/')) return 'newsletter';
+  if (route.includes('/in-app/')) return 'notification';
+  return 'broadcast';
+}
+
+function purposeForRoute(route: string): string {
+  if (route.includes('/announcements/')) return 'communications.ministry_updates';
+  if (route.includes('/newsletters/')) return 'communications.ministry_updates';
+  if (route.includes('/kca')) return 'communications.kca_updates';
+  return 'communications.ministry_updates';
+}
+
+const PURPOSE_OPTIONS = [
+  { value: 'communications.ministry_updates', label: 'Ministry updates' },
+  { value: 'communications.event_reminders', label: 'Event reminders' },
+  { value: 'communications.kca_updates', label: 'KCA updates' },
+  { value: 'communications.missions_updates', label: 'Missions updates' },
+  { value: 'communications.pastoral_care', label: 'Pastoral care' },
+];
+
+const CHANNEL_OPTIONS = [
+  { value: 'email', label: 'Email' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'push', label: 'Push' },
+  { value: 'in_app', label: 'In-App' },
+];
 
 export function CommunicationsComposePanel({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const live = !designFixturesEnabled() && shouldUseCatalogLiveData();
-  const channel = channelForRoute(screen.route);
+  const [channel, setChannel] = useState(() => channelForRoute(screen.route));
+  const channelLocked = screen.route !== '/admin/communications/broadcasts/create';
+  const kind = kindForRoute(screen.route);
   const [audienceId, setAudienceId] = useState('');
   const [templateId, setTemplateId] = useState('');
-  const [purpose, setPurpose] = useState(screen.title.replace(/\s+/g, '_').toLowerCase());
+  const [purpose, setPurpose] = useState(() => purposeForRoute(screen.route));
   const [subject, setSubject] = useState('');
   const [audienceCount, setAudienceCount] = useState<number | null>(null);
   const [templateCount, setTemplateCount] = useState<number | null>(null);
@@ -83,8 +115,8 @@ export function CommunicationsComposePanel({ screen }: { screen: AdminScreen }) 
           audience_id: audienceId,
           template_id: templateId,
           channel,
-          kind: 'broadcast',
-          purpose: purpose || 'admin_broadcast',
+          kind,
+          purpose: purpose || 'communications.ministry_updates',
           title: subject || screen.title,
         },
         scope: CATALOG_GLOBAL_SCOPE,
@@ -148,9 +180,26 @@ export function CommunicationsComposePanel({ screen }: { screen: AdminScreen }) 
               required
             />
           </label>
+          <label>
+            <span>{t('admin.channel', { defaultMessage: 'Channel' })}</span>
+            <select
+              name="channel"
+              value={channel}
+              disabled={channelLocked}
+              onChange={(event) => setChannel(event.target.value)}
+            >
+              {CHANNEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="wide">
-            <span>{t('admin.purpose', { defaultMessage: 'Purpose code' })}</span>
-            <input name="purpose" value={purpose} onChange={(event) => setPurpose(event.target.value)} required />
+            <span>{t('admin.purpose', { defaultMessage: 'Purpose' })}</span>
+            <select name="purpose" value={purpose} onChange={(event) => setPurpose(event.target.value)} required>
+              {PURPOSE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </label>
           <label className="wide">
             <span>{t('admin.subject', { defaultMessage: 'Subject / title' })}</span>

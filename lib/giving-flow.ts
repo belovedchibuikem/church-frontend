@@ -4,14 +4,38 @@ export const GIVING_DRAFT_KEY = 'fhc.giving-draft';
 export const GIVING_RECEIPT_KEY = 'fhc.giving-receipt';
 
 export const GIVING_FUNDS = [
-  'General Offering',
   'Tithe',
+  'Offering',
   'Mission Care Fund',
   'Building Hope Church',
   'KCA Scholarship',
 ] as const;
 
 export const GIVING_PRESETS = [1000, 2500, 5000, 10000, 25000, 50000] as const;
+
+export const MANUAL_GIVING_METHODS = ['Bank Transfer', 'USSD', 'Wallet'] as const;
+
+export function isManualGivingMethod(method: string): boolean {
+  return (MANUAL_GIVING_METHODS as readonly string[]).includes(method);
+}
+
+export function givingFundToPurpose(fund: string): 'tithe' | 'offering' | 'missions' | 'projects' | 'kca' | 'donation' {
+  switch (fund) {
+    case 'Tithe':
+      return 'tithe';
+    case 'Offering':
+    case 'General Offering':
+      return 'offering';
+    case 'Mission Care Fund':
+      return 'missions';
+    case 'Building Hope Church':
+      return 'projects';
+    case 'KCA Scholarship':
+      return 'kca';
+    default:
+      return 'donation';
+  }
+}
 
 export type GivingDraft = {
   amount: string;
@@ -36,7 +60,7 @@ export type GivingReceiptSnapshot = {
 
 export const emptyGivingDraft = (): GivingDraft => ({
   amount: '',
-  fund: 'General Offering',
+  fund: 'Tithe',
   note: '',
   method: 'Card',
   currency: 'NGN',
@@ -67,7 +91,7 @@ export function readGivingDraft(): GivingDraft | null {
   if (!draft || typeof draft.amount !== 'string') return null;
   return {
     amount: draft.amount,
-    fund: draft.fund || 'General Offering',
+    fund: draft.fund || 'Tithe',
     note: draft.note ?? '',
     method: draft.method || 'Card',
     currency: (draft.currency || 'NGN').toUpperCase(),

@@ -12,6 +12,8 @@ import {
   emptyGivingDraft,
   GIVING_FUNDS,
   GIVING_PRESETS,
+  givingFundToPurpose,
+  isManualGivingMethod,
   parseGivingAmountMajor,
   readGivingDraft,
   readGivingReceiptSnapshot,
@@ -34,6 +36,7 @@ import {
   isPaymentGovernanceDenied,
   isRecentMfaRequiredError,
   PAYMENT_GOVERNANCE_DENIED_MESSAGE,
+  storeUserFile,
   type CurrentUser,
   type UserPaymentReceipt,
 } from '@/lib/user-api';
@@ -53,8 +56,9 @@ function formatWhen(value?: string | null, locale?: string): string {
 
 function givingFundLabel(t: TranslateFn, fund: string): string {
   const keys: Record<string, string> = {
-    'General Offering': 'account.givingFundGeneralOffering',
     Tithe: 'account.givingFundTithe',
+    Offering: 'account.givingFundOffering',
+    'General Offering': 'account.givingFundOffering',
     'Mission Care Fund': 'account.givingFundMissionCare',
     'Building Hope Church': 'account.givingFundBuildingHope',
     'KCA Scholarship': 'account.givingFundKcaScholarship',
@@ -346,6 +350,8 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [requireProof, setRequireProof] = useState(false);
   const name = displayNameFromUser(user);
 
   useEffect(() => {
@@ -368,16 +374,53 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
     setError(null);
     setMfaRequired(false);
     try {
+      const needsProof = isManualGivingMethod(draft.method) || requireProof;
+      let proofId: string | undefined;
+      if (needsProof) {
+        if (!proofFile) {
+          setError(
+            t('account.uploadPaymentReceiptRequired', {
+              defaultMessage: 'Upload a photo or PDF of your payment receipt before recording this gift.',
+            }),
+          );
+          setBusy(false);
+          return;
+        }
+        const formData = new FormData();
+        formData.set('file', proofFile);
+        formData.set('purpose', 'payment.proof');
+        formData.set('classification', 'internal');
+        const asset = await storeUserFile(formData);
+        proofId = asset.id ?? asset.public_id ?? undefined;
+        if (!proofId) {
+          setError(t('errors.uploadReceiptFailed', { defaultMessage: 'The payment receipt could not be stored. Try again.' }));
+          setBusy(false);
+          return;
+        }
+      }
+
       const intent = await createGivingIntent({
         amount_minor: amountMinor,
         currency: draft.currency,
         fund: draft.fund,
+        purpose_code: givingFundToPurpose(draft.fund),
         note: draft.note || null,
+        proof_file_asset_id: proofId,
       });
       const intentId = intent.id ?? intent.public_id ?? null;
 
       if (isLocalManualGivingProvider(intent.provider_code) && intentId) {
-        const completed = await completeGivingIntent(intentId);
+        if (!proofId) {
+          setRequireProof(true);
+          setError(
+            t('account.uploadPaymentReceiptRequired', {
+              defaultMessage: 'Upload a photo or PDF of your payment receipt before recording this gift.',
+            }),
+          );
+          setBusy(false);
+          return;
+        }
+        const completed = await completeGivingIntent(intentId, proofId);
         const receiptId = completed.receipt?.id ?? completed.receipt?.public_id ?? null;
         let receiptNumber = completed.receipt?.receipt_number ?? null;
         let issuedAt = completed.receipt?.issued_at ?? completed.receipt?.created_at ?? null;
@@ -546,6 +589,21 @@ function GivePaymentStep({ user }: { user: CurrentUser | null }) {
                 vars: { note: draft.note },
               })}
             </p>
+          ) : null}
+          {(isManualGivingMethod(draft.method) || requireProof) ? (
+            <label className="wide">
+              {t('account.paymentReceipt', { defaultMessage: 'Payment receipt' })}
+              <input
+                accept="image/*,application/pdf"
+                onChange={(event) => setProofFile(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+              <small>
+                {t('account.paymentReceiptHint', {
+                  defaultMessage: 'Required for bank transfer, USSD, wallet, or other manual payment. Tithe and Offering are recorded as separate gifts.',
+                })}
+              </small>
+            </label>
           ) : null}
           {error ? (
             <div className="panel" data-giving-error="true" role="alert">

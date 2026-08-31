@@ -145,7 +145,32 @@ export type KcaModuleSummary = {
   sequence?: number | null;
   is_active?: boolean;
   lessons_count?: number | null;
-  lessons?: Array<{ id?: string; code?: string | null; title?: string | null; sequence?: number | null }>;
+  lessons?: Array<{
+    id?: string;
+    code?: string | null;
+    title?: string | null;
+    sequence?: number | null;
+    unlocked?: boolean;
+    day_index?: number | null;
+    lock_reason?: string;
+  }>;
+};
+
+export type KcaLessonDetail = {
+  id?: string;
+  module_id?: string | null;
+  code?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  body?: string | null;
+  content_url?: string | null;
+  estimated_minutes?: number | null;
+  sequence?: number | null;
+  day_index?: number | null;
+  lesson_type?: string | null;
+  unlocked?: boolean;
+  unlock_token?: string | null;
+  requires_acknowledgement?: boolean;
 };
 
 export type KcaAssignmentSummary = {
@@ -162,6 +187,8 @@ export type UserPaymentTransaction = {
   payment_intent_id?: string | null;
   amount_minor?: number | null;
   currency?: string | null;
+  purpose_code?: string | null;
+  provider_code?: string | null;
   status?: string | null;
   occurred_at?: string | null;
   created_at?: string | null;
@@ -257,6 +284,8 @@ export type UserDashboard = {
 export type GivingIntentInput = {
   amount_minor: number;
   currency: string;
+  purpose_code?: string | null;
+  proof_file_asset_id?: string | null;
   note?: string | null;
   fund?: string | null;
 };
@@ -357,6 +386,7 @@ export type UserMembership = {
 
 export type RequestChurchMembershipInput = {
   home_church_id?: string | null;
+  confirm_transfer?: boolean;
 };
 
 export type HomeChurchDashboard = {
@@ -385,9 +415,9 @@ export type HomeChurchReport = {
 export const EVENT_TICKET_UNAVAILABLE_MESSAGE =
   'This registration ticket is not available. It may not exist yet, or the ticket API is not enabled.';
 
-/** Member evidence submit / grading stay OD-008 — no user-api helper is exposed. */
+/** Member evidence submit uses POST /user/kca/assignments/{id}/evidence after storing a kca.evidence file. */
 export const KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE =
-  'Evidence submit is not available yet (OD-008). Assignment review stays with your mentor and administrators.';
+  'Upload a file first, then submit it as evidence for this assignment.';
 
 /** Forward browser session cookies on RSC/server fetches (credentials alone is not enough cross-origin). */
 async function serverSessionHeaders(): Promise<HeadersInit | undefined> {
@@ -646,6 +676,19 @@ export async function markUserNotificationRead(notificationId: string): Promise<
     },
   );
   return { ...notification, id: notification.id ?? notification.public_id };
+}
+
+/** POST /user/notifications/read-all */
+export async function markAllUserNotificationsRead(): Promise<UserNotification[]> {
+  const headers = new Headers(await serverSessionHeaders());
+  const data = await apiRequestData<unknown>('user/notifications/read-all', {
+    method: 'POST',
+    headers,
+  });
+  return asList<UserNotification>(data).map((item) => ({
+    ...item,
+    id: item.id ?? item.public_id,
+  }));
 }
 
 /** GET /user/dashboard — member home aggregate. */
@@ -908,6 +951,26 @@ export async function requestChurchMembership(
         ...(input.home_church_id != null && input.home_church_id !== ''
           ? { home_church_id: input.home_church_id }
           : {}),
+        ...(input.confirm_transfer ? { confirm_transfer: true } : {}),
+      }),
+    },
+  );
+  return { ...membership, id: membership.id ?? membership.public_id };
+}
+
+/** POST /user/home-churches/{homeChurch}/memberships */
+export async function requestHomeChurchMembership(
+  homeChurchId: string,
+  input: { confirm_transfer?: boolean } = {},
+): Promise<UserMembership> {
+  const headers = new Headers(await serverSessionHeaders());
+  const membership = await apiRequestData<UserMembership>(
+    `user/home-churches/${encodeURIComponent(homeChurchId)}/memberships`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        ...(input.confirm_transfer ? { confirm_transfer: true } : {}),
       }),
     },
   );
@@ -983,8 +1046,10 @@ export async function createGivingIntent(
   const body: JsonObject = {
     amount_minor: input.amount_minor,
     currency: input.currency.toUpperCase(),
+    purpose_code: input.purpose_code ?? 'offering',
     idempotency_key: idempotencyKey,
   };
+  if (input.proof_file_asset_id) body.proof_file_asset_id = input.proof_file_asset_id;
 
   const intent = await apiRequestData<UserPaymentIntent>('user/payments/giving-intents', {
     method: 'POST',
@@ -995,13 +1060,14 @@ export async function createGivingIntent(
 }
 
 /** POST /user/payments/giving-intents/{id}/complete — local_manual gateway only. */
-export async function completeGivingIntent(intentId: string): Promise<CompleteGivingResult> {
+export async function completeGivingIntent(intentId: string, proofFileAssetId: string): Promise<CompleteGivingResult> {
   const headers = new Headers(await serverSessionHeaders());
   return apiRequestData<CompleteGivingResult>(
     `user/payments/giving-intents/${encodeURIComponent(intentId)}/complete`,
     {
       method: 'POST',
       headers,
+      body: JSON.stringify({ proof_file_asset_id: proofFileAssetId }),
     },
   );
 }
@@ -1025,6 +1091,25 @@ export async function fetchUserPaymentIntent(intentId: string): Promise<UserPaym
   return { ...intent, id: intent.id ?? intent.public_id };
 }
 
+export type KcaAccess = {
+  state?: string;
+  destination?: string;
+  label?: string;
+  next_step?: string;
+  permitted_actions?: string[];
+  application?: JsonObject | null;
+  enrollment?: JsonObject | null;
+  timeline?: Array<JsonObject>;
+};
+
+/** GET /user/kca/me */
+export async function fetchKcaMe(): Promise<KcaAccess> {
+  return apiRequestData<KcaAccess>('user/kca/me', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
 /** GET /user/kca/dashboard */
 export async function fetchKcaDashboard(): Promise<KcaDashboard> {
   return apiRequestData<KcaDashboard>('user/kca/dashboard', {
@@ -1033,12 +1118,72 @@ export async function fetchKcaDashboard(): Promise<KcaDashboard> {
   });
 }
 
-/** POST /user/kca/applications — saves the authenticated member's KCA application. */
-export async function submitKcaApplication(applicationData: Record<string, string>): Promise<{ id: string; status: string; received_at?: string }> {
+/** GET /user/kca/applications/current */
+export async function fetchKcaCurrentApplication(): Promise<JsonObject | null> {
+  return apiRequestData<JsonObject | null>('user/kca/applications/current', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function submitMissionInvitation(input: {
+  title: string;
+  type?: string;
+  start?: string;
+  location?: string;
+  details?: string;
+  idempotencyKey?: string;
+}): Promise<{ id: string; status: string }> {
+  const idempotencyKey =
+    input.idempotencyKey ??
+    (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `mission-invite-${Date.now()}`);
+  return apiRequestData('user/mission/invitations', {
+    method: 'POST',
+    headers: {
+      ...(await serverSessionHeaders()),
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      title: input.title,
+      type: input.type,
+      start: input.start,
+      location: input.location,
+      details: input.details,
+      idempotency_key: idempotencyKey,
+    }),
+  });
+}
+
+export async function fetchMissionInvitations(): Promise<Array<{ id: string; status: string }>> {
+  const data = await apiRequestData<unknown>('user/mission/invitations', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<{ id: string; status: string }>(data);
+}
+
+export async function submitMissionSupportRequest(input: {
+  title: string;
+  details?: string;
+  category?: string;
+}): Promise<{ id: string; status: string }> {
+  return apiRequestData('user/mission/support-requests', {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify(input),
+  });
+}
+export async function submitKcaApplication(
+  applicationData: Record<string, string>,
+  options: { finalize?: boolean } = {},
+): Promise<{ id: string; status: string; received_at?: string }> {
   return apiRequestData('user/kca/applications', {
     method: 'POST',
     headers: await serverSessionHeaders(),
-    body: JSON.stringify({ application_data: applicationData }),
+    body: JSON.stringify({
+      application_data: applicationData,
+      finalize: options.finalize ?? true,
+    }),
   });
 }
 
@@ -1051,7 +1196,29 @@ export async function fetchKcaModules(): Promise<KcaModuleSummary[]> {
   return asList<KcaModuleSummary>(data);
 }
 
-/** GET /user/kca/modules/{module} */
+/** POST /user/kca/lessons/{id}/complete */
+export async function completeKcaLesson(
+  lessonId: string,
+  options: { acknowledged?: boolean; idempotencyKey?: string; unlockToken?: string } = {},
+): Promise<{ id?: string; completed_at?: string }> {
+  return apiRequestData(`user/kca/lessons/${encodeURIComponent(lessonId)}/complete`, {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify({
+      acknowledged: options.acknowledged ?? true,
+      idempotency_key: options.idempotencyKey ?? undefined,
+      unlock_token: options.unlockToken ?? undefined,
+    }),
+  });
+}
+
+/** GET /user/kca/lessons/{id} — published body only when the daily bundle is unlocked. */
+export async function fetchKcaLesson(lessonId: string): Promise<KcaLessonDetail> {
+  return apiRequestData<KcaLessonDetail>(`user/kca/lessons/${encodeURIComponent(lessonId)}`, {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
 export async function fetchKcaModule(moduleId: string): Promise<KcaModuleSummary> {
   return apiRequestData<KcaModuleSummary>(`user/kca/modules/${encodeURIComponent(moduleId)}`, {
     method: 'GET',
@@ -1059,13 +1226,47 @@ export async function fetchKcaModule(moduleId: string): Promise<KcaModuleSummary
   });
 }
 
-/** GET /user/kca/assignments — read-only; evidence submit is OD-008. */
+/** GET /user/kca/assignments — evidence submit is POST /user/kca/assignments/{id}/evidence. */
 export async function fetchKcaAssignments(): Promise<KcaAssignmentSummary[]> {
   const data = await apiRequestData<unknown>('user/kca/assignments', {
     method: 'GET',
     headers: await serverSessionHeaders(),
   });
   return asList<KcaAssignmentSummary>(data);
+}
+
+export async function fetchKcaAssignment(assignmentId: string): Promise<KcaAssignmentSummary> {
+  return apiRequestData<KcaAssignmentSummary>(`user/kca/assignments/${encodeURIComponent(assignmentId)}`, {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function submitKcaEvidence(
+  assignmentId: string,
+  fileAssetId: string,
+  idempotencyKey?: string,
+): Promise<{ id?: string; submitted_at?: string }> {
+  const key = idempotencyKey ?? newIdempotencyKey('kca-evidence');
+  const headers = new Headers(await serverSessionHeaders());
+  headers.set('Idempotency-Key', key);
+  return apiRequestData(`user/kca/assignments/${encodeURIComponent(assignmentId)}/evidence`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      file_asset_id: fileAssetId,
+      idempotency_key: key,
+    }),
+  });
+}
+
+export async function downloadKcaCertificatePdf(): Promise<Response> {
+  const headers = new Headers(await serverSessionHeaders());
+  headers.set('Accept', 'application/pdf, application/json');
+  return apiRequestResponse('user/kca/certificates/current/download', {
+    method: 'GET',
+    headers,
+  });
 }
 
 /** GET /user/kca/mentor */

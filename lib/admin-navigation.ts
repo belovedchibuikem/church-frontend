@@ -1,4 +1,4 @@
-import { adminScreens, type AdminScreen } from './admin-routes.ts';
+import { adminScreens, getAdminScreen, type AdminScreen } from './admin-routes.ts';
 
 export type AdminBreadcrumb = { label: string; route: string };
 
@@ -120,8 +120,17 @@ export function getInteractionRouteMap(screen: AdminScreen): Record<string, stri
   const actionKey = screen.action ? normalizeInteractionLabel(screen.action) : '';
   const canUseFormChild = Boolean(formChild && actionKey && /create|add|new|next/.test(actionKey) && /\/(create|new)(?:\/|$)/.test(formChild?.route ?? ''));
   const workflowDestination = screen.action ? primaryWorkflowDestinations[screen.id] : undefined;
+  const securityDestinations = screen.batch === 'O'
+    ? {
+        'open queue': screen.id === 'O-08' ? '/admin/security/safeguarding/cases' : '/admin/security/alerts',
+        'generate report': '/admin/security/audit-logs',
+        'view analytics': screen.id === 'O-01' ? '/admin/security/login-history' : '/admin/security',
+        'report incident': '/admin/security/safeguarding/cases',
+      }
+    : {};
   return {
     ...actionDestinations,
+    ...securityDestinations,
     ...(parent ? { back: parent.route, cancel: parent.route } : {}),
     ...(child ? { view: child, open: child, 'view details': child, 'see details': child } : {}),
     ...(canUseFormChild && formChild ? { [actionKey]: formChild.route } : {}),
@@ -130,5 +139,5 @@ export function getInteractionRouteMap(screen: AdminScreen): Record<string, stri
 }
 
 export function isCanonicalAdminRoute(route: string): boolean {
-  return route === '/admin/screens' || adminScreens.some((screen) => screen.route === route);
+  return route === '/admin/screens' || getAdminScreen(route) !== undefined;
 }

@@ -1,6 +1,7 @@
 import { ApiError, apiRequest, resolveApiBaseUrl } from './api-client';
 import type { ApiAdminScope, ApiSuccessEnvelope, JsonObject } from './api-types';
 import type { SearchSelectOption } from '../components/search-select';
+import { formatTimestamp } from './admin-identity-api';
 
 export type AdminScope = ApiAdminScope;
 
@@ -24,6 +25,8 @@ export const CATALOG_PATHS = {
   'kca.years': 'kca/years',
   'kca.cohorts': 'kca/cohorts',
   'kca.modules': 'kca/modules',
+  'kca.lessons': 'kca/lessons',
+  'kca.prerequisites': 'kca/prerequisites',
   'kca.lecturer_assignments': 'kca/lecturer-assignments',
   'kca.mentor_assignments': 'kca/mentor-assignments',
   'kca.evidence': 'kca/evidence-submissions',
@@ -32,6 +35,9 @@ export const CATALOG_PATHS = {
   'press.publications': 'press/publications',
   'press.translations': 'press/translations',
   'press.contributors': 'press/contributors',
+  'press.authors': 'press/authors',
+  'press.assets': 'press/assets',
+  'press.reviews': 'press/reviews',
   'events.events': 'events/events',
   'events.registrations': 'events/registrations',
   'finance.payment_intents': 'finance/payment-intents',
@@ -51,6 +57,7 @@ export const CATALOG_PATHS = {
   'platform.files': 'platform/files',
   'safeguarding.incidents': 'safeguarding/incidents',
   'safeguarding.guardians': 'safeguarding/guardian-relationships',
+  'safeguarding.child_profiles': 'safeguarding/child-profiles',
 } as const;
 
 export type CatalogDomainKey = keyof typeof CATALOG_PATHS;
@@ -251,14 +258,17 @@ export function resolveCatalogDataset(screen: {
   if (
     route === '/admin/press/publications' ||
     route === '/admin/press/manuscripts' ||
-    route === '/admin/press/catalogue'
+    route === '/admin/press/catalogue' ||
+    route === '/admin/press/distribution'
   ) {
     return 'press.publications';
   }
-  if (route === '/admin/press/authors') return 'press.contributors';
+  if (route === '/admin/press/authors') return 'press.authors';
   if (route === '/admin/press/translations' || route === '/admin/settings/translation-governance') {
     return 'press.translations';
   }
+  if (route.includes('/admin/press/manuscripts/') && route.includes('review')) return 'press.reviews';
+  if (route === '/admin/press/assets') return 'press.assets';
   if (route === '/admin/press/sales') return 'finance.payment_intents';
   if (route === '/admin/communications/templates') return 'communications.templates';
   if (route === '/admin/communications/audiences' || route === '/admin/communications/audiences/create' || route.startsWith('/admin/communications/audiences/')) {
@@ -304,10 +314,11 @@ export function resolveCatalogDataset(screen: {
     return 'privacy.data_subject_requests';
   }
   if (route === '/admin/security/safeguarding/cases') return 'safeguarding.incidents';
-  if (route === '/admin/security/guardian-consent' || route === '/admin/security/child-profiles') {
-    return 'safeguarding.guardians';
+  if (route === '/admin/security/guardian-consent') return 'safeguarding.guardians';
+  if (route === '/admin/security/child-profiles' || route === '/admin/security/communication-restrictions') {
+    return 'safeguarding.child_profiles';
   }
-  if (route === '/admin/press/assets' || route === '/admin/settings/uploads') return 'platform.files';
+  if (route === '/admin/settings/uploads') return 'platform.files';
   if (route === '/admin/kca/applications' || route === '/admin/kca/review-queue') return 'kca.applications';
   if (route === '/admin/kca/students') return 'kca.enrollments';
   if (route === '/admin/kca/evidence-reviews') return 'kca.evidence';
@@ -316,6 +327,9 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/cohorts') return 'kca.cohorts';
   if (route === '/admin/kca/years') return 'kca.years';
   if (route === '/admin/kca/modules') return 'kca.modules';
+  if (route === '/admin/kca/lessons') return 'kca.lessons';
+  if (route.includes('/admin/kca/modules/') && route.endsWith('/prerequisites')) return 'kca.prerequisites';
+  if (route === '/admin/kca/alumni') return 'kca.certificates';
   if (route === '/admin/kca/lecturers') return 'kca.lecturer_assignments';
   if (route === '/admin/kca/mentors') return 'kca.mentor_assignments';
   return null;
@@ -331,6 +345,11 @@ export function resolveCatalogPurposeFilter(route: string): string | undefined {
   if (route === '/admin/finance/kca-payments') return 'kca';
   if (route === '/admin/finance/publication-payments' || route === '/admin/press/sales') return 'publication';
   return undefined;
+}
+
+function humanizeCatalogToken(value: string): string {
+  if (!value || value === '—') return value;
+  return value.replaceAll(/[._-]+/g, ' ').trim();
 }
 
 /** Project catalog records onto existing platform table column labels. */
@@ -366,7 +385,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('applicant')) {
         mapped[column] = get('person_name', 'applicant_name', 'name');
       } else if (key.includes('status')) {
-        mapped[column] = get('status');
+        mapped[column] = humanizeCatalogToken(get('status'));
       } else if (key.includes('author') || key.includes('donor') || key.includes('user') || key === 'by') {
         mapped[column] = get(
           'author_name',
@@ -378,20 +397,24 @@ export function catalogRecordsToRows(
           'donor_name',
         );
       } else if (key.includes('stage')) {
-        mapped[column] = get('status', 'stage');
-      } else if (key.includes('category') || key.includes('channel') || key.includes('type') || key.includes('reason')) {
-        mapped[column] = get(
-          'category',
-          'channel',
-          'channel_code',
-          'purpose_code',
-          'kind',
-          'format',
-          'type',
-          'concern_type',
-          'relationship_type',
-          'request_type',
-          'condition_type',
+        mapped[column] = humanizeCatalogToken(get('status', 'stage'));
+      } else if (key === 'channel' || key.endsWith(' channel')) {
+        mapped[column] = humanizeCatalogToken(get('channel', 'provider_code', 'channel_code'));
+      } else if (key.includes('category') || key.includes('type') || key.includes('reason')) {
+        mapped[column] = humanizeCatalogToken(
+          get(
+            'category',
+            'purpose_code',
+            'kind',
+            'format',
+            'type',
+            'concern_type',
+            'relationship_type',
+            'request_type',
+            'condition_type',
+            'reason',
+            'reason_code',
+          ),
         );
       } else if (key.includes('language')) {
         mapped[column] = get('language_code', 'language');
@@ -403,22 +426,34 @@ export function catalogRecordsToRows(
         key.includes('updated') ||
         key === 'time'
       ) {
-        mapped[column] = get(
-          'received_at',
-          'submitted_at',
-          'published_at',
-          'occurred_at',
-          'opened_at',
-          'succeeded_at',
-          'starts_at',
-          'starts_on',
-          'issued_at',
-          'registered_at',
-          'created_at',
-          'updated_at',
-          'status_changed_at',
-          'reviewed_at',
-        );
+        const timestamp =
+          key === 'date' || key === 'date & time'
+            ? get(
+                'occurred_at',
+                'issued_at',
+                'requested_at',
+                'reconciled_at',
+                'succeeded_at',
+                'created_at',
+              )
+            : get(
+                'received_at',
+                'submitted_at',
+                'published_at',
+                'occurred_at',
+                'opened_at',
+                'succeeded_at',
+                'starts_at',
+                'starts_on',
+                'issued_at',
+                'registered_at',
+                'created_at',
+                'updated_at',
+                'status_changed_at',
+                'reviewed_at',
+                'decided_at',
+              );
+        mapped[column] = formatTimestamp(timestamp === '—' ? null : timestamp);
       } else if (key.includes('amount')) {
         mapped[column] = get('amount', 'amount_minor');
       } else if (key === 'code') {

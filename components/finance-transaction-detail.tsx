@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/components/locale-provider';
+import { formatTimestamp } from '../lib/admin-identity-api';
 import type { AdminScreen } from '../lib/admin-routes.ts';
 import { apiRequest, ApiError } from '../lib/api-client';
 import type { ApiSuccessEnvelope, JsonObject } from '../lib/api-types';
@@ -101,15 +102,16 @@ export function FinanceTransactionDetail({ screen }: { screen: AdminScreen }) {
   };
 
   const display = {
-    Amount: details.amount ?? details.Amount ?? '—',
-    Type: details.category ?? details.purpose_code ?? details.Type ?? '—',
-    'Transaction ID': details.id ?? transactionId ?? '—',
-    Date: details.occurred_at ?? details.Date ?? '—',
-    Donor: details.donor_name ?? details.payer_name ?? details.Donor ?? '—',
-    Channel: details.channel ?? details.provider_code ?? details.Channel ?? '—',
-    Provider: details.provider_code ?? details.Provider ?? '—',
-    Status: details.status ?? details.Status ?? '—',
-    Receipt: details.receipt_number ?? details.Receipt ?? '—',
+    Amount: details.amount ?? details.Amount ?? 'Not provided',
+    Type: details.category ?? details.purpose_code ?? details.Type ?? 'Not provided',
+    'Transaction ID': details.id ?? transactionId ?? 'Not provided',
+    Date: details.occurred_at ? formatTimestamp(details.occurred_at) : (details.Date ?? 'Not provided'),
+    Donor: details.donor_name ?? details.payer_name ?? details.Donor ?? 'Not provided',
+    Channel: details.channel ?? details.provider_code ?? details.Channel ?? 'Not provided',
+    Provider: details.provider_code ?? details.Provider ?? 'Not provided',
+    Status: details.status ?? details.Status ?? 'Not provided',
+    Reconciliation: details.reconciliation_status ?? 'Not provided',
+    Receipt: details.receipt_number ?? details.Receipt ?? 'Not provided',
   };
 
   return (

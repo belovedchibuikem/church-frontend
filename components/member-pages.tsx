@@ -179,7 +179,7 @@ export function LiveMyChurchPage({ route }: { route: SiteRoute }) {
   return (
     <>
       <MemberHero
-        action={{ href: '/join-church/register', label: t('member.joinChurch', { defaultMessage: 'Join a church' }) }}
+        action={{ href: '/join-church/register', label: t('member.joinChurch', { defaultMessage: '+ Join a church' }) }}
         body={t('member.myChurchBody', { defaultMessage: 'Live memberships from your Family House account. Status and join dates come from the church API.' })}
         eyebrow={t('member.myChurch', { defaultMessage: 'MY CHURCH' })}
         secondary={{ href: '/find-church', label: t('member.findChurch', { defaultMessage: 'Find a church' }) }}

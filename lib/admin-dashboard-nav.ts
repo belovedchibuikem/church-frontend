@@ -1,0 +1,373 @@
+export type DashboardNavItem = { icon: string; label: string; href: string; screenId: string };
+
+export const dashboardNavItems: DashboardNavItem[] = [
+  { icon: '◆', label: 'Global Admin', href: '/admin', screenId: 'A-03' },
+  { icon: '◎', label: 'Geography', href: '/admin/geography', screenId: 'C-01' },
+  { icon: '⌂', label: 'Home Churches', href: '/admin/home-churches/dashboard', screenId: 'D-01' },
+  { icon: '▣', label: 'Church', href: '/admin/church/dashboard', screenId: 'E-01' },
+  { icon: '◇', label: 'KCA', href: '/admin/kca', screenId: 'G-01' },
+  { icon: '⌖', label: 'Mission', href: '/admin/mission', screenId: 'I-01' },
+  { icon: '▤', label: 'Press', href: '/admin/press', screenId: 'J-01' },
+  { icon: '₦', label: 'Finance', href: '/admin/finance', screenId: 'K-01' },
+  { icon: '◉', label: 'Communications', href: '/admin/communications', screenId: 'M-01' },
+  { icon: '▦', label: 'Reports & Analytics', href: '/admin/reports', screenId: 'N-01' },
+  { icon: '!', label: 'Security', href: '/admin/security', screenId: 'O-01' },
+];
+
+export type DashboardQuickAction = { label: string; href: string };
+
+export const dashboardQuickActions: Record<string, DashboardQuickAction[]> = {
+  'A-03': [
+    { label: 'Manage Users', href: '/admin/users' },
+    { label: 'Approve Requests', href: '/admin/approvals' },
+    { label: 'Generate Report', href: '/admin/reports' },
+    { label: 'System Settings', href: '/admin/settings/platform' },
+  ],
+  'C-01': [
+    { label: 'View Countries', href: '/admin/geography/countries' },
+    { label: 'Hierarchy Tree', href: '/admin/geography/hierarchy' },
+    { label: 'Geography Map', href: '/admin/geography/map' },
+    { label: 'Territory Reports', href: '/admin/geography/reports' },
+  ],
+  'D-01': [
+    { label: 'Applications', href: '/admin/home-churches/applications' },
+    { label: 'Home Churches', href: '/admin/home-churches' },
+    { label: 'New Application', href: '/admin/home-churches/applications/new' },
+    { label: 'Reports', href: '/admin/reports/home-churches' },
+  ],
+  'E-01': [
+    { label: 'Add Member', href: '/admin/church/members' },
+    { label: 'First Timers', href: '/admin/church/first-timers' },
+    { label: 'Church Reports', href: '/admin/church/reports' },
+    { label: 'Churches', href: '/admin/churches' },
+  ],
+  'F-17': [
+    { label: 'Directory', href: '/admin/people' },
+    { label: 'First Timers', href: '/admin/people/first-timers' },
+    { label: 'Follow-Up', href: '/admin/people/follow-up' },
+    { label: 'Converts', href: '/admin/people/converts' },
+  ],
+  'G-01': [
+    { label: 'View Review Queue', href: '/admin/kca/review-queue' },
+    { label: 'Create Orientation Batch', href: '/admin/kca/orientation' },
+    { label: 'Generate Reports', href: '/admin/reports/kca' },
+    { label: 'Admission Settings', href: '/admin/settings/kca' },
+  ],
+  'I-01': [
+    { label: 'Create Crusade', href: '/admin/mission/crusades/create' },
+    { label: 'View All Crusades', href: '/admin/mission/crusades' },
+    { label: 'Souls', href: '/admin/mission/souls' },
+    { label: 'Mission Reports', href: '/admin/mission/reports' },
+  ],
+  'J-01': [
+    { label: 'Create Publication', href: '/admin/press/publications/create' },
+    { label: 'Publications', href: '/admin/press/publications' },
+    { label: 'Manuscripts', href: '/admin/press/manuscripts' },
+    { label: 'Press Analytics', href: '/admin/press/analytics' },
+  ],
+  'K-01': [
+    { label: 'Transactions', href: '/admin/finance/transactions' },
+    { label: 'Refunds', href: '/admin/finance/refunds' },
+    { label: 'Disputes', href: '/admin/finance/disputes' },
+    { label: 'Finance Reports', href: '/admin/finance/reports' },
+  ],
+  'M-01': [
+    { label: 'Compose Broadcast', href: '/admin/communications/broadcasts/create' },
+    { label: 'Create Announcement', href: '/admin/communications/announcements/create' },
+    { label: 'Delivery Queue', href: '/admin/communications/delivery-queue' },
+    { label: 'Failed Messages', href: '/admin/communications/failed' },
+  ],
+  'N-01': [
+    { label: 'Church Analytics', href: '/admin/reports/churches' },
+    { label: 'Home Church Analytics', href: '/admin/reports/home-churches' },
+    { label: 'Country Comparison', href: '/admin/reports/countries' },
+    { label: 'Finance Analytics', href: '/admin/reports/finance' },
+  ],
+  'N-02': [
+    { label: 'Church Directory', href: '/admin/churches' },
+    { label: 'Church Dashboard', href: '/admin/church/dashboard' },
+    { label: 'Membership Report', href: '/admin/reports/membership' },
+    { label: 'First Timers Report', href: '/admin/reports/first-timers' },
+  ],
+  'N-03': [
+    { label: 'Home Churches', href: '/admin/home-churches' },
+    { label: 'Applications', href: '/admin/home-churches/applications' },
+    { label: 'Attendance', href: '/admin/home-churches/attendance' },
+    { label: 'Global Reports', href: '/admin/reports' },
+  ],
+  'N-04': [
+    { label: 'People Directory', href: '/admin/people' },
+    { label: 'Members', href: '/admin/church/members' },
+    { label: 'Church Analytics', href: '/admin/reports/churches' },
+    { label: 'Trends', href: '/admin/reports/trends' },
+  ],
+  'N-05': [
+    { label: 'First Timers', href: '/admin/church/first-timers' },
+    { label: 'Follow-up Queue', href: '/admin/church/first-timers' },
+    { label: 'Membership Report', href: '/admin/reports/membership' },
+    { label: 'Church Analytics', href: '/admin/reports/churches' },
+  ],
+  'N-06': [
+    { label: 'Church Dashboard', href: '/admin/church/dashboard' },
+    { label: 'First Timers', href: '/admin/church/first-timers' },
+    { label: 'Membership Report', href: '/admin/reports/membership' },
+    { label: 'Missions Report', href: '/admin/reports/missions' },
+  ],
+  'N-07': [
+    { label: 'Mission Dashboard', href: '/admin/mission' },
+    { label: 'Crusades', href: '/admin/mission/crusades' },
+    { label: 'Mission Reports', href: '/admin/mission/reports' },
+    { label: 'Country Comparison', href: '/admin/reports/countries' },
+  ],
+  'N-08': [
+    { label: 'KCA Dashboard', href: '/admin/kca' },
+    { label: 'Students', href: '/admin/kca/students' },
+    { label: 'Applications', href: '/admin/kca/applications' },
+    { label: 'Mentor Report', href: '/admin/reports/mentors' },
+  ],
+  'N-09': [
+    { label: 'Mentors', href: '/admin/kca/mentors' },
+    { label: 'KCA Dashboard', href: '/admin/kca' },
+    { label: 'KCA Report', href: '/admin/reports/kca' },
+    { label: 'Global Reports', href: '/admin/reports' },
+  ],
+  'N-10': [
+    { label: 'Press Dashboard', href: '/admin/press' },
+    { label: 'Publications', href: '/admin/press/publications' },
+    { label: 'Press Analytics', href: '/admin/press/analytics' },
+    { label: 'Press AI', href: '/admin/reports/press-ai' },
+  ],
+  'N-11': [
+    { label: 'Finance Dashboard', href: '/admin/finance' },
+    { label: 'Transactions', href: '/admin/finance/transactions' },
+    { label: 'Finance Reports', href: '/admin/finance/reports' },
+    { label: 'Reconciliation', href: '/admin/finance/reconciliation' },
+  ],
+  'N-12': [
+    { label: 'Countries', href: '/admin/geography/countries' },
+    { label: 'Geography Dashboard', href: '/admin/geography' },
+    { label: 'Territory Report', href: '/admin/reports/territories' },
+    { label: 'Global Reports', href: '/admin/reports' },
+  ],
+  'N-13': [
+    { label: 'Administrative Units', href: '/admin/geography/regions' },
+    { label: 'Hierarchy', href: '/admin/geography/hierarchy' },
+    { label: 'Country Report', href: '/admin/reports/countries' },
+    { label: 'Geography Reports', href: '/admin/geography/reports' },
+  ],
+  'N-14': [
+    { label: 'Global Reports', href: '/admin/reports' },
+    { label: 'Church Analytics', href: '/admin/reports/churches' },
+    { label: 'Membership Report', href: '/admin/reports/membership' },
+    { label: 'Finance Analytics', href: '/admin/reports/finance' },
+  ],
+  'N-15': [
+    { label: 'Global Reports', href: '/admin/reports' },
+    { label: 'Church Analytics', href: '/admin/reports/churches' },
+    { label: 'Membership Report', href: '/admin/reports/membership' },
+    { label: 'People Directory', href: '/admin/people' },
+  ],
+  'N-16': [
+    { label: 'Press Analytics', href: '/admin/press/analytics' },
+    { label: 'Publications', href: '/admin/press/publications' },
+    { label: 'Press Dashboard', href: '/admin/press' },
+    { label: 'Catalogue', href: '/admin/press/catalogue' },
+  ],
+  'O-01': [
+    { label: 'Create Record', href: '/admin/security/safeguarding/cases' },
+    { label: 'Open Queue', href: '/admin/security/alerts' },
+    { label: 'Generate Report', href: '/admin/security/audit-logs' },
+    { label: 'View Analytics', href: '/admin/security/login-history' },
+  ],
+  'O-08': [
+    { label: 'Report Incident', href: '/admin/security/safeguarding/cases' },
+    { label: 'Open Queue', href: '/admin/security/safeguarding/cases' },
+    { label: 'Generate Report', href: '/admin/security/audit-logs' },
+    { label: 'View Analytics', href: '/admin/security' },
+  ],
+};
+
+export const dashboardMetricLinks: Record<string, Record<string, string>> = {
+  'A-03': {
+    'Total Churches': '/admin/churches',
+    'Home Churches': '/admin/home-churches',
+    Members: '/admin/people',
+    Countries: '/admin/geography/countries',
+  },
+  'C-01': {
+    Countries: '/admin/geography/countries',
+    'Regions / States': '/admin/geography/regions',
+    'Local Areas': '/admin/geography/local-areas',
+    Churches: '/admin/geography/organizations',
+  },
+  'D-01': {
+    'Total Home Churches': '/admin/home-churches',
+    'Active Home Churches': '/admin/home-churches',
+    'Total Members': '/admin/home-churches/members',
+    Leaders: '/admin/home-churches/leaders',
+    'New Applications': '/admin/home-churches/applications',
+    'Attendance Sessions': '/admin/home-churches/attendance',
+    Activities: '/admin/home-churches/activities',
+    'Open Needs': '/admin/home-churches/needs',
+  },
+  'E-01': {
+    Churches: '/admin/churches',
+    'Total Members': '/admin/church/members',
+    'First Timers': '/admin/church/first-timers',
+    Converts: '/admin/church/converts',
+    Leaders: '/admin/church/leadership',
+    Disciples: '/admin/church/disciples',
+    Workers: '/admin/church/workers',
+    Departments: '/admin/church/departments',
+    'Small Groups': '/admin/church/small-groups',
+    Evangelism: '/admin/church/evangelism',
+    'Attendance (Avg)': '/admin/church/attendance',
+  },
+  'F-17': {
+    'Total People': '/admin/people',
+    Active: '/admin/people',
+    'New This Month': '/admin/people',
+    Converted: '/admin/people/converts',
+  },
+  'G-01': {
+    Applications: '/admin/kca/applications',
+    'Under Review': '/admin/kca/review-queue',
+    Enrollments: '/admin/kca/students',
+  },
+  'I-01': {
+    'Total Crusades': '/admin/mission/crusades',
+    'Souls Captured': '/admin/mission/souls',
+    'Active Follow-ups': '/admin/mission/follow-up',
+  },
+  'J-01': {
+    Publications: '/admin/press/publications',
+    Manuscripts: '/admin/press/manuscripts',
+    Published: '/admin/press/catalogue',
+  },
+  'K-01': {
+    'Total Receipts': '/admin/finance/reports',
+    'Total Transactions': '/admin/finance/transactions',
+    'Total Donors': '/admin/finance/transactions',
+  },
+  'M-01': {
+    'Messages Sent': '/admin/communications/delivery-report',
+    Delivered: '/admin/communications/broadcasts',
+    Failed: '/admin/communications/failed',
+    Pending: '/admin/communications/delivery-queue',
+  },
+  'N-01': {
+    'Total People': '/admin/reports/membership',
+    'Active Churches': '/admin/reports/churches',
+    'Home Churches': '/admin/reports/home-churches',
+    Countries: '/admin/reports/countries',
+  },
+  'N-02': {
+    Churches: '/admin/churches',
+    'Total Members': '/admin/church/members',
+    'First Timers': '/admin/church/first-timers',
+    Converts: '/admin/church/converts',
+    Evangelism: '/admin/reports/evangelism',
+  },
+  'N-03': {
+    'Total Home Churches': '/admin/home-churches',
+    'Active Home Churches': '/admin/home-churches',
+    'Total Members': '/admin/home-churches/members',
+    Leaders: '/admin/home-churches/leaders',
+    'New Applications': '/admin/home-churches/applications',
+  },
+  'N-04': {
+    'Total People': '/admin/people',
+    Active: '/admin/people',
+    'New This Month': '/admin/people',
+    Converted: '/admin/people/converts',
+  },
+  'N-05': {
+    'First Timers': '/admin/church/first-timers',
+    'Total Members': '/admin/church/members',
+    Converts: '/admin/church/converts',
+    Churches: '/admin/churches',
+  },
+  'N-06': {
+    Evangelism: '/admin/church/evangelism',
+    'First Timers': '/admin/church/first-timers',
+    Converts: '/admin/church/converts',
+    'Total Members': '/admin/church/members',
+  },
+  'N-07': {
+    'Total Crusades': '/admin/mission/crusades',
+    'Souls Captured': '/admin/mission/souls',
+    'Souls Won': '/admin/mission/souls',
+    'Active Follow-ups': '/admin/mission/follow-up',
+  },
+  'N-08': {
+    Applications: '/admin/kca/applications',
+    Enrollments: '/admin/kca/students',
+    'Under Review': '/admin/kca/review-queue',
+    Accepted: '/admin/kca/applications',
+  },
+  'N-09': {
+    Enrollments: '/admin/kca/mentors',
+    Applications: '/admin/kca/applications',
+    'Under Review': '/admin/kca/review-queue',
+  },
+  'N-10': {
+    Publications: '/admin/press/publications',
+    Manuscripts: '/admin/press/manuscripts',
+    Published: '/admin/press/catalogue',
+  },
+  'N-11': {
+    'Total Receipts': '/admin/finance/reports',
+    'Total Transactions': '/admin/finance/transactions',
+    'Total Donors': '/admin/finance/transactions',
+  },
+  'N-12': {
+    Countries: '/admin/geography/countries',
+    'Regions / States': '/admin/geography/regions',
+    'Local Areas': '/admin/geography/local-areas',
+    Churches: '/admin/geography/organizations',
+  },
+  'N-13': {
+    Countries: '/admin/geography/countries',
+    'Regions / States': '/admin/geography/regions',
+    'Local Areas': '/admin/geography/local-areas',
+    Churches: '/admin/geography/organizations',
+  },
+  'N-14': {
+    'Total People': '/admin/reports/membership',
+    'Active Churches': '/admin/reports/churches',
+    'Home Churches': '/admin/reports/home-churches',
+    Countries: '/admin/reports/countries',
+  },
+  'N-15': {
+    'Total People': '/admin/reports/membership',
+    'Active Churches': '/admin/reports/churches',
+    'Home Churches': '/admin/reports/home-churches',
+    Countries: '/admin/reports/countries',
+  },
+  'N-16': {
+    Publications: '/admin/press/publications',
+    Manuscripts: '/admin/press/manuscripts',
+    Published: '/admin/press/catalogue',
+  },
+  'O-01': {
+    'User Accounts': '/admin/users',
+    'Active Users': '/admin/users',
+    'Failed Logins': '/admin/security/access-decisions',
+    'Security Alerts': '/admin/security/alerts',
+  },
+  'O-08': {
+    'Open Cases': '/admin/security/safeguarding/cases',
+    'Under Review': '/admin/security/safeguarding/cases',
+    'High Priority': '/admin/security/safeguarding/cases',
+    'Closed Cases': '/admin/security/safeguarding/cases',
+  },
+};
+
+export const dashboardPeriodPresets = [
+  { value: 'last_30_days', label: 'Last 30 days' },
+  { value: 'last_90_days', label: 'Last 90 days' },
+  { value: 'last_6_months', label: 'Last 6 months' },
+  { value: 'this_year', label: 'This year' },
+] as const;
+
+export type DashboardPeriodPreset = (typeof dashboardPeriodPresets)[number]['value'];

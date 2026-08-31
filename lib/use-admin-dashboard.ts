@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { Metric } from './admin-routes';
 import {
@@ -18,7 +18,15 @@ type UseAdminDashboardResult = {
   loading: boolean;
   error: string | null;
   live: boolean;
+  retry: () => void;
+  preset: string;
+  setPreset: (preset: string) => void;
 };
+
+export function readDashboardDatePreset(): string {
+  if (typeof window === 'undefined') return 'last_6_months';
+  return new URLSearchParams(window.location.search).get('date') ?? 'last_6_months';
+}
 
 export function useAdminDashboard(
   module: AdminDashboardModule | null,
@@ -28,6 +36,20 @@ export function useAdminDashboard(
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(live);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [preset, setPresetState] = useState('last_6_months');
+  const retry = useCallback(() => setRefreshKey((value) => value + 1), []);
+  const setPreset = useCallback((next: string) => {
+    setPresetState(next);
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('date', next);
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
+  useEffect(() => {
+    setPresetState(readDashboardDatePreset());
+  }, []);
 
   useEffect(() => {
     if (!live || !module) {
@@ -41,7 +63,7 @@ export function useAdminDashboard(
     setLoading(true);
     setError(null);
 
-    void fetchAdminDashboard(module, defaultAdminScope(scopeType), controller.signal)
+    void fetchAdminDashboard(module, defaultAdminScope(scopeType), controller.signal, { preset })
       .then((dashboard) => {
         if (controller.signal.aborted) return;
         setData(dashboard);
@@ -56,7 +78,7 @@ export function useAdminDashboard(
       });
 
     return () => controller.abort();
-  }, [live, module, scopeType]);
+  }, [live, module, scopeType, preset, refreshKey]);
 
   return {
     data,
@@ -64,5 +86,8 @@ export function useAdminDashboard(
     loading,
     error,
     live,
+    retry,
+    preset,
+    setPreset,
   };
 }
