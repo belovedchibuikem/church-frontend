@@ -6,9 +6,10 @@ import { useLocale } from '@/components/locale-provider';
 import { AdminFormFields } from './admin-form-fields';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
-import { adminFormSchemas, fieldsForEntity, normalizeDetailValues, type AdminFormField } from '../lib/admin-form-schemas';
+import { adminFormSchemas, defaultValueForField, fieldsForEntity, normalizeDetailValues, type AdminFormField } from '../lib/admin-form-schemas';
 import { fieldsFromRecordDetails } from '../lib/admin-row-actions';
 import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
+import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
 
 export type ActionSurfaceMode = 'create' | 'edit' | 'assign' | 'confirm' | 'file' | 'preview' | 'help' | 'actions' | 'ai';
 
@@ -38,7 +39,7 @@ export function inferActionSurfaceMode(label: string): ActionSurfaceMode {
   if (/ask.*ai|ai assistant/.test(value)) return 'ai';
   if (/download|export|print|upload|receipt|pdf/.test(value)) return 'file';
   if (/assign|distribute/.test(value)) return 'assign';
-  if (/create|add|new|register|request access|submit manuscript|submit testimony/.test(value)) return 'create';
+  if (/create|add|new|register|request access|submit manuscript|submit testimony|record assessment|record attendance/.test(value)) return 'create';
   if (/edit|update/.test(value)) return 'edit';
   if (/approve|reject|defer|activate|suspend|close|delete|remove|save|submit|publish|send|notify|issue|escalate|reconcile|refund|confirm|process|decision|take action|retry|resolve|deliver|attempt|prepare/.test(value)) return 'confirm';
   if (/view|open|details|review|report/.test(value)) return 'preview';
@@ -129,18 +130,19 @@ function FieldControl({ field, required, defaultValue }: { field: Field; require
     : undefined;
   if (field.type === 'textarea') return <textarea name={field.name} placeholder={placeholder} rows={4} required={required} defaultValue={defaultValue}/>;
   if (field.type === 'checkbox') return <label className="interaction-check"><input name={field.name} type="checkbox" value="true" defaultChecked={defaultValue === 'true' || defaultValue === 'Active'} />{placeholder ?? t('admin.enabled', { defaultMessage: 'Enabled' })}</label>;
-  if (field.type === 'search-select' && field.catalog) {
+  const searchCatalog = field.catalog ?? catalogForIdField(field.name);
+  if ((field.type === 'search-select' || searchCatalog) && searchCatalog) {
     const fixtureOptions =
-      field.catalog in catalogOptions
-        ? catalogOptions[field.catalog as keyof typeof catalogOptions]
+      searchCatalog in catalogOptions
+        ? catalogOptions[searchCatalog as keyof typeof catalogOptions]
         : undefined;
     return (
       <SearchSelect
         name={field.name}
-        catalog={field.catalog}
+        catalog={searchCatalog}
         options={fixtureOptions ?? []}
         defaultValue={defaultValue}
-        placeholder={placeholder}
+        placeholder={placeholder ?? placeholderForIdField(field.name)}
         required={required}
       />
     );
@@ -344,9 +346,8 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
 
   if (schema || ((mode === 'edit' || mode === 'create') && fields.length > 0)) {
     return <form className="interaction-action-form" onSubmit={save}>
-      <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{record ? `${entity}: ${record}` : entity}</h3><p>{t('admin.fieldsMatchColumns', { defaultMessage: 'Fields match the database columns for this record type.' })}</p></div>
+      <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{record ? `${entity}: ${record}` : entity}</h3><p>{t('admin.completeFieldsBelow', { defaultMessage: 'Search by name where a person, church, year, or module is needed. The system stores the matching record ID.' })}</p></div>
       <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' ? normalizedDetails : {}} className="interaction-form-grid" />
-      <div className="interaction-context-strip"><span>{t('admin.scopeLabel', { defaultMessage: 'Scope:' })} <b>{scope}</b></span><span>{t('admin.permissionLabel', { defaultMessage: 'Permission:' })} <b>{permission}</b></span></div>
       {errorNote}
       {footerButtons(submitLabel)}
     </form>;
@@ -354,7 +355,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
 
   return <form className="interaction-action-form" onSubmit={save}>
     <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{entity}</h3><p>{t('admin.completeFieldsBelow', { defaultMessage: 'Complete the fields below. Required values are marked.' })}</p></div>
-    <div className="interaction-form-grid">{fields.map((field, index) => <label className={field.type === 'textarea' ? 'wide' : ''} key={field.name}>{t(`admin.field.${field.name}`, { defaultMessage: field.label })}{index < 2 && <b aria-hidden="true"> *</b>}<FieldControl field={field} required={index < 2} defaultValue={mode === 'edit' ? Object.values(normalizedDetails)[index] : undefined}/></label>)}</div>
+    <div className="interaction-form-grid">{fields.map((field) => <label className={field.type === 'textarea' ? 'wide' : ''} key={field.name}>{t(`admin.field.${field.name}`, { defaultMessage: field.label })}{field.required && <b aria-hidden="true"> *</b>}<FieldControl field={field} required={field.required} defaultValue={mode === 'edit' ? defaultValueForField(field, normalizedDetails) : undefined}/></label>)}</div>
     <div className="interaction-context-strip"><span>{t('admin.scopeLabel', { defaultMessage: 'Scope:' })} <b>{scope}</b></span><span>{t('admin.permissionLabel', { defaultMessage: 'Permission:' })} <b>{permission}</b></span></div>
     {errorNote}
     {footerButtons(submitLabel)}

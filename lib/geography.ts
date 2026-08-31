@@ -1,6 +1,7 @@
 /** Public world geography for searchable Country → State → City/LGA selects. */
 
 import { resolveApiV1BaseUrl } from './api-config.ts';
+import nigeriaLocalities from './data/nigeria-localities.json' with { type: 'json' };
 
 export const DEFAULT_COUNTRY_CODE = 'NG';
 
@@ -110,6 +111,56 @@ export function formatLocationLine(input: {
   return parts.join(', ');
 }
 
+const NG_MIN_STATES = 36;
+const NG_MIN_LOCALITIES = 10;
+
+type NigeriaLocalitiesFile = {
+  iso?: string;
+  name?: string;
+  states?: Record<string, string[]>;
+};
+
+function nigeriaStateMap(): Record<string, string[]> {
+  const source = nigeriaLocalities as NigeriaLocalitiesFile;
+  return source.states ?? {};
+}
+
+export function nigeriaStateNames(): string[] {
+  return Object.keys(nigeriaStateMap()).sort((left, right) => left.localeCompare(right));
+}
+
+export function nigeriaLocalityNames(stateName: string): string[] {
+  const needle = normalizeAdminName(stateName);
+  if (!needle) return [];
+  for (const [name, localities] of Object.entries(nigeriaStateMap())) {
+    if (normalizeAdminName(name) === needle) {
+      return [...localities].filter(Boolean).sort((left, right) => left.localeCompare(right));
+    }
+  }
+  return [];
+}
+
+function normalizeAdminName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+(state|province|region|county|territory|district)$/i, '')
+    .replace(/\s+/g, ' ');
+}
+
+function completeIfSparseNigeriaStates(iso: string | null, names: string[]): string[] {
+  if (iso !== 'NG') return names;
+  const bundled = nigeriaStateNames();
+  return names.length >= NG_MIN_STATES ? names : bundled;
+}
+
+function completeIfSparseNigeriaLocalities(iso: string | null, state: string, names: string[]): string[] {
+  if (iso !== 'NG') return names;
+  const bundled = nigeriaLocalityNames(state);
+  if (bundled.length === 0) return names;
+  return names.length >= NG_MIN_LOCALITIES ? names : bundled;
+}
+
 function cacheKey(countryName: string, state?: string): string {
   return state ? `${countryName.trim().toLowerCase()}::${state.trim().toLowerCase()}` : countryName.trim().toLowerCase();
 }
@@ -188,8 +239,14 @@ export async function fetchStates(countryCodeOrName: string, signal?: AbortSigna
   if (laravelGeographyBase() && iso) {
     const fromLaravel = await fetchLaravelStates(iso, signal);
     if (fromLaravel !== null) {
-      statesCache.set(key, fromLaravel);
-      return fromLaravel;
+      const names = completeIfSparseNigeriaStates(iso, fromLaravel);
+      statesCache.set(key, names);
+      return names;
+    }
+    if (iso === 'NG') {
+      const names = nigeriaStateNames();
+      statesCache.set(key, names);
+      return names;
     }
     throw new Error('Unable to load states from the platform catalogue.');
   }
@@ -229,8 +286,14 @@ export async function fetchCities(countryCodeOrName: string, stateName: string, 
   if (laravelGeographyBase() && iso) {
     const fromLaravel = await fetchLaravelLocalities(iso, state, signal);
     if (fromLaravel !== null) {
-      citiesCache.set(key, fromLaravel);
-      return fromLaravel;
+      const names = completeIfSparseNigeriaLocalities(iso, state, fromLaravel);
+      citiesCache.set(key, names);
+      return names;
+    }
+    if (iso === 'NG') {
+      const names = nigeriaLocalityNames(state);
+      citiesCache.set(key, names);
+      return names;
     }
     throw new Error('Unable to load local areas from the platform catalogue.');
   }

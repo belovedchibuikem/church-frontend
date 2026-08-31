@@ -5,6 +5,7 @@ import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
 import type { AdminFormField } from '../lib/admin-form-schemas';
 import { defaultValueForField } from '../lib/admin-form-schemas';
+import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
 
 function optionMessageKey(option: string): string {
   return `admin.option.${option.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
@@ -35,10 +36,12 @@ function FieldControl({
       </label>
     );
   }
-  if (field.type === 'search-select' && field.catalog) {
+  const searchCatalog = field.catalog ?? catalogForIdField(field.name);
+  if (searchCatalog) {
+    const catalog = field.catalog ?? searchCatalog;
     const fixtureOptions =
-      field.catalog in catalogOptions
-        ? catalogOptions[field.catalog as keyof typeof catalogOptions]
+      catalog && catalog in catalogOptions
+        ? catalogOptions[catalog as keyof typeof catalogOptions]
         : undefined;
     const defaultLabel =
       values[`${field.name}_label`] ||
@@ -47,11 +50,11 @@ function FieldControl({
     return (
       <SearchSelect
         name={field.name}
-        catalog={field.catalog}
+        catalog={catalog}
         options={fixtureOptions ?? []}
         defaultValue={defaultValue}
         defaultLabel={defaultLabel}
-        placeholder={placeholder}
+        placeholder={placeholder ?? placeholderForIdField(field.name)}
         required={required}
       />
     );

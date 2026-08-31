@@ -287,7 +287,24 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     };
     const template = adminScreens.find((screen) => screen.id === (suffix ? idMap[suffix] : 'D-08'));
     if (!template) return undefined;
-    return { ...template, route, subtitle: homeChurchNested[1] };
+    const titles: Record<string, string> = {
+      members: 'Members',
+      attendance: 'Attendance',
+      activities: 'Activities',
+      needs: 'Needs',
+      finance: 'Reports',
+      status: 'Suspend / Close',
+    };
+    return {
+      ...template,
+      route,
+      title: suffix ? titles[suffix] ?? template.title : 'Home church',
+      subtitle: homeChurchNested[1],
+      tabs: undefined,
+      details: undefined,
+      items: undefined,
+      action: suffix === 'members' ? '+ Add Member' : undefined,
+    };
   }
 
   const financeTransactionDetail = route.match(/^\/admin\/finance\/transactions\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/i);
@@ -451,7 +468,33 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     };
     const template = adminScreens.find((screen) => screen.id === (suffix ? idMap[suffix] : 'E-03'));
     if (!template) return undefined;
-    return { ...template, route, subtitle: churchNested[1], kind: suffix === 'edit' ? 'wizard' : template.kind };
+    const titles: Record<string, string> = {
+      edit: 'Edit church',
+      leadership: 'Leadership',
+      members: 'Members',
+      'first-timers': 'First timers',
+      converts: 'Converts',
+      disciples: 'Disciples',
+      workers: 'Workers',
+      departments: 'Departments',
+      'small-groups': 'Small groups',
+      evangelism: 'Evangelism',
+      attendance: 'Attendance',
+      reports: 'Reports',
+      finance: 'Finance',
+      settings: 'Settings',
+    };
+    return {
+      ...template,
+      route,
+      title: suffix ? titles[suffix] ?? template.title : 'Church',
+      subtitle: churchNested[1],
+      tabs: undefined,
+      details: undefined,
+      items: undefined,
+      action: undefined,
+      kind: suffix === 'edit' ? 'wizard' : template.kind,
+    };
   }
 
   const userNested = route.match(/^\/admin\/users\/([0-7][0-9A-HJKMNP-TV-Z]{25})(?:\/(edit|sessions|profile))?$/i);

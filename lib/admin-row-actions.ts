@@ -2,7 +2,9 @@
  * Shared helpers so View/Edit/Delete behave consistently across admin modules.
  */
 
+import type { AdminFormField } from './admin-form-schemas';
 import { resolveEntityKey } from './admin-form-schemas';
+import { catalogForIdField, labelForIdField, placeholderForIdField } from './id-field-catalog';
 
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i;
 
@@ -84,9 +86,9 @@ export function formatRowActionRecord(displayName: string | undefined, id: strin
 /** Build editable field list from cached record details when no schema exists. */
 export function fieldsFromRecordDetails(
   details: Record<string, string>,
-): Array<{ label: string; name: string; type: 'text' | 'textarea'; wide?: boolean }> {
+): AdminFormField[] {
   const skip = new Set(['id', 'public_id', 'created_at', 'updated_at', 'published_at']);
-  const fields: Array<{ label: string; name: string; type: 'text' | 'textarea'; wide?: boolean }> = [];
+  const fields: AdminFormField[] = [];
   for (const [key, value] of Object.entries(details)) {
     if (!value || value === '—') continue;
     if (skip.has(key)) continue;
@@ -94,12 +96,24 @@ export function fieldsFromRecordDetails(
     if (key.endsWith('_label')) continue;
     if (/^[A-Z]/.test(key) && key.includes(' ')) continue; // friendly preview keys like "Record ID"
     if (key === 'Name' || key === 'Location' || key === 'Region' || key === 'Status') continue;
+    const catalog = catalogForIdField(key);
+    if (catalog) {
+      fields.push({
+        label: labelForIdField(key),
+        name: key,
+        type: 'search-select',
+        catalog,
+        placeholder: placeholderForIdField(key),
+        wide: true,
+      });
+      continue;
+    }
     const isLong = value.length > 80 || key.includes('note') || key.includes('summary') || key.includes('instruction');
     fields.push({
       label: key.replaceAll('_', ' ').replace(/\bid\b/gi, 'ID'),
       name: key,
       type: isLong ? 'textarea' : 'text',
-      wide: isLong || key.endsWith('_id'),
+      wide: isLong,
     });
   }
   return fields.slice(0, 24);

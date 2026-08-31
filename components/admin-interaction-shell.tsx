@@ -510,7 +510,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       navigate(destination);
       return;
     }
-    if (/view|open|details|cohort|website/i.test(clean)) {
+    if (/view|open|details|website/i.test(clean) && !/create|add|\+|new/i.test(clean)) {
       event.preventDefault();
       openAction(label || t('admin.recordDetails', { defaultMessage: 'Record details' }), 'preview');
       return;

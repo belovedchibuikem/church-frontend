@@ -100,6 +100,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .tab { position: relative; min-width: max-content; border: 0; background: transparent; padding: 13px 2px; color: #697089; font-weight: 700; font-size: 12px; cursor: pointer; }
 .tab.active { color: var(--fhc-violet-700); }
 .tab.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--fhc-violet-600); border-radius: 9px 9px 0 0; }
+.home-church-section-nav { display: flex; gap: 22px; overflow-x: auto; border-bottom: 1px solid var(--fhc-line); margin: 0 0 22px; scrollbar-width: none; }
+.home-church-section-nav a.tab { text-decoration: none; }
+.home-church-workspace-header { margin-bottom: 8px; }
+.entity-overview-card { padding: 22px; }
+.entity-definition-list { margin: 0; }
+.entity-definition-list > div { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid #edf0f4; }
+.entity-definition-list dt { margin: 0; color: #6b7280; font-size: 12px; font-weight: 600; }
+.entity-definition-list dd { margin: 0; color: #1f2937; font-size: 14px; font-weight: 600; word-break: break-word; }
+.overview-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .metric-selected { border-color: #d6ccf6; box-shadow: inset 0 -4px 0 #6b46d8, var(--fhc-shadow); }
 .bar-chart { flex: 1; min-height: 160px; margin: 22px 0 14px; display: flex; align-items: flex-end; gap: 9px; border-bottom: 1px solid #e6e8f0; }
 .bar-chart i { flex: 1; background: linear-gradient(180deg,#8b6be4,#c7b9f6); border-radius: 3px 3px 0 0; }
@@ -129,7 +138,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .feed-item time { color: #7c8297; font-size: 11px; }
 .feed-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 50%; background: var(--fhc-violet-100); color: var(--fhc-violet-700); font-weight: 900; }
 .tone-1 { background: #fff1e6; color: #e26d2f; }.tone-2 { background: #fff8dd; color: #d39400; }.tone-3 { background: #eaf9f1; color: #15935b; }
-.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }.row-actions button { height: 30px; border-radius: 5px; border: 1px solid #7e5ddd; background: white; color: var(--fhc-violet-700); font-size: 10px; font-weight: 800; padding: 0 8px; }.row-actions .table-action.is-danger { border-color: #f0b4b4; color: #dc2626; }.kca-row-actions button, .mission-row-actions button, .platform-row-actions button { min-width: 40px; height: 24px; font-size: 8px; padding: 0 6px; }.interaction-detail-list { display: grid; gap: 10px; margin: 16px 0; }.interaction-detail-list div { display: grid; gap: 2px; }.interaction-detail-list dt { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }.interaction-detail-list dd { margin: 0; font-weight: 700; color: #1f2937; }.field-help { display: block; margin-top: 4px; font-size: 10px; color: #6b7280; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }.row-assign-form { display:flex; align-items:center; gap:8px; min-width:220px; }.row-assign-form .search-select { min-width:180px; flex:1; }.row-actions button { height: 30px; border-radius: 5px; border: 1px solid #7e5ddd; background: white; color: var(--fhc-violet-700); font-size: 10px; font-weight: 800; padding: 0 8px; }.row-actions .table-action.is-danger { border-color: #f0b4b4; color: #dc2626; }.kca-row-actions button, .mission-row-actions button, .platform-row-actions button { min-width: 40px; height: 24px; font-size: 8px; padding: 0 6px; }.interaction-detail-list { display: grid; gap: 10px; margin: 16px 0; }.interaction-detail-list div { display: grid; gap: 2px; }.interaction-detail-list dt { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }.interaction-detail-list dd { margin: 0; font-weight: 700; color: #1f2937; }.field-help { display: block; margin-top: 4px; font-size: 10px; color: #6b7280; }
 .scope-current { float: right; margin-top: -86px; color: #7b8195; font-size: 10px; }.scope-current strong { display: block; min-width: 142px; margin-top: 4px; padding: 9px 12px; border: 1px solid var(--fhc-line); border-radius: 7px; background: white; color: var(--fhc-ink); }
 .scope-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
 .scope-card { min-height: 170px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 9px; padding: 26px; text-decoration: none; color: var(--fhc-ink); transition: .18s ease; }

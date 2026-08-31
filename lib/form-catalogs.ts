@@ -8,7 +8,13 @@ import {
 import {
   designFixturesEnabled,
   listChurches,
+  listCrusades,
+  listFirstTimers,
+  listHomeChurchApplications,
   listHomeChurches,
+  listPeopleDirectory,
+  listSouls,
+  listTeamAssignments,
   shouldUseOperationsLiveData,
 } from './admin-operations-api';
 import {
@@ -84,6 +90,33 @@ export const nationalityOptions: SearchSelectOption[] = [
   { value: 'GB', label: 'British', meta: 'United Kingdom' },
 ];
 
+export const firstTimerOptions: SearchSelectOption[] = [
+  { value: '01JFIRSTIMER01', label: 'Grace Ezekiel', meta: 'Ikeja visit' },
+  { value: '01JFIRSTIMER02', label: 'John Chinedu Doe', meta: 'Lekki visit' },
+];
+
+export const userOptions: SearchSelectOption[] = [
+  { value: '01JUSERGRACE', label: 'Grace Ezekiel', meta: 'grace@example.org' },
+  { value: '01JUSERDAN', label: 'Pastor Daniel David', meta: 'daniel@example.org' },
+];
+
+export const crusadeOptions: SearchSelectOption[] = [
+  { value: '01JCRUSADEHOPE', label: 'Hope Crusade', meta: 'Lagos' },
+  { value: '01JCRUSADEHARVEST', label: 'Harvest Crusade', meta: 'Abuja' },
+];
+
+export const missionTeamAssignmentOptions: SearchSelectOption[] = [
+  { value: '01JTEAMGRACE', label: 'Grace Ezekiel', meta: 'Mentor · Hope Crusade' },
+];
+
+export const soulOptions: SearchSelectOption[] = [
+  { value: '01JSOULJOHN', label: 'John Chinedu Doe', meta: 'Hope Crusade' },
+];
+
+export const homeChurchApplicationOptions: SearchSelectOption[] = [
+  { value: '01JHCAPPALLEN', label: 'Allen Home Church application', meta: 'draft' },
+];
+
 export const catalogOptions = {
   country: countryOptions,
   region: regionOptions,
@@ -94,6 +127,12 @@ export const catalogOptions = {
   person: personOptions,
   nationality: nationalityOptions,
   kcaModule: kcaModuleOptions,
+  firstTimer: firstTimerOptions,
+  user: userOptions,
+  crusade: crusadeOptions,
+  missionTeamAssignment: missionTeamAssignmentOptions,
+  soul: soulOptions,
+  homeChurchApplication: homeChurchApplicationOptions,
 };
 
 export type FormCatalogKey = keyof typeof catalogOptions;
@@ -197,6 +236,84 @@ export async function loadFormCatalogPage(
         total: result.pagination.total,
       };
     }
+    if (catalog === 'person') {
+      const result = await listPeopleDirectory({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: String(item.id ?? ''),
+          label: String(item.name ?? ([item.given_name, item.family_name].filter(Boolean).join(' ') || item.id)),
+          meta: typeof item.email === 'string' ? item.email : typeof item.phone === 'string' ? item.phone : undefined,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
+    if (catalog === 'firstTimer') {
+      const result = await listFirstTimers({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.person_name ?? item.id,
+          meta: item.church_name ?? undefined,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
+    if (catalog === 'crusade') {
+      const result = await listCrusades({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.name,
+          meta: item.status ?? undefined,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
+    if (catalog === 'missionTeamAssignment') {
+      const result = await listTeamAssignments({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.person_name ?? item.id,
+          meta: [item.role_code, item.crusade_name].filter(Boolean).join(' · ') || undefined,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
+    if (catalog === 'soul') {
+      const result = await listSouls({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.person_name ?? item.id,
+          meta: item.crusade_name ?? item.status,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
+    if (catalog === 'homeChurchApplication') {
+      const result = await listHomeChurchApplications({ search: query || undefined, perPage, page, signal });
+      return {
+        items: result.items.map((item) => ({
+          value: item.id,
+          label: item.proposed_name,
+          meta: item.status,
+        })),
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
   }
 
   if (!designFixturesEnabled() && isOrganizationApiConfigured()) {
@@ -261,21 +378,24 @@ export async function loadFormCatalogPage(
     }
   }
 
-  if (!designFixturesEnabled() && catalog === 'person' && identityApiConfigured()) {
-    const result = await listAdminUsers({ search: query || undefined, perPage, page });
-    const items = result.data
-      .filter((user) => Boolean(user.person_id))
-      .map((user) => ({
-        value: String(user.person_id),
-        label: user.name,
-        meta: user.email,
-      }));
-    return {
-      items,
-      page: result.pagination.current_page,
-      hasMore: result.pagination.current_page < result.pagination.last_page,
-      total: result.pagination.total,
-    };
+  if (!designFixturesEnabled() && identityApiConfigured()) {
+    if (catalog === 'user' || catalog === 'person') {
+      const result = await listAdminUsers({ search: query || undefined, perPage, page });
+      const asPerson = catalog === 'person';
+      const items = result.data
+        .filter((user) => (asPerson ? Boolean(user.person_id) : Boolean(user.id)))
+        .map((user) => ({
+          value: String(asPerson ? user.person_id : user.id),
+          label: user.name,
+          meta: user.email,
+        }));
+      return {
+        items,
+        page: result.pagination.current_page,
+        hasMore: result.pagination.current_page < result.pagination.last_page,
+        total: result.pagination.total,
+      };
+    }
   }
 
   if (!designFixturesEnabled()) {

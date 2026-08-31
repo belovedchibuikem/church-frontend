@@ -68,6 +68,7 @@ import { DataClassificationPanel } from './data-classification-panel';
 import { ChurchSettingsPanel } from './church-settings-panel';
 import { DomainSettingsLinksPanel, LanguagesSettingsPanel } from './domain-settings-panels';
 import { BrandingSettingsPanel } from './branding-settings-panel';
+import { EntitySearchSelect } from './entity-search-select';
 import { PublicSiteCmsPanel } from './public-site-cms-panel';
 import { resolveEntityKey } from '../lib/admin-form-schemas';
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
@@ -1478,7 +1479,7 @@ function MediaLibraryPanel() {
     const fileInput = form.elements.namedItem('file') as HTMLInputElement | null;
     const file = fileInput?.files?.[0];
     if (!file || !attachableId.trim()) {
-      setMessage('Choose an image and enter the record public ID (ULID) to attach it to.');
+      setMessage('Choose an image and select the record to attach it to.');
       return;
     }
     setBusy(true);
@@ -1544,7 +1545,14 @@ function MediaLibraryPanel() {
         <div className="form-grid">
           <label>
             <span>Record type</span>
-            <select value={attachableType} onChange={(event) => setAttachableType(event.target.value)} disabled={busy}>
+            <select
+              value={attachableType}
+              onChange={(event) => {
+                setAttachableType(event.target.value);
+                setAttachableId('');
+              }}
+              disabled={busy}
+            >
               <option value="church">Church</option>
               <option value="home_church">Home church</option>
               <option value="ministry_event">Event</option>
@@ -1566,8 +1574,27 @@ function MediaLibraryPanel() {
             </select>
           </label>
           <label className="full">
-            <span>Record public ID</span>
-            <input value={attachableId} onChange={(event) => setAttachableId(event.target.value)} placeholder="ULID from the record" disabled={busy} />
+            <span>Record</span>
+            <EntitySearchSelect
+              name="attachable_id"
+              catalog={
+                (
+                  {
+                    church: 'church',
+                    home_church: 'homeChurch',
+                    ministry_event: 'event',
+                    crusade: 'crusade',
+                    press_publication: 'pressPublication',
+                    person: 'person',
+                  } as Record<string, string>
+                )[attachableType]
+              }
+              required
+              value={attachableId}
+              onValueChange={setAttachableId}
+              disabled={busy}
+              placeholder="Search the record to attach this image to"
+            />
           </label>
           <label className="full">
             <span>Image file</span>

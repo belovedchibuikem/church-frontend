@@ -39,6 +39,7 @@ import {
 } from '../lib/admin-dashboard-api';
 import { useAdminDashboard } from '../lib/use-admin-dashboard';
 import { DashboardQuickLinks, DashboardShell, LinkedMetricCards } from './admin-dashboard-chrome';
+import { EntitySearchSelect } from './entity-search-select';
 
 function isPublicId(value: string | undefined | null): boolean {
   return Boolean(value && /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(value.trim()));
@@ -212,16 +213,16 @@ function CaptureSoulForm({
       <div className="mission-form-grid">
         <label>
           <span>{t('mission.crusadeRequired', { defaultMessage: 'Crusade *' })}</span>
-          <select name="crusade_id" defaultValue={defaultCrusadeId && isPublicId(defaultCrusadeId) ? defaultCrusadeId : ''}>
-            <option value="">{t('mission.selectCrusade', { defaultMessage: 'Select crusade' })}</option>
-            {crusades.map((crusade) => (
-              <option key={crusade.id} value={crusade.id}>{crusade.name} · {crusade.id}</option>
-            ))}
-          </select>
+          <EntitySearchSelect
+            name="crusade_id"
+            required
+            defaultValue={defaultCrusadeId && isPublicId(defaultCrusadeId) ? defaultCrusadeId : undefined}
+            options={crusades.map((crusade) => ({ value: crusade.id, label: crusade.name, meta: crusade.id }))}
+          />
         </label>
         <label>
-          <span>{t('mission.personId', { defaultMessage: 'Person id' })}</span>
-          <input name="person_id" autoComplete="off" placeholder={t('mission.optionalPersonPublicId', { defaultMessage: 'Optional person public id' })} />
+          <span>{t('mission.person', { defaultMessage: 'Person' })}</span>
+          <EntitySearchSelect name="person_id" />
         </label>
         <label>
           <span>{t('account.givenName', { defaultMessage: 'Given name' })}</span>
@@ -323,14 +324,13 @@ function RecordFollowUpForm({
       <div className="mission-form-grid">
         <label>
           <span>{t('mission.soulRequired', { defaultMessage: 'Soul *' })}</span>
-          <select name="soul_id" value={soulId} onChange={(event) => setSoulId(event.target.value)}>
-            <option value="">{t('mission.selectSoul', { defaultMessage: 'Select soul' })}</option>
-            {souls.map((soul) => (
-              <option key={soul.id} value={soul.id}>
-                {soul.person_id ?? soul.id} · {soul.id}
-              </option>
-            ))}
-          </select>
+          <EntitySearchSelect
+            name="soul_id"
+            required
+            value={soulId}
+            onValueChange={setSoulId}
+            options={souls.map((soul) => ({ value: soul.id, label: soul.person_name ?? soul.person_id ?? soul.id, meta: soul.id }))}
+          />
         </label>
         <label>
           <span>{t('mission.mentorAssignment', { defaultMessage: 'Mentor assignment' })}</span>
@@ -394,6 +394,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [souls, setSouls] = useState<SoulRecord[]>([]);
   const [crusades, setCrusades] = useState<CrusadeRecord[]>([]);
+  const [assignMentorSoulId, setAssignMentorSoulId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!live || !dataset) return;
@@ -440,19 +441,21 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
     };
   }, [dataset, live, screen.scope]);
 
-  async function onAssignMentor(row: Record<string, string>) {
-    const soulId = row.__id;
-    if (!soulId || soulId === '—') return;
-    const teamAssignmentId = window.prompt(t('mission.teamAssignmentPrompt', { defaultMessage: 'Mission team assignment id (ULID):' }));
+  async function onAssignMentor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const soulId = assignMentorSoulId;
+    if (!soulId) return;
+    const teamAssignmentId = String(new FormData(event.currentTarget).get('mission_team_assignment_id') || '').trim();
     if (!teamAssignmentId) return;
     setBusyId(soulId);
     setError(null);
     try {
       await assignSoulMentor(
         soulId,
-        { mission_team_assignment_id: teamAssignmentId.trim() },
+        { mission_team_assignment_id: teamAssignmentId },
         { scope: defaultOpsScope(screen.scope) },
       );
+      setAssignMentorSoulId(null);
       await refresh();
     } catch (err) {
       setError(operationsErrorMessage(err, t('errors.mentorAssignmentFailed', { defaultMessage: 'Mentor assignment failed.' })));
@@ -485,6 +488,28 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
       ) : null}
       {live && dataset === 'souls' ? (
         <RecordFollowUpForm screen={screen} souls={souls} onRecorded={refresh} />
+      ) : null}
+      {live && dataset === 'souls' && assignMentorSoulId ? (
+        <form className="mission-form-card" onSubmit={(event) => void onAssignMentor(event)} style={{ marginBottom: 16 }}>
+          <header>
+            <h2>{t('mission.assignMentor', { defaultMessage: 'Assign mentor' })}</h2>
+            <p>{t('mission.assignMentorHelp', { defaultMessage: 'Search a mission team assignment. The system stores the assignment id.' })}</p>
+          </header>
+          <div className="mission-form-grid">
+            <label>
+              <span>{t('mission.teamAssignment', { defaultMessage: 'Team assignment *' })}</span>
+              <EntitySearchSelect name="mission_team_assignment_id" required />
+            </label>
+          </div>
+          <footer>
+            <button className="mission-primary-button" type="submit" disabled={busyId === assignMentorSoulId}>
+              {t('mission.assignMentor', { defaultMessage: 'Assign mentor' })}
+            </button>
+            <button className="ghost-button" type="button" onClick={() => setAssignMentorSoulId(null)}>
+              {t('common.cancel', { defaultMessage: 'Cancel' })}
+            </button>
+          </footer>
+        </form>
       ) : null}
       <section className="mission-table-card">
       <MissionToolbar action={screen.action} tabs={screen.tabs} />
@@ -540,7 +565,7 @@ function MissionTable({ screen }: { screen: AdminScreen }) {
                             className="table-action"
                             data-interaction-native="true"
                             disabled={busyId === row.__id}
-                            onClick={() => void onAssignMentor(row)}
+                            onClick={() => setAssignMentorSoulId(row.__id && row.__id !== '—' ? row.__id : null)}
                           >
                             {t('mission.assignMentor', { defaultMessage: 'Assign mentor' })}
                           </button>

@@ -82,16 +82,9 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-04', batch: 'H', route: '/admin/kca/years', title: 'KCA Years',
-    subtitle: 'Configure and manage KCA academic years.', kind: 'operations', permission: 'kca.year.view', scope: 'assigned', nav: 'kca-years',
-    columns: ['Year', 'Name', 'Duration', 'Status', 'Students'],
-    rows: [
-      { Year: 'Year 1', Name: 'Foundation', Duration: '12 Months', Status: 'Active', Students: '8' },
-      { Year: 'Year 2', Name: 'Growth', Duration: '12 Months', Status: 'Active', Students: '812' },
-      { Year: 'Year 3', Name: 'Ministry', Duration: '12 Months', Status: 'Active', Students: '658' },
-      { Year: 'Year 4', Name: 'Leadership', Duration: '12 Months', Status: 'Upcoming', Students: '0' },
-      { Year: 'Year 5', Name: 'Commissioning', Duration: '6 Months', Status: 'Upcoming', Students: '0' },
-    ],
-    items: ['Year 1 — 1,032 students', 'Year 2 — 812 students', 'Year 3 — 658 students', 'Year 4 — 0 students', 'Year 5 — 0 students'],
+    subtitle: 'Academic years used by cohorts, enrollments, and assessments.', kind: 'table', permission: 'kca.year.view', scope: 'assigned', nav: 'kca-years', action: '+ Create Year',
+    columns: ['Code', 'Name', 'Starts on', 'Ends on'],
+    rows: [],
   },
   {
     id: 'H-05', batch: 'H', route: '/admin/kca/mentors', title: 'Mentors',
@@ -126,7 +119,7 @@ export const kcaLearningScreens: AdminScreen[] = [
     id: 'H-10', batch: 'H', route: '/admin/kca/modules/new', title: 'Module Builder',
     subtitle: 'Create and configure a new KCA module.', kind: 'wizard', permission: 'kca.module.create', scope: 'assigned', nav: 'kca-modules', action: 'Next: Content',
     tabs: ['Basic Info', 'Content', 'Prerequisites', 'Evidence', 'Review'],
-    details: { title: 'Identity in Christ', code: 'Y1-M01', sequence: '1', is_active: 'Active', lecturer_person_id: 'Dr. John Samuel' },
+    details: {},
   },
   {
     id: 'H-11', batch: 'H', route: '/admin/kca/modules/identity-in-christ/prerequisites', title: 'Prerequisite Builder',
@@ -141,9 +134,9 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-13', batch: 'H', route: '/admin/kca/attendance', title: 'Attendance',
-    subtitle: 'Track student attendance.', kind: 'operations', permission: 'kca.attendance.view', scope: 'assigned', nav: 'kca-learning', action: 'Export',
-    metrics: [{ label: 'Classes', value: '24' }, { label: 'Present', value: '1,842', trend: '82%' }, { label: 'Absent', value: '298', trend: '14%' }, { label: 'Late', value: '56', trend: '4%' }],
-    items: ['Samuel David — 92%', 'Grace Ese — 88%', 'Daniel Johnson — 75%', 'Precious Adediji — 60%'],
+    subtitle: 'Record and review lesson attendance for enrolled students.', kind: 'operations', permission: 'kca.attendance.view', scope: 'assigned', nav: 'kca-learning', action: 'Export',
+    metrics: [],
+    items: [],
   },
   {
     id: 'H-14', batch: 'H', route: '/admin/kca/assignments', title: 'Assignments',
@@ -182,15 +175,11 @@ export const kcaLearningScreens: AdminScreen[] = [
     ],
   },
   {
-    id: 'H-17', batch: 'H', route: '/admin/kca/assessments/final', title: 'Final Assessment',
-    subtitle: 'Manage final assessments.', kind: 'table', permission: 'kca.assessment.view', scope: 'assigned', nav: 'kca-assessments', action: '+ Create Assessment',
-    details: { Module: 'Identity in Christ' },
-    columns: ['Assessment', 'Type', 'Date', 'Submissions', 'Status'],
-    rows: [
-      { Assessment: 'Final Exam', Type: 'Quiz', Date: 'Jun 10, 2024', Submissions: '230/246', Status: 'Completed' },
-      { Assessment: 'Capstone Project', Type: 'Project', Date: 'Jun 12, 2024', Submissions: '210/246', Status: 'In Progress' },
-      { Assessment: 'Oral Interview', Type: 'Interview', Date: 'Jun 14, 2024', Submissions: '198/246', Status: 'Scheduled' },
-    ],
+    id: 'H-17', batch: 'H', route: '/admin/kca/assessments/final', title: 'Assessments',
+    subtitle: 'Record results for a module, a lesson, a student year, one student, or every enrolled student.', kind: 'table', permission: 'kca.assessment.view', scope: 'assigned', nav: 'kca-assessments', action: '+ Record Assessment',
+    details: {},
+    columns: ['Student', 'Assessment', 'Module', 'Result', 'Score', 'Date'],
+    rows: [],
   },
   {
     id: 'H-18', batch: 'H', route: '/admin/kca/certificates', title: 'Certification Queue',

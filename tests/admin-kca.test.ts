@@ -66,3 +66,19 @@ test('member KCA destinations map to authoritative routes', () => {
   assert.equal(kcaIsActivatedStudent('admission_progress'), false);
   assert.equal(kcaPrimaryCta('overview').href, '/kca/enrol');
 });
+
+test('KCA years and assessments use dedicated form schemas', async () => {
+  const { resolveEntityKey, fieldsForEntity } = await import('../lib/admin-form-schemas.ts');
+  assert.equal(resolveEntityKey('/admin/kca/years', 'H-04'), 'kca_year');
+  assert.equal(resolveEntityKey('/admin/kca/assessments/final', 'H-17'), 'kca_assessment');
+  assert.ok(fieldsForEntity('kca_year').some((field) => field.name === 'code'));
+  assert.ok(fieldsForEntity('kca_assessment').some((field) => field.name === 'kca_enrollment_id'));
+  const years = getAdminScreen('/admin/kca/years')!;
+  assert.equal(years.action, '+ Create Year');
+});
+
+test('create cohort is not treated as a preview overlay', async () => {
+  const shell = await readFile(new URL('../components/admin-interaction-shell.tsx', import.meta.url), 'utf8');
+  assert.match(shell, /view\|open\|details\|website/);
+  assert.doesNotMatch(shell, /view\|open\|details\|cohort\|website/);
+});

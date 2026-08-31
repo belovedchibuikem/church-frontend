@@ -8,9 +8,23 @@ import {
   isNigeria,
   localityLabelFor,
   namesToOptions,
+  nigeriaLocalityNames,
+  nigeriaStateNames,
 } from '../lib/geography.ts';
 import { draftFromFormData } from '../lib/auth-session.ts';
 import { formFieldsFor } from '../lib/site-content.ts';
+
+test('Nigeria catalogue includes all 36 states, FCT, and 770+ LGAs', () => {
+  assert.ok(nigeriaStateNames().length >= 37);
+  assert.ok(nigeriaStateNames().some((name) => /lagos/i.test(name)));
+  assert.ok(nigeriaStateNames().some((name) => /kano/i.test(name)));
+  assert.ok(nigeriaStateNames().some((name) => /federal capital/i.test(name)));
+  const lgaCount = nigeriaStateNames().reduce((total, state) => total + nigeriaLocalityNames(state).length, 0);
+  assert.ok(lgaCount >= 770);
+  assert.ok(nigeriaLocalityNames('Lagos').includes('Ikeja'));
+  assert.ok(nigeriaLocalityNames('Lagos State').includes('Ikeja'));
+  assert.ok(nigeriaLocalityNames('Federal Capital Territory').includes('Bwari'));
+});
 
 test('Nigeria is the default country and uses an LGA label', () => {
   assert.equal(DEFAULT_COUNTRY_CODE, 'NG');

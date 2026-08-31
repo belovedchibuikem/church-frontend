@@ -28,7 +28,10 @@ test('dynamic home church and application ULID routes resolve', () => {
   const detail = getAdminScreen(`/admin/home-churches/${id}`);
   assert.ok(detail);
   assert.equal(detail.batch, 'D');
+  assert.equal(detail.title, 'Home church');
+  assert.equal(detail.tabs, undefined);
   assert.equal(getAdminScreen(`/admin/home-churches/${id}/members`)?.id, 'D-09');
+  assert.equal(getAdminScreen(`/admin/home-churches/${id}/members`)?.tabs, undefined);
   assert.equal(getAdminScreen(`/admin/home-churches/${id}/attendance`)?.id, 'D-10');
   assert.equal(getAdminScreen(`/admin/home-churches/${id}/activities`)?.id, 'D-11');
   assert.equal(getAdminScreen(`/admin/home-churches/${id}/needs`)?.id, 'D-12');
@@ -71,4 +74,13 @@ test('unauthenticated home church access is unauthenticated not forbidden', () =
   });
   assert.equal(decision.allowed, false);
   if (!decision.allowed) assert.equal(decision.reason, 'unauthenticated');
+});
+
+test('home church workspace uses section links instead of duplicate tab buttons', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../components/home-churches-ops.tsx', import.meta.url), 'utf8');
+  assert.match(source, /home-church-section-nav/);
+  assert.match(source, /HOME_CHURCH_SECTIONS/);
+  assert.match(source, /href=\{href\}/);
+  assert.doesNotMatch(source, /role="tablist"/);
 });

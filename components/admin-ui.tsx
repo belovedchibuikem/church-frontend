@@ -71,6 +71,7 @@ import { ChurchScreenContent } from './church-ops';
 import { PeopleScreenContent } from './people-ops';
 import { AdministrationAuditExport, AdministrationScreenContent } from './administration-ops';
 import { SearchSelect } from './search-select';
+import { EntitySearchSelect } from './entity-search-select';
 import { TableRowActions } from './table-row-actions';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
@@ -3216,7 +3217,7 @@ function WorkflowView({ screen }: { screen: AdminScreen }) {
             <h2>Application transition</h2>
             <p className="page-subtitle">Call `POST /admin/church/home-church-applications/&#123;id&#125;/transitions` with credentials and scope.</p>
             <div className="form-grid">
-              <label className="full"><span>Application id *</span><input value={applicationId} onChange={(event) => setApplicationId(event.target.value)} placeholder="01J…" /></label>
+              <label className="full"><span>Application *</span><EntitySearchSelect name="home_church_application_id" catalog="homeChurchApplication" required value={applicationId} onValueChange={setApplicationId} /></label>
               <label>
                 <span>Status *</span>
                 <select value={transitionStatus} onChange={(event) => setTransitionStatus(event.target.value)}>
@@ -3949,9 +3950,11 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo }: 
   const breadcrumbs = getAdminBreadcrumbs(screen);
   const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, screenKind: screen.kind, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
   if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen} returnTo={returnTo}/>;
-  const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id);
+  const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id)
+    || (/^\/admin\/home-churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route) && !screen.route.includes('/applications/'))
+    || /^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route);
   const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
-  const rendererOwnsAction = new Set(['G-01','G-17','H-11','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20']).has(screen.id);
+  const rendererOwnsAction = new Set(['G-01','G-17','H-11','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
   return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
 }
 

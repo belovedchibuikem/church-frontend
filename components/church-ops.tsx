@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { AdminScreen } from '../lib/admin-routes';
 import {
@@ -33,8 +34,8 @@ import {
   type FirstTimerRecord,
   type MembershipRecord,
 } from '../lib/admin-operations-api';
-import { listLocationsPage, listUnitsPage } from '../lib/admin-organization-api';
 import { ChurchSettingsPanel } from './church-settings-panel';
+import { EntitySearchSelect } from './entity-search-select';
 
 type ScopeProps = { screen: AdminScreen; requestedScope?: string };
 
@@ -57,26 +58,111 @@ function StatusLine({ error, message, onRetry }: { error?: string | null; messag
   );
 }
 
+const CHURCH_SECTIONS = [
+  { suffix: '', label: 'Overview' },
+  { suffix: '/leadership', label: 'Leadership' },
+  { suffix: '/members', label: 'Members' },
+  { suffix: '/first-timers', label: 'First timers' },
+  { suffix: '/converts', label: 'Converts' },
+  { suffix: '/disciples', label: 'Disciples' },
+  { suffix: '/workers', label: 'Workers' },
+  { suffix: '/departments', label: 'Departments' },
+  { suffix: '/small-groups', label: 'Groups' },
+  { suffix: '/evangelism', label: 'Evangelism' },
+  { suffix: '/attendance', label: 'Attendance' },
+  { suffix: '/reports', label: 'Reports' },
+  { suffix: '/finance', label: 'Finance' },
+  { suffix: '/settings', label: 'Settings' },
+] as const;
+
 function ChurchTabs({ id }: { id: string }) {
+  const pathname = usePathname() ?? '';
   if (!id) return null;
-  const href = `/admin/churches/${id}`;
+  const base = `/admin/churches/${id}`;
   return (
-    <nav className="tabs" role="tablist" aria-label="Church sections">
-      <Link className="tab" href={href}>Overview</Link>
-      <Link className="tab" href={`${href}/leadership`}>Leadership</Link>
-      <Link className="tab" href={`${href}/members`}>Members</Link>
-      <Link className="tab" href={`${href}/first-timers`}>First Timers</Link>
-      <Link className="tab" href={`${href}/converts`}>Converts</Link>
-      <Link className="tab" href={`${href}/disciples`}>Disciples</Link>
-      <Link className="tab" href={`${href}/workers`}>Workers</Link>
-      <Link className="tab" href={`${href}/departments`}>Departments</Link>
-      <Link className="tab" href={`${href}/small-groups`}>Groups</Link>
-      <Link className="tab" href={`${href}/evangelism`}>Evangelism</Link>
-      <Link className="tab" href={`${href}/attendance`}>Attendance</Link>
-      <Link className="tab" href={`${href}/reports`}>Reports</Link>
-      <Link className="tab" href={`${href}/finance`}>Finance</Link>
-      <Link className="tab" href={`${href}/settings`}>Settings</Link>
+    <nav className="home-church-section-nav" aria-label="Church sections">
+      {CHURCH_SECTIONS.map((section) => {
+        const href = `${base}${section.suffix}`;
+        const active = section.suffix === '' ? pathname === base : pathname === href || pathname.startsWith(`${href}/`);
+        return (
+          <Link
+            key={href}
+            className={active ? 'tab active' : 'tab'}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+          >
+            {section.label}
+          </Link>
+        );
+      })}
     </nav>
+  );
+}
+
+function ChurchWorkspace({
+  id,
+  requestedScope,
+  children,
+}: {
+  id: string;
+  requestedScope?: string;
+  children: ReactNode;
+}) {
+  const scope = useScope(requestedScope);
+  const [record, setRecord] = useState<ChurchRecord | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void getChurch(id, scope)
+      .then((next) => {
+        if (!cancelled) setRecord(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, scope]);
+
+  const place = record?.location_name ?? record?.administrative_unit_name ?? record?.country_name;
+
+  return (
+    <div className="home-church-workspace">
+      <header className="page-header home-church-workspace-header">
+        <div>
+          <h1 className="page-title">{record?.name ?? 'Church'}</h1>
+          <p className="page-subtitle">
+            {record
+              ? `${(record.status ?? 'unpublished').replaceAll('_', ' ')}${place ? ` · ${place}` : ''}`
+              : 'Loading church…'}
+          </p>
+        </div>
+      </header>
+      <ChurchTabs id={id} />
+      {children}
+    </div>
+  );
+}
+
+function PersonPicker({ name, required }: { name: string; required?: boolean }) {
+  return (
+    <EntitySearchSelect
+      name={name}
+      catalog="person"
+      placeholder="Type a name to search people"
+      required={required}
+    />
+  );
+}
+
+function ChurchPicker({ name, required }: { name: string; required?: boolean }) {
+  return (
+    <EntitySearchSelect
+      name={name}
+      catalog="church"
+      placeholder="Type a church name to search"
+      required={required}
+    />
   );
 }
 
@@ -90,8 +176,6 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
-  const [units, setUnits] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(search), 300);
@@ -111,21 +195,6 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
   }, [debounced, page, scope]);
 
   useEffect(() => { void load(); }, [load]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [locationPage, unitPage] = await Promise.all([
-          listLocationsPage({ perPage: 100, sort: 'name' }, { scope }),
-          listUnitsPage({ perPage: 100, sort: 'name' }, { scope }),
-        ]);
-        setLocations(locationPage.items);
-        setUnits(unitPage.items);
-      } catch {
-        /* options load independently */
-      }
-    })();
-  }, [scope]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -159,8 +228,8 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
         <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
           <div className="form-grid">
             <label><span>Canonical name *</span><input name="name" required /></label>
-            <label><span>Location *</span><select name="location_id" required><option value="">Select</option>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label><span>Region / local area *</span><select name="administrative_unit_id" required><option value="">Select</option>{units.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label><span>Location *</span><EntitySearchSelect name="location_id" required /></label>
+            <label><span>Region / local area *</span><EntitySearchSelect name="administrative_unit_id" required /></label>
           </div>
           <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Create'}</button></div>
         </form>
@@ -176,7 +245,12 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
                 <td>{row.administrative_unit_name ?? 'Not provided'}</td>
                 <td>{row.memberships_count ?? 0}</td>
                 <td>{row.status ?? '—'}</td>
-                <td className="actions-cell"><Link className="table-action" href={`/admin/churches/${row.id}`}>View</Link></td>
+                <td className="actions-cell">
+                  <div className="row-actions">
+                    <Link className="table-action" href={`/admin/churches/${row.id}`}>Open</Link>
+                    <Link className="table-action" href={`/admin/churches/${row.id}/edit`}>Edit</Link>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -270,24 +344,22 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <ChurchTabs id={id} />
       <StatusLine error={error} onRetry={() => void load()} />
       {record ? (
-        <article className="card">
+        <article className="card entity-overview-card">
           {editing ? (
             <form onSubmit={(event) => void onSave(event)}>
               <label><span>Canonical name *</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
               <p className="maps-settings-lead">Location and coverage stay on the linked geography records. Use Geography to change address or coordinates.</p>
-              <div className="form-footer">
+              <div className="overview-actions">
                 <button type="button" className="ghost-button" onClick={() => setEditing(false)}>Cancel</button>
-                <button type="submit" className="primary-button" disabled={busy}>Save</button>
+                <button type="submit" className="primary-button" disabled={busy}>Save name</button>
               </div>
             </form>
           ) : (
             <>
-              <dl>
+              <dl className="entity-definition-list">
                 <div><dt>Name</dt><dd>{record.name}</dd></div>
-                <div><dt>Church ID</dt><dd>{record.id}</dd></div>
                 <div><dt>Status</dt><dd>{record.status ?? 'Not provided'}</dd></div>
                 <div><dt>Location</dt><dd>{missing(record.location_name)}</dd></div>
                 <div><dt>Address</dt><dd>{missing(record.address_line_one)}</dd></div>
@@ -299,14 +371,23 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
                 <div><dt>Home churches</dt><dd>{record.home_churches_count ?? 0}</dd></div>
                 <div><dt>Published</dt><dd>{record.published_at ? new Date(record.published_at).toLocaleString() : 'Not provided'}</dd></div>
               </dl>
-              <div className="form-footer">
-                <button type="button" className="ghost-button" onClick={() => setEditing(true)}>Edit</button>
-                <Link className="ghost-button link-button" href={`${screen.route.replace(/\/edit$/, '')}/edit`}>Open editor</Link>
+              <div className="overview-actions">
+                <button type="button" className="ghost-button" onClick={() => setEditing(true)}>Edit name</button>
               </div>
-              <label className="full"><span>Status reason *</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>
-              <div className="form-footer">
-                {record.status !== 'unpublished' ? <button type="button" className="danger-button" disabled={busy} onClick={() => void changeStatus('unpublished')}>Unpublish / suspend</button> : <button type="button" className="primary-button" disabled={busy} onClick={() => void changeStatus('active')}>Activate</button>}
-                <button type="button" className="danger-button" disabled={busy} onClick={() => void onDelete()}>Delete if empty</button>
+              <label className="full">
+                <span>Reason for status change *</span>
+                <textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  rows={3}
+                  placeholder="Required when you unpublish, suspend, or activate this church."
+                />
+              </label>
+              <div className="overview-actions">
+                {record.status !== 'unpublished'
+                  ? <button type="button" className="danger-button" disabled={busy} onClick={() => void changeStatus('unpublished')}>Unpublish (hide from directory)</button>
+                  : <button type="button" className="primary-button" disabled={busy} onClick={() => void changeStatus('active')}>Publish / activate</button>}
+                <button type="button" className="danger-button" disabled={busy} onClick={() => void onDelete()}>Delete (only if empty)</button>
               </div>
             </>
           )}
@@ -361,7 +442,7 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
   }
 
   async function onEnd(id: string) {
-    if (!window.confirm('End this appointment? History is kept by setting an end date.')) return;
+    if (!window.confirm('End this assignment? The person stays in history with an end date; they are no longer listed as active.')) return;
     const row = rows.find((item) => String(item.id) === id);
     setBusy(true);
     try {
@@ -383,13 +464,12 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
 
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
-          {!churchId ? <label><span>Church id *</span><input name="church_id" required /></label> : null}
-          <label><span>Person id *</span><input name="person_id" required /></label>
-          <label><span>Title *</span><input name="title" required /></label>
+          {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
+          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
+          <label><span>Title *</span><input name="title" required placeholder={roleType === 'worker' ? 'e.g. Usher' : 'Role title'} /></label>
           <label><span>Start date</span><input name="started_at" type="date" /></label>
         </div>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Assign {roleType}</button></div>
@@ -404,7 +484,7 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
                 <td>{String(row.title ?? row.name ?? '—')}</td>
                 <td>{String(row.church_name ?? '—')}</td>
                 <td>{String(row.status ?? '—')}</td>
-                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEnd(String(row.id))}>End</button> : null}</td>
+                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEnd(String(row.id))}>End assignment</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -453,15 +533,25 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
     }
   }
 
+  async function onEndMembership(row: MembershipRecord) {
+    if (!window.confirm(`End ${row.person_name ?? 'this person'}’s membership? They stay in history as ended and can join another church later.`)) return;
+    try {
+      await endMembership(row.id, { reason_code: 'admin_ended' }, scope);
+      await load();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Unable to end membership.'));
+    }
+  }
+
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onAdd(event)}>
         <div className="form-grid">
-          {!churchId ? <label><span>Church id *</span><input name="church_id" required /></label> : null}
-          <label><span>Person id *</span><input name="person_id" required /></label>
+          {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
+          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
         </div>
+        <p className="maps-settings-lead">Search by name. The membership is stored against the selected person and church records.</p>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Add member</button></div>
       </form>
       <div className="card table-card">
@@ -474,7 +564,7 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
                 <td>{row.church_name ?? '—'}</td>
                 <td>{row.status}</td>
                 <td>{row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '—'}</td>
-                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void endMembership(row.id, { reason_code: 'admin_ended' }, scope).then(load).catch((err) => setError(operationsErrorMessage(err, 'Unable to end membership.')))}>End</button> : null}</td>
+                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEndMembership(row)}>End membership</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -525,13 +615,13 @@ function FirstTimersPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
-          {!churchId ? <label><span>Church id *</span><input name="church_id" required /></label> : null}
-          <label><span>Person id *</span><input name="person_id" required /></label>
+          {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
+          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
         </div>
+        <p className="maps-settings-lead">Choose the visitor by name. An existing person record is reused — you never type a database ID.</p>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Register first timer</button></div>
       </form>
       <div className="card table-card">
@@ -613,14 +703,13 @@ function ConvertsPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
-          {!churchId ? <label><span>Church id *</span><input name="church_id" required /></label> : null}
-          <label><span>Person id *</span><input name="person_id" required /></label>
+          {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
+          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
           <label><span>Converted on</span><input name="converted_at" type="date" /></label>
-          <label><span>Source</span><input name="source" /></label>
+          <label><span>Source</span><input name="source" placeholder="e.g. altar call" /></label>
         </div>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Record convert</button></div>
       </form>
@@ -688,7 +777,7 @@ function NamedCrudPanel({
   }
 
   async function onArchive(id: string) {
-    if (!window.confirm(`Archive this ${title.toLowerCase().slice(0, -1)}?`)) return;
+    if (!window.confirm(`Remove this ${title.toLowerCase().replace(/s$/, '')} from the active list? Linked memberships still block a hard delete.`)) return;
     setBusy(true);
     try {
       if (path.includes('groups')) {
@@ -707,11 +796,10 @@ function NamedCrudPanel({
 
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
-          {!churchId ? <label><span>Church id *</span><input name="church_id" required /></label> : null}
+          {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
           {fields.map((field) => (
             <label key={field.name}><span>{field.label}{field.required ? ' *' : ''}</span><input name={field.name} type={field.type ?? 'text'} required={field.required} /></label>
           ))}
@@ -727,7 +815,7 @@ function NamedCrudPanel({
                 <td>{String(row.name ?? row.title ?? '—')}</td>
                 <td>{String(row.church_name ?? '—')}</td>
                 <td>{String(row.status ?? '—')}</td>
-                <td><button type="button" className="ghost-button" onClick={() => void onArchive(String(row.id))}>Archive</button></td>
+                <td><button type="button" className="ghost-button" onClick={() => void onArchive(String(row.id))}>Remove from active list</button></td>
               </tr>
             ))}
           </tbody>
@@ -787,11 +875,10 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
-          <label><span>Home church *</span><select name="home_church_id" required><option value="">Select</option>{homes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label><span>Home church *</span><EntitySearchSelect name="home_church_id" required placeholder="Search home church by name" options={homes.map((item) => ({ value: item.id, label: item.name }))} /></label>
           <label><span>Service date *</span><input name="service_date" type="date" required /></label>
           <label><span>Adults</span><input name="adults" type="number" min={0} defaultValue={0} /></label>
           <label><span>Children</span><input name="children" type="number" min={0} defaultValue={0} /></label>
@@ -859,7 +946,6 @@ function ReportsPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <StatusLine error={error} onRetry={() => void load()} />
       <div className="metric-grid">
         {Object.entries(counts).map(([label, value]) => (
@@ -871,11 +957,9 @@ function ReportsPanel({ screen, requestedScope }: ScopeProps) {
   );
 }
 
-function FinancePanel({ screen }: ScopeProps) {
-  const churchId = churchIdFromRoute(screen.route);
+function FinancePanel({ screen: _screen }: ScopeProps) {
   return (
     <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
       <article className="card settings-card">
         <p>Church giving, receipts and reconciliation live in the canonical Finance module. This screen does not keep a second ledger.</p>
         <Link className="primary-button link-button" href="/admin/finance">Open Finance</Link>
@@ -884,40 +968,44 @@ function FinancePanel({ screen }: ScopeProps) {
   );
 }
 
-function SettingsPanel({ screen }: ScopeProps) {
-  const churchId = churchIdFromRoute(screen.route);
-  return (
-    <>
-      {churchId ? <ChurchTabs id={churchId} /> : null}
-      <ChurchSettingsPanel />
-    </>
-  );
+function SettingsPanel({ screen: _screen }: ScopeProps) {
+  return <ChurchSettingsPanel />;
 }
 
 export function ChurchScreenContent({ screen, requestedScope }: ScopeProps) {
   const route = screen.route;
+  const churchId = churchIdFromRoute(route);
+  const wrap = (node: ReactNode) =>
+    churchId ? (
+      <ChurchWorkspace id={churchId} requestedScope={requestedScope}>
+        {node}
+      </ChurchWorkspace>
+    ) : (
+      node
+    );
+
   if (route === '/admin/churches' || route === '/admin/churches/new') return <ChurchesTable requestedScope={requestedScope} />;
-  if (/\/leadership$/.test(route) || route === '/admin/church/leadership') return <RolePanel screen={screen} requestedScope={requestedScope} roleType="leader" />;
-  if (/\/members$/.test(route) || route === '/admin/church/members') return <MembersPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/first-timers$/.test(route) || route === '/admin/church/first-timers') return <FirstTimersPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/converts$/.test(route) || route === '/admin/church/converts') return <ConvertsPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/disciples$/.test(route) || route === '/admin/church/disciples') return <RolePanel screen={screen} requestedScope={requestedScope} roleType="disciple" />;
-  if (/\/workers$/.test(route) || route === '/admin/church/workers') return <RolePanel screen={screen} requestedScope={requestedScope} roleType="worker" />;
+  if (/\/leadership$/.test(route) || route === '/admin/church/leadership') return wrap(<RolePanel screen={screen} requestedScope={requestedScope} roleType="leader" />);
+  if (/\/members$/.test(route) || route === '/admin/church/members') return wrap(<MembersPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/first-timers$/.test(route) || route === '/admin/church/first-timers') return wrap(<FirstTimersPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/converts$/.test(route) || route === '/admin/church/converts') return wrap(<ConvertsPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/disciples$/.test(route) || route === '/admin/church/disciples') return wrap(<RolePanel screen={screen} requestedScope={requestedScope} roleType="disciple" />);
+  if (/\/workers$/.test(route) || route === '/admin/church/workers') return wrap(<RolePanel screen={screen} requestedScope={requestedScope} roleType="worker" />);
   if (/\/departments$/.test(route) || route === '/admin/church/departments') {
-    return <NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Departments" list={listDepartments} path="admin/church/departments" fields={[{ name: 'name', label: 'Name', required: true }, { name: 'description', label: 'Description' }]} />;
+    return wrap(<NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Departments" list={listDepartments} path="admin/church/departments" fields={[{ name: 'name', label: 'Name', required: true }, { name: 'description', label: 'Description' }]} />);
   }
   if (/\/small-groups$/.test(route) || route === '/admin/church/small-groups') {
-    return <NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Small groups" list={listChurchGroups} path="admin/church/groups" fields={[{ name: 'name', label: 'Name', required: true }, { name: 'description', label: 'Description' }, { name: 'capacity', label: 'Capacity', type: 'number' }]} />;
+    return wrap(<NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Small groups" list={listChurchGroups} path="admin/church/groups" fields={[{ name: 'name', label: 'Name', required: true }, { name: 'description', label: 'Description' }, { name: 'capacity', label: 'Capacity', type: 'number' }]} />);
   }
   if (/\/evangelism$/.test(route) || route === '/admin/church/evangelism') {
-    return <NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Activities" list={listEvangelismActivities} path="admin/church/evangelism-activities" fields={[{ name: 'title', label: 'Title', required: true }, { name: 'activity_type', label: 'Type' }]} />;
+    return wrap(<NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Activities" list={listEvangelismActivities} path="admin/church/evangelism-activities" fields={[{ name: 'title', label: 'Title', required: true }, { name: 'activity_type', label: 'Type' }]} />);
   }
-  if (/\/attendance$/.test(route) || route === '/admin/church/attendance') return <AttendancePanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/reports$/.test(route) || route === '/admin/church/reports') return <ReportsPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/finance$/.test(route) || route === '/admin/church/finance') return <FinancePanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/settings$/.test(route) || route === '/admin/church/settings') return <SettingsPanel screen={screen} requestedScope={requestedScope} />;
+  if (/\/attendance$/.test(route) || route === '/admin/church/attendance') return wrap(<AttendancePanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/reports$/.test(route) || route === '/admin/church/reports') return wrap(<ReportsPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/finance$/.test(route) || route === '/admin/church/finance') return wrap(<FinancePanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/settings$/.test(route) || route === '/admin/church/settings') return wrap(<SettingsPanel screen={screen} requestedScope={requestedScope} />);
   if (/^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(route) || route.includes('the-covenant-place')) {
-    return <ChurchDetail screen={screen} requestedScope={requestedScope} />;
+    return wrap(<ChurchDetail screen={screen} requestedScope={requestedScope} />);
   }
   return <ChurchesTable requestedScope={requestedScope} />;
 }

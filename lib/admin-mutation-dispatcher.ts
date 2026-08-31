@@ -29,6 +29,7 @@ import {
   completeSoulFollowUp,
   createChurch,
   createHomeChurch,
+  updateHomeChurch,
   createTeamAssignment,
   endTeamAssignment,
   updateChurch,
@@ -717,6 +718,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts.scope,
     );
   }
+  if (routeStarts(route, '/admin/home-churches') && !route.includes('/applications') && labelIs(label, /edit|update/) && !labelIs(label, /member|attendance|status|application/)) {
+    return updateHomeChurch(
+      requireId(pickRecord(ctx, 'home_church_id', 'id'), 'home church'),
+      {
+        name: field(payload, 'name') ?? '',
+        leader_person_id: requireId(firstUlid(payload.leader_person_id, payload.person_id, payload.owner_id), 'leader'),
+      },
+      opts.scope,
+    );
+  }
   if (routeStarts(route, '/admin/home-churches/applications') && labelIs(label, /new application|create application|submit application|add application/)) {
     return mutate(
       'admin/church/home-church-applications',
@@ -1239,13 +1250,35 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     );
   }
   if (routeStarts(route, '/admin/kca') && labelIs(label, /record attendance|mark attendance/)) {
-    const enrollmentId = requireId(pickRecord(ctx, 'enrollment_id', 'id'), 'enrollment');
+    const enrollmentId = requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id, ctx.recordId), 'enrollment');
     return mutate(
       `admin/kca/enrollments/${encodeURIComponent(enrollmentId)}/attendance`,
       {
         lesson_id: requireId(firstUlid(payload.lesson_id, payload.kca_lesson_id), 'lesson'),
         status: field(payload, 'status') ?? 'present',
         session_on: field(payload, 'session_on', 'startDate') ?? '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/assessments') && labelIs(label, /create|add|record|save|submit/)) {
+    const audienceRaw = field(payload, 'audience') ?? 'student';
+    const audience = /all/i.test(audienceRaw)
+      ? 'all'
+      : /year/i.test(audienceRaw)
+        ? 'year'
+        : 'student';
+    return mutate(
+      'admin/kca/assessment-results',
+      {
+        audience,
+        kca_enrollment_id: firstUlid(payload.kca_enrollment_id, payload.enrollment_id) ?? null,
+        year_id: firstUlid(payload.year_id, payload.kca_year_id) ?? null,
+        kca_module_id: firstUlid(payload.kca_module_id, payload.module_id) ?? null,
+        kca_lesson_id: firstUlid(payload.kca_lesson_id, payload.lesson_id) ?? null,
+        assessment_code: field(payload, 'assessment_code', 'title', 'name') ?? '',
+        result_code: field(payload, 'result_code', 'result') ?? 'pass',
+        score: field(payload, 'score') ?? null,
       },
       opts,
     );

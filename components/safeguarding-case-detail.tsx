@@ -7,6 +7,7 @@ import type { AdminScreen } from '../lib/admin-routes.ts';
 import { apiRequest, ApiError } from '../lib/api-client';
 import type { ApiSuccessEnvelope, JsonObject } from '../lib/api-types';
 import { CATALOG_GLOBAL_SCOPE } from '../lib/admin-catalog-api';
+import { EntitySearchSelect } from './entity-search-select';
 import { designFixturesEnabled, uploadMediaAttachment } from '../lib/admin-platform-api';
 import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-cache';
 
@@ -175,8 +176,8 @@ export function SafeguardingCaseDetail({ screen }: { screen: AdminScreen }) {
             }}
           >
             <label>
-              <span>{t('admin.assignUserUlid', { defaultMessage: 'Assign (user ULID)' })}</span>
-              <input name="assigned_to_user_id" required />
+              <span>{t('admin.assignUser', { defaultMessage: 'Assign user' })}</span>
+              <EntitySearchSelect name="assigned_to_user_id" required />
             </label>
             <button className="ghost-button" data-interaction-native="true" disabled={busy} type="submit">
               {t('admin.assignCase', { defaultMessage: 'Assign Case' })}

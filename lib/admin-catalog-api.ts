@@ -31,6 +31,7 @@ export const CATALOG_PATHS = {
   'kca.mentor_assignments': 'kca/mentor-assignments',
   'kca.evidence': 'kca/evidence-submissions',
   'kca.assessments': 'kca/assessment-results',
+  'kca.attendance': 'kca/attendance',
   'kca.certificates': 'kca/certificates',
   'press.publications': 'press/publications',
   'press.translations': 'press/translations',
@@ -229,6 +230,8 @@ export async function searchCatalogOptions(
 /** Form-catalog keys that resolve to ProtectedDomainRegistry catalogs (searchable). */
 export const FORM_TO_DOMAIN_CATALOG: Partial<Record<string, CatalogDomainKey>> = {
   // Domain catalogs are used for remaining modules; church/org selects use operations/org APIs.
+  paymentTransaction: 'finance.payment_transactions',
+  eventRegistration: 'events.registrations',
   pressPublication: 'press.publications',
   pressTranslation: 'press.translations',
   pressContributor: 'press.contributors',
@@ -240,6 +243,7 @@ export const FORM_TO_DOMAIN_CATALOG: Partial<Record<string, CatalogDomainKey>> =
   kcaYear: 'kca.years',
   kcaCohort: 'kca.cohorts',
   kcaModule: 'kca.modules',
+  kcaLesson: 'kca.lessons',
   kcaEnrollment: 'kca.enrollments',
   kcaCertificate: 'kca.certificates',
   platformFile: 'platform.files',
@@ -328,6 +332,7 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/years') return 'kca.years';
   if (route === '/admin/kca/modules') return 'kca.modules';
   if (route === '/admin/kca/lessons') return 'kca.lessons';
+  if (route === '/admin/kca/attendance') return 'kca.attendance';
   if (route.includes('/admin/kca/modules/') && route.endsWith('/prerequisites')) return 'kca.prerequisites';
   if (route === '/admin/kca/alumni') return 'kca.certificates';
   if (route === '/admin/kca/lecturers') return 'kca.lecturer_assignments';
@@ -418,6 +423,8 @@ export function catalogRecordsToRows(
         );
       } else if (key.includes('language')) {
         mapped[column] = get('language_code', 'language');
+      } else if (key === 'id') {
+        mapped[column] = get('registration_number', 'code', 'id');
       } else if (
         key.includes('submitted') ||
         key.includes('received') ||
@@ -463,7 +470,13 @@ export function catalogRecordsToRows(
       } else if (key.includes('variance') || key.includes('expected') || key.includes('received')) {
         mapped[column] = get('amount', 'status', 'reason_code');
       } else if (key.includes('progress')) {
-        mapped[column] = get('progress', 'status');
+        mapped[column] = get('progress', 'starts_on', 'status');
+      } else if (key.includes('result')) {
+        mapped[column] = humanizeCatalogToken(get('result_code', 'result'));
+      } else if (key.includes('score')) {
+        mapped[column] = get('score');
+      } else if (key.includes('assessment')) {
+        mapped[column] = get('assessment_code', 'title', 'name');
       } else if (key.includes('lecturer') || key.includes('mentor')) {
         mapped[column] = get('lecturer_name', 'mentor_name', 'person_name');
       } else if (key.includes('specialization') || key.includes('module')) {
@@ -478,6 +491,10 @@ export function catalogRecordsToRows(
         mapped[column] = get('cohort_name', 'region', 'locality');
       } else if (key.includes('translator')) {
         mapped[column] = get('translator_name', 'person_name');
+      } else if (key.includes('lesson')) {
+        mapped[column] = get('lesson_title', 'title', 'lesson_id');
+      } else if (key.includes('session')) {
+        mapped[column] = formatTimestamp(get('session_on') === '—' ? null : get('session_on'));
       } else if (key.includes('cohort')) {
         mapped[column] = get('cohort_name', 'name', 'cohort_id', 'cohort');
       } else if (key.includes('year')) {

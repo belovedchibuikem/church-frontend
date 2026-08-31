@@ -50,12 +50,34 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_cohort: {
     entity: 'KCA cohort',
     fields: [
-      { label: 'Cohort name', name: 'name', type: 'text', required: true, placeholder: 'e.g. 2024 Cohort A' },
-      { label: 'Code', name: 'code', type: 'text', required: true, placeholder: 'e.g. 2024-A' },
-      { label: 'KCA year', name: 'year_id', type: 'search-select', catalog: 'kcaYear', required: true, placeholder: 'Search academic year' },
+      { label: 'Cohort name', name: 'name', type: 'text', required: true, placeholder: 'e.g. 2026 Cohort A' },
+      { label: 'Code', name: 'code', type: 'text', required: true, placeholder: 'e.g. 2026-A' },
+      { label: 'KCA year', name: 'year_id', type: 'search-select', catalog: 'kcaYear', required: true, placeholder: 'Search academic year by name' },
       { label: 'Starts on', name: 'starts_on', type: 'date', required: true },
       { label: 'Ends on', name: 'ends_on', type: 'date', required: true },
       { label: 'Timezone', name: 'timezone', type: 'text', placeholder: 'Africa/Lagos', helpText: 'Cohort learning-day timezone (IANA). Defaults to UTC.' },
+    ],
+  },
+  kca_year: {
+    entity: 'KCA year',
+    fields: [
+      { label: 'Year name', name: 'name', type: 'text', required: true, placeholder: 'e.g. Foundation 2026' },
+      { label: 'Code', name: 'code', type: 'text', required: true, placeholder: 'e.g. Y1-2026' },
+      { label: 'Starts on', name: 'starts_on', type: 'date', required: true },
+      { label: 'Ends on', name: 'ends_on', type: 'date', required: true },
+    ],
+  },
+  kca_assessment: {
+    entity: 'KCA assessment',
+    fields: [
+      { label: 'Who is this for?', name: 'audience', type: 'select', required: true, options: ['One student', 'A student year', 'All enrolled students'], helpText: 'Results are stored per enrollment. Year and all-students apply the same result to each matching student.' },
+      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', placeholder: 'Search student by name (required for one student)' },
+      { label: 'KCA year', name: 'year_id', type: 'search-select', catalog: 'kcaYear', placeholder: 'Search year (required when assessing a year)' },
+      { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', placeholder: 'Optional — assess a specific module' },
+      { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', placeholder: 'Optional — name this assessment after a lesson' },
+      { label: 'Assessment name', name: 'assessment_code', type: 'text', required: true, placeholder: 'e.g. Identity final, Lesson 3 quiz' },
+      { label: 'Result', name: 'result_code', type: 'select', required: true, options: ['pass', 'fail', 'distinction', 'incomplete'] },
+      { label: 'Score', name: 'score', type: 'number', placeholder: '0–100' },
     ],
   },
   home_church: {
@@ -63,10 +85,10 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     fields: [
       { label: 'Name', name: 'name', type: 'text', required: true, placeholder: 'Enter home church name' },
       { label: 'Parent church', name: 'church_id', type: 'search-select', catalog: 'church', required: true, placeholder: 'Search church' },
-      { label: 'Leader', name: 'leader_person_id', type: 'search-select', catalog: 'person', placeholder: 'Search leader' },
-      { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit' },
-      { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
-      { label: 'Status', name: 'status', type: 'select', options: ['Active', 'Suspended', 'Closed'] },
+      { label: 'Leader', name: 'leader_person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search leader' },
+      { label: 'Administrative unit', name: 'administrative_unit_id', type: 'search-select', catalog: 'administrativeUnit', placeholder: 'Search unit', helpText: 'Set when the home church is created.' },
+      { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location', helpText: 'Set when the home church is created.' },
+      { label: 'Status', name: 'status', type: 'select', options: ['active', 'suspended', 'closed'], helpText: 'Use Suspend / Close to change status. This field is informational on edit.' },
     ],
   },
   church: {
@@ -403,7 +425,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   payment_refund: {
     entity: 'Refund',
     fields: [
-      { label: 'Transaction', name: 'payment_transaction_id', type: 'text', placeholder: 'Transaction ULID' },
+      { label: 'Transaction', name: 'payment_transaction_id', type: 'search-select', catalog: 'finance.payment_transactions', placeholder: 'Search transaction' },
       { label: 'Amount (minor units)', name: 'amount_minor', type: 'number', placeholder: '500000' },
       { label: 'Reason code', name: 'reason_code', type: 'text', placeholder: 'requested_by_admin' },
     ],
@@ -411,7 +433,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   payment_intent: {
     entity: 'Payment intent',
     fields: [
-      { label: 'Event registration', name: 'event_registration_id', type: 'text', placeholder: 'Registration ULID' },
+      { label: 'Event registration', name: 'event_registration_id', type: 'search-select', catalog: 'events.registrations', placeholder: 'Search registration' },
     ],
   },
   safeguarding_incident: {
@@ -462,7 +484,8 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
   { pattern: /\/admin\/kca\/modules/, entity: 'kca_module' },
   { pattern: /\/admin\/kca\/lessons/, entity: 'kca_lesson' },
   { pattern: /\/admin\/kca\/cohorts/, entity: 'kca_cohort' },
-  { pattern: /\/admin\/kca\/years/, entity: 'kca_cohort' },
+  { pattern: /\/admin\/kca\/years/, entity: 'kca_year' },
+  { pattern: /\/admin\/kca\/assessments/, entity: 'kca_assessment' },
   { pattern: /\/admin\/kca\/lecturers/, entity: 'kca_lecturer_assignment' },
   { pattern: /\/admin\/kca\/mentors/, entity: 'kca_mentor_assignment' },
   { pattern: /\/admin\/kca\/students/, entity: 'kca_enrollment' },
@@ -508,6 +531,8 @@ const screenEntityMap: Record<string, string> = {
   'H-10': 'kca_module',
   'H-12': 'kca_lesson',
   'H-03': 'kca_cohort',
+  'H-04': 'kca_year',
+  'H-17': 'kca_assessment',
   'H-05': 'kca_mentor_assignment',
   'H-07': 'kca_lecturer_assignment',
   'E-02': 'church',
@@ -579,7 +604,14 @@ export function normalizeDetailValues(details: Record<string, string>): Record<s
 
 export function defaultValueForField(field: AdminFormField, values: Record<string, string>): string | undefined {
   const direct = values[field.name];
-  if (direct !== undefined) return direct;
   if (field.name === 'is_active' && values.status) return /inactive/i.test(values.status) ? 'Inactive' : 'Active';
+  if (field.name === 'status' && (direct || values.Status)) {
+    const raw = (direct ?? values.Status ?? '').toLowerCase();
+    if (field.options?.some((option) => option.toLowerCase() === raw)) {
+      return field.options.find((option) => option.toLowerCase() === raw) ?? raw;
+    }
+    return direct ?? values.Status;
+  }
+  if (direct !== undefined) return direct;
   return undefined;
 }

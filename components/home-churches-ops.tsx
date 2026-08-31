@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { AdminScreen } from '../lib/admin-routes';
+import { stashAdminRecords } from '../lib/admin-record-cache';
+import { EntitySearchSelect } from './entity-search-select';
 import { listAdminAuditEvents } from '../lib/admin-identity-api';
 import {
   createHomeChurch,
@@ -13,13 +16,11 @@ import {
   getHomeChurch,
   getHomeChurchApplication,
   listAttendance,
-  listChurches,
   listEvangelismActivities,
   listHomeChurchApplications,
   listHomeChurches,
   listMemberships,
   listPastoralNeeds,
-  listPeopleDirectory,
   mutateMinistryRecord,
   operationsErrorMessage,
   startMembership,
@@ -32,7 +33,6 @@ import {
   type MembershipRecord,
   type PastoralNeedRecord,
 } from '../lib/admin-operations-api';
-import { listLocationsPage, listUnitsPage } from '../lib/admin-organization-api';
 
 type ScopeProps = { screen: AdminScreen; requestedScope?: string };
 
@@ -60,20 +60,98 @@ function StatusLine({ error, message, onRetry }: { error?: string | null; messag
   );
 }
 
+const HOME_CHURCH_SECTIONS = [
+  { suffix: '', label: 'Overview' },
+  { suffix: '/members', label: 'Members' },
+  { suffix: '/attendance', label: 'Attendance' },
+  { suffix: '/activities', label: 'Activities' },
+  { suffix: '/needs', label: 'Needs' },
+  { suffix: '/finance', label: 'Reports' },
+  { suffix: '/status', label: 'Suspend / Close' },
+] as const;
+
 function HomeChurchTabs({ id }: { id: string }) {
+  const pathname = usePathname() ?? '';
   if (!id) return null;
-  const href = `/admin/home-churches/${id}`;
+  const base = `/admin/home-churches/${id}`;
   return (
-    <nav className="tabs" role="tablist" aria-label="Home church sections">
-      <Link className="tab" href={href}>Overview</Link>
-      <Link className="tab" href={`${href}/members`}>Members</Link>
-      <Link className="tab" href={`${href}/attendance`}>Attendance</Link>
-      <Link className="tab" href={`${href}/activities`}>Activities</Link>
-      <Link className="tab" href={`${href}/needs`}>Needs</Link>
-      <Link className="tab" href={`${href}/finance`}>Reports</Link>
-      <Link className="tab" href={`${href}/status`}>Suspend / Close</Link>
+    <nav className="home-church-section-nav" aria-label="Home church sections">
+      {HOME_CHURCH_SECTIONS.map((section) => {
+        const href = `${base}${section.suffix}`;
+        const active = section.suffix === '' ? pathname === base : pathname === href;
+        return (
+          <Link
+            key={href}
+            className={active ? 'tab active' : 'tab'}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+          >
+            {section.label}
+          </Link>
+        );
+      })}
     </nav>
   );
+}
+
+function HomeChurchWorkspace({
+  id,
+  requestedScope,
+  children,
+}: {
+  id: string;
+  requestedScope?: string;
+  children: ReactNode;
+}) {
+  const scope = useScope(requestedScope);
+  const [record, setRecord] = useState<HomeChurchRecord | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void getHomeChurch(id, scope)
+      .then((next) => {
+        if (cancelled) return;
+        setRecord(next);
+        stashAdminRecords([next as unknown as Record<string, unknown>]);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, scope]);
+
+  return (
+    <div className="home-church-workspace">
+      <header className="page-header home-church-workspace-header">
+        <div>
+          <h1 className="page-title">{record?.name ?? 'Home church'}</h1>
+          <p className="page-subtitle">
+            {record ? `${record.status.replaceAll('_', ' ')} · ${id}` : id}
+          </p>
+        </div>
+      </header>
+      <HomeChurchTabs id={id} />
+      {children}
+    </div>
+  );
+}
+
+function PersonPicker({ name, required, defaultValue, defaultLabel }: { name: string; required?: boolean; defaultValue?: string; defaultLabel?: string }) {
+  return (
+    <EntitySearchSelect
+      name={name}
+      catalog="person"
+      placeholder="Search people"
+      required={required}
+      defaultValue={defaultValue}
+      defaultLabel={defaultLabel}
+    />
+  );
+}
+
+function attendanceHeadcount(row: Record<string, unknown>): number {
+  return Number(row.adults ?? 0) + Number(row.children ?? 0) + Number(row.first_timers ?? 0);
 }
 
 function ApplicationsTable({ requestedScope }: { requestedScope?: string }) {
@@ -260,29 +338,6 @@ function NewApplicationForm({ requestedScope }: { requestedScope?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [churches, setChurches] = useState<Array<{ id: string; name: string }>>([]);
-  const [people, setPeople] = useState<Array<{ id: string; name?: string }>>([]);
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
-  const [units, setUnits] = useState<Array<{ id: string; name: string }>>([]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [churchPage, peoplePage, locationPage, unitPage] = await Promise.all([
-          listChurches({ scope, perPage: 100 }),
-          listPeopleDirectory({ scope, perPage: 100 }),
-          listLocationsPage({ perPage: 100, sort: 'name' }, { scope }),
-          listUnitsPage({ perPage: 100, sort: 'name' }, { scope }),
-        ]);
-        setChurches(churchPage.items.map((item) => ({ id: item.id, name: item.name })));
-        setPeople(peoplePage.items.map((item) => ({ id: String(item.id), name: String(item.name ?? item.id) })));
-        setLocations(locationPage.items);
-        setUnits(unitPage.items);
-      } catch (err) {
-        setError(operationsErrorMessage(err, 'Unable to load application options.'));
-      }
-    })();
-  }, [scope]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -317,12 +372,12 @@ function NewApplicationForm({ requestedScope }: { requestedScope?: string }) {
     <form className="card settings-card" onSubmit={(event) => void onSubmit(event)}>
       <StatusLine error={error} message={message} />
       <div className="form-grid">
-        <label><span>Applicant *</span><select name="applicant_person_id" required><option value="">Select person</option>{people.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label><span>Sponsoring church *</span><select name="church_id" required><option value="">Select church</option>{churches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label><span>Applicant *</span><EntitySearchSelect name="applicant_person_id" required /></label>
+        <label><span>Sponsoring church *</span><EntitySearchSelect name="church_id" required /></label>
         <label><span>Proposed name *</span><input name="proposed_name" required /></label>
         <label><span>Expected participants *</span><input name="expected_participants" type="number" min={1} required /></label>
-        <label><span>Country / location *</span><select name="location_id" required><option value="">Select location</option>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label><span>Region / local area *</span><select name="administrative_unit_id" required><option value="">Select unit</option>{units.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label><span>Country / location *</span><EntitySearchSelect name="location_id" required /></label>
+        <label><span>Region / local area *</span><EntitySearchSelect name="administrative_unit_id" required /></label>
         <label><span>Meeting day *</span><select name="meeting_day" required><option value="sunday">Sunday</option><option value="monday">Monday</option><option value="tuesday">Tuesday</option><option value="wednesday">Wednesday</option><option value="thursday">Thursday</option><option value="friday">Friday</option><option value="saturday">Saturday</option></select></label>
         <label><span>Meeting time *</span><input name="meeting_time" type="time" required /></label>
         <label><span>Contact email *</span><input name="contact_email" type="email" required /></label>
@@ -357,6 +412,7 @@ function HomeChurchesTable({ requestedScope, leadersOnly }: { requestedScope?: s
       const result = await listHomeChurches({ search: debounced || undefined, status: status || undefined, page, perPage: 25, scope });
       setItems(result.items);
       setTotal(result.pagination.total);
+      stashAdminRecords(result.items as unknown as Array<Record<string, unknown>>);
     } catch (err) {
       setItems([]);
       setError(operationsErrorMessage(err, 'Unable to load home churches.'));
@@ -405,10 +461,10 @@ function HomeChurchesTable({ requestedScope, leadersOnly }: { requestedScope?: s
         <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
           <div className="form-grid">
             <label><span>Name *</span><input name="name" required /></label>
-            <label><span>Church id *</span><input name="church_id" required /></label>
-            <label><span>Leader person id *</span><input name="leader_person_id" required /></label>
-            <label><span>Location id *</span><input name="location_id" required /></label>
-            <label><span>Administrative unit id *</span><input name="administrative_unit_id" required /></label>
+            <label><span>Church *</span><EntitySearchSelect name="church_id" required /></label>
+            <label><span>Leader *</span><EntitySearchSelect name="leader_person_id" required /></label>
+            <label><span>Location *</span><EntitySearchSelect name="location_id" required /></label>
+            <label><span>Administrative unit *</span><EntitySearchSelect name="administrative_unit_id" required /></label>
           </div>
           <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Create'}</button></div>
         </form>
@@ -461,6 +517,7 @@ function HomeChurchDetail({ screen, requestedScope }: ScopeProps) {
       setRecord(next);
       setName(next.name);
       setLeaderId(next.leader_person_id ?? '');
+      stashAdminRecords([next as unknown as Record<string, unknown>]);
     } catch (err) {
       setRecord(null);
       setError(operationsErrorMessage(err, 'Unable to load home church.'));
@@ -472,11 +529,15 @@ function HomeChurchDetail({ screen, requestedScope }: ScopeProps) {
   async function onSave(event: FormEvent) {
     event.preventDefault();
     if (!record) return;
+    const form = event.currentTarget as HTMLFormElement;
+    const leader = String(new FormData(form).get('leader_person_id') || leaderId);
     setBusy(true);
     setError(null);
     try {
-      const next = await updateHomeChurch(record.id, { name, leader_person_id: leaderId }, scope);
+      const next = await updateHomeChurch(record.id, { name, leader_person_id: leader }, scope);
       setRecord(next);
+      setLeaderId(next.leader_person_id ?? leader);
+      stashAdminRecords([next as unknown as Record<string, unknown>]);
       setEditing(false);
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to save home church.'));
@@ -487,16 +548,19 @@ function HomeChurchDetail({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <HomeChurchTabs id={id} />
       <StatusLine error={error} onRetry={() => void load()} />
       {record ? (
-        <article className="card">
+        <article className="card entity-overview-card">
           {editing ? (
             <form onSubmit={(event) => void onSave(event)}>
               <div className="form-grid">
                 <label><span>Name *</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-                <label><span>Leader person id *</span><input value={leaderId} onChange={(event) => setLeaderId(event.target.value)} required /></label>
+                <label>
+                  <span>Leader *</span>
+                  <PersonPicker name="leader_person_id" required defaultValue={leaderId} defaultLabel={record.leader_name ?? undefined} />
+                </label>
               </div>
+              <p className="maps-settings-lead">Parent church, location, and coverage are set when the home church is created. Status is changed from Suspend / Close.</p>
               <div className="form-footer">
                 <button type="button" className="ghost-button" onClick={() => setEditing(false)}>Cancel</button>
                 <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
@@ -504,21 +568,24 @@ function HomeChurchDetail({ screen, requestedScope }: ScopeProps) {
             </form>
           ) : (
             <>
-              <dl>
+              <dl className="entity-definition-list">
                 <div><dt>Name</dt><dd>{record.name}</dd></div>
-                <div><dt>ID</dt><dd>{record.id}</dd></div>
-                <div><dt>Status</dt><dd>{record.status}</dd></div>
+                <div><dt>Status</dt><dd>{record.status.replaceAll('_', ' ')}</dd></div>
                 <div><dt>Leader</dt><dd>{record.leader_name ?? '—'}</dd></div>
                 <div><dt>Parent church</dt><dd>{record.church_name ?? '—'}</dd></div>
                 <div><dt>Location</dt><dd>{record.location_name ?? '—'}</dd></div>
                 <div><dt>Coverage</dt><dd>{record.administrative_unit_name ?? '—'}</dd></div>
                 <div><dt>Members</dt><dd>{record.members_count ?? 0}</dd></div>
+                <div><dt>Record ID</dt><dd>{record.id}</dd></div>
               </dl>
-              <button type="button" className="ghost-button" onClick={() => setEditing(true)}>Edit</button>
+              <div className="overview-actions">
+                <button type="button" className="primary-button" onClick={() => setEditing(true)}>Edit details</button>
+                <Link className="ghost-button link-button" href={`/admin/home-churches/${id}/members`}>View members</Link>
+              </div>
             </>
           )}
         </article>
-      ) : null}
+      ) : !error ? <p className="maps-settings-lead">Loading home church…</p> : null}
     </>
   );
 }
@@ -583,19 +650,18 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <HomeChurchTabs id={homeId} />
       <StatusLine error={error} onRetry={() => void load()} />
       {homeId ? (
       <form className="card settings-card" onSubmit={(event) => void onAdd(event)}>
         <div className="form-grid">
-          <label><span>Person id *</span><input name="person_id" required /></label>
+          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
         </div>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Add member</button></div>
       </form>
-      ) : <p className="maps-settings-lead">Select a home church to add or end memberships. This list is scoped memberships with a home church.</p>}
+      ) : <p className="maps-settings-lead">Open a home church to add or end memberships. This list shows memberships that include a home church.</p>}
       <div className="card table-card">
         <table>
-          <thead><tr><th>Name</th><th>Church</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Church</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
           <tbody>
             {items.length === 0 ? <tr><td colSpan={5}>No members linked to this home church.</td></tr> : items.map((row) => (
               <tr key={row.id}>
@@ -603,7 +669,7 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
                 <td>{row.church_name ?? '—'}</td>
                 <td>{row.status}</td>
                 <td>{row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '—'}</td>
-                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEnd(row.id)}>End</button> : null}</td>
+                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEnd(row.id)}>End membership</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -656,13 +722,24 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
     }
   }
 
-  const totals = rows.reduce((acc, row) => acc + Number(row.total ?? 0), 0);
+  const visibleRows = useMemo(() => {
+    const seen = new Set<string>();
+    return rows.filter((row) => {
+      const key = String(row.id ?? `${row.home_church_id}-${row.service_date}`);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [rows]);
+  const totals = visibleRows.reduce((acc, row) => acc + attendanceHeadcount(row), 0);
 
   return (
     <>
-      <HomeChurchTabs id={homeId} />
       <StatusLine error={error} onRetry={() => void load()} />
-      <p className="maps-settings-lead">Sessions: {rows.length}. Headcount total: {totals}. Saving the same date updates the existing record (audit via church.churches.manage).</p>
+      <p className="maps-settings-lead">
+        {homeId ? 'Sessions for this home church. Saving the same date updates that session.' : 'Attendance across home churches in the current scope.'}
+        {' '}Sessions: {visibleRows.length}. Headcount (adults + children + guests): {totals}.
+      </p>
       {homeId ? (
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
@@ -677,15 +754,16 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
       ) : null}
       <div className="card table-card">
         <table>
-          <thead><tr><th>Date</th><th>Adults</th><th>Children</th><th>Guests</th><th>Total</th></tr></thead>
+          <thead><tr>{homeId ? null : <th>Home church</th>}<th>Date</th><th>Adults</th><th>Children</th><th>Guests</th><th>Total</th></tr></thead>
           <tbody>
-            {rows.length === 0 ? <tr><td colSpan={5}>No attendance sessions.</td></tr> : rows.map((row) => (
-              <tr key={String(row.id)}>
+            {visibleRows.length === 0 ? <tr><td colSpan={homeId ? 5 : 6}>No attendance sessions.</td></tr> : visibleRows.map((row, index) => (
+              <tr key={String(row.id ?? `${row.home_church_id}-${row.service_date}-${index}`)}>
+                {homeId ? null : <td>{String(row.home_church_name ?? row.church_name ?? '—')}</td>}
                 <td>{String(row.service_date ?? '—')}</td>
                 <td>{String(row.adults ?? 0)}</td>
                 <td>{String(row.children ?? 0)}</td>
                 <td>{String(row.first_timers ?? 0)}</td>
-                <td>{String(row.total ?? 0)}</td>
+                <td>{String(attendanceHeadcount(row))}</td>
               </tr>
             ))}
           </tbody>
@@ -747,7 +825,6 @@ function ActivitiesPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <HomeChurchTabs id={homeId} />
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
@@ -813,11 +890,10 @@ function NeedsPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <HomeChurchTabs id={homeId} />
       <StatusLine error={error} onRetry={() => void load()} />
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
-          <label><span>Person id *</span><input name="person_id" required /></label>
+          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
           <label><span>Category *</span><input name="category" required /></label>
           <label className="full"><span>Summary *</span><textarea name="summary" required /></label>
         </div>
@@ -876,7 +952,6 @@ function ReportsPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <HomeChurchTabs id={homeId} />
       <StatusLine error={error} onRetry={() => void load()} />
       <p className="maps-settings-lead">Monthly reports are member-submitted snapshots stored as audited `home_church.report.submitted` events. Ledger balances stay in Finance — this view does not create a second ledger.</p>
       <div className="card table-card">
@@ -936,7 +1011,6 @@ function StatusPanel({ screen, requestedScope }: ScopeProps) {
 
   return (
     <>
-      <HomeChurchTabs id={id} />
       <StatusLine error={error} onRetry={() => void load()} />
       {record ? (
         <article className="card settings-card">
@@ -956,19 +1030,29 @@ function StatusPanel({ screen, requestedScope }: ScopeProps) {
 
 export function HomeChurchesScreenContent({ screen, requestedScope }: ScopeProps) {
   const route = screen.route;
+  const nestedId = homeChurchIdFromRoute(route);
+  const wrap = (node: ReactNode) =>
+    nestedId ? (
+      <HomeChurchWorkspace id={nestedId} requestedScope={requestedScope}>
+        {node}
+      </HomeChurchWorkspace>
+    ) : (
+      node
+    );
+
   if (route === '/admin/home-churches/applications') return <ApplicationsTable requestedScope={requestedScope} />;
   if (route === '/admin/home-churches/applications/new') return <NewApplicationForm requestedScope={requestedScope} />;
   if (/\/applications\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(route)) return <ApplicationWorkspace screen={screen} requestedScope={requestedScope} />;
   if (route === '/admin/home-churches') return <HomeChurchesTable requestedScope={requestedScope} />;
   if (route === '/admin/home-churches/leaders') return <HomeChurchesTable requestedScope={requestedScope} leadersOnly />;
-  if (/\/members$/.test(route)) return <MembersPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/attendance$/.test(route)) return <AttendancePanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/activities$/.test(route)) return <ActivitiesPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/needs$/.test(route)) return <NeedsPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/finance$/.test(route)) return <ReportsPanel screen={screen} requestedScope={requestedScope} />;
-  if (/\/status$/.test(route)) return <StatusPanel screen={screen} requestedScope={requestedScope} />;
+  if (/\/members$/.test(route)) return wrap(<MembersPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/attendance$/.test(route)) return wrap(<AttendancePanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/activities$/.test(route)) return wrap(<ActivitiesPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/needs$/.test(route)) return wrap(<NeedsPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/finance$/.test(route)) return wrap(<ReportsPanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/status$/.test(route)) return wrap(<StatusPanel screen={screen} requestedScope={requestedScope} />);
   if (/^\/admin\/home-churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(route) || route.includes('grace-home-church')) {
-    return <HomeChurchDetail screen={screen} requestedScope={requestedScope} />;
+    return wrap(<HomeChurchDetail screen={screen} requestedScope={requestedScope} />);
   }
   return <HomeChurchesTable requestedScope={requestedScope} />;
 }

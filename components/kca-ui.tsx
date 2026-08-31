@@ -19,6 +19,7 @@ import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-a
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
+import { EntitySearchSelect } from './entity-search-select';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { TableRowActions } from './table-row-actions';
@@ -480,10 +481,10 @@ function KcaYears({ screen }: { screen: AdminScreen }) {
 function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const fields = fieldsForEntity('kca_module');
-  const values = normalizeDetailValues(screen.details ?? {});
+  const live = !shouldUseDesignFixtures();
+  const values = live ? {} : normalizeDetailValues(screen.details ?? {});
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
-  const live = !shouldUseDesignFixtures();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -540,26 +541,16 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
 
         {wizard.currentStep === 1 && (
           <div className="kca-form-grid">
-            <label className="wide"><span>{t('member.kca.lessonPlanNotes', { defaultMessage: 'Lesson plan notes' })}</span><textarea placeholder={t('member.kca.lessonPlanPlaceholder', { defaultMessage: 'Outline videos, readings, and assignments for this module...' })} rows={5} defaultValue={t('member.kca.lessonPlanDefault', { defaultMessage: '8 lessons planned: identity foundations, adoption, new creation, authority, and daily walk.' })} /></label>
+            <p className="maps-settings-lead">Save the module first, then add lessons from Lessons. Notes here are planning-only and are not stored until the module exists.</p>
+            <label className="wide"><span>{t('member.kca.lessonPlanNotes', { defaultMessage: 'Lesson plan notes' })}</span><textarea placeholder={t('member.kca.lessonPlanPlaceholder', { defaultMessage: 'Outline videos, readings, and assignments for this module...' })} rows={5} /></label>
             <label><span>{t('member.kca.contentFormat', { defaultMessage: 'Content format' })}</span><select defaultValue="Mixed"><option value="Mixed">{t('member.kca.formatMixed', { defaultMessage: 'Mixed' })}</option><option value="Video-led">{t('member.kca.formatVideoLed', { defaultMessage: 'Video-led' })}</option><option value="Reading-led">{t('member.kca.formatReadingLed', { defaultMessage: 'Reading-led' })}</option></select></label>
-            <label><span>{t('member.kca.estimatedLessons', { defaultMessage: 'Estimated lessons' })}</span><input type="number" defaultValue="8" min={1} /></label>
+            <label><span>{t('member.kca.estimatedLessons', { defaultMessage: 'Estimated lessons' })}</span><input type="number" min={1} /></label>
           </div>
         )}
 
         {wizard.currentStep === 2 && (
           <div className="kca-prerequisite-list">
-            {[
-              { key: 'member.kca.prereqBibleSurvey', label: 'Bible Survey (Year 1)' },
-              { key: 'member.kca.walkWithChrist', label: 'Walk With Christ' },
-              { key: 'member.kca.prereqBasicBibleKnowledge', label: 'Basic Bible Knowledge' },
-            ].map((item, index) => (
-              <div className="kca-prerequisite-row" key={item.key}>
-                <span className="kca-drag" aria-hidden="true">⋮⋮</span>
-                <span className="kca-prerequisite-icon" aria-hidden="true">{index < 2 ? '▣' : '◇'}</span>
-                <strong>{t(item.key, { defaultMessage: item.label })}</strong>
-                <KcaBadge value={index < 2 ? t('common.required', { defaultMessage: 'Required' }) : t('common.optional', { defaultMessage: 'Optional' })} />
-              </div>
-            ))}
+            <p className="maps-settings-lead">Prerequisites are added after the module exists, from the Prerequisites screen. Nothing is saved from these placeholder rows.</p>
             <button className="ghost-button" type="button" data-interaction-native="true">{t('member.kca.addPrerequisite', { defaultMessage: '+ Add prerequisite' })}</button>
           </div>
         )}
@@ -568,7 +559,7 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
           <div className="kca-form-grid">
             <label><span>{t('member.kca.evidenceType', { defaultMessage: 'Evidence type' })}</span><select defaultValue="Written + Practical"><option value="Written + Practical">{t('member.kca.evidenceWrittenPractical', { defaultMessage: 'Written + Practical' })}</option><option value="Written only">{t('member.kca.evidenceWrittenOnly', { defaultMessage: 'Written only' })}</option><option value="Practical only">{t('member.kca.evidencePracticalOnly', { defaultMessage: 'Practical only' })}</option></select></label>
             <label><span>{t('member.kca.minimumSubmissions', { defaultMessage: 'Minimum submissions' })}</span><input type="number" defaultValue="3" min={0} /></label>
-            <label className="wide"><span>{t('member.kca.evidenceInstructions', { defaultMessage: 'Evidence instructions' })}</span><textarea rows={4} placeholder={t('member.kca.evidencePlaceholder', { defaultMessage: 'Describe what students must submit...' })} defaultValue={t('member.kca.evidenceDefault', { defaultMessage: 'Students submit reflection essays and a practical application assignment reviewed by their mentor.' })} /></label>
+            <label className="wide"><span>{t('member.kca.evidenceInstructions', { defaultMessage: 'Evidence instructions' })}</span><textarea rows={4} placeholder={t('member.kca.evidencePlaceholder', { defaultMessage: 'Describe what students must submit...' })} /></label>
           </div>
         )}
 
@@ -768,17 +759,11 @@ function KcaPrerequisites({ screen }: { screen: AdminScreen }) {
         <div className="form-grid">
           <label>
             <span>Module *</span>
-            <select name="module_id" required defaultValue="">
-              <option value="">Select module</option>
-              {modules.map((item) => <option key={String(item.id)} value={String(item.id)}>{String(item.title ?? item.code ?? item.id)}</option>)}
-            </select>
+            <EntitySearchSelect name="module_id" required catalog="kcaModule" options={modules.map((item) => ({ value: String(item.id), label: String(item.title ?? item.code ?? item.id) }))} />
           </label>
           <label>
             <span>Prerequisite module *</span>
-            <select name="prerequisite_module_id" required defaultValue="">
-              <option value="">Select prerequisite module</option>
-              {modules.map((item) => <option key={`pr-${String(item.id)}`} value={String(item.id)}>{String(item.title ?? item.code ?? item.id)}</option>)}
-            </select>
+            <EntitySearchSelect name="prerequisite_module_id" required catalog="kcaModule" options={modules.map((item) => ({ value: String(item.id), label: String(item.title ?? item.code ?? item.id) }))} />
           </label>
           <label>
             <span>Requirement *</span>
@@ -821,14 +806,109 @@ function KcaPrerequisites({ screen }: { screen: AdminScreen }) {
 }
 
 function KcaAttendance({ screen }: { screen: AdminScreen }) {
-  const { t } = useLocale();
-  const attendanceStatuses = [
-    t('member.kca.present', { defaultMessage: 'Present' }),
-    t('member.kca.present', { defaultMessage: 'Present' }),
-    t('member.kca.late', { defaultMessage: 'Late' }),
-    t('member.kca.absent', { defaultMessage: 'Absent' }),
-  ];
-  return <div className="kca-attendance"><KcaMetrics metrics={screen.metrics}/><article className="card"><KcaFilters search={t('member.kca.searchStudents', { defaultMessage: 'Search students...' })}/><div className="kca-attendance-list">{(screen.items ?? []).map((item,index) => { const [name,value] = item.split(' — '); const numericValue = Number(value.replace(/[^0-9.]/g, '')); return <div key={item}><span className="kca-mini-avatar">{name.split(' ').map(part=>part[0]).join('').slice(0,2)}</span><strong>{name}</strong><i role="progressbar" aria-label={t('member.kca.attendanceAria', { defaultMessage: '{name} attendance', vars: { name } })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Number.isFinite(numericValue) ? numericValue : 0}><b style={{width:value}}/></i><span>{value}</span><small>{attendanceStatuses[index]}</small></div>; })}</div></article></div>;
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState(live ? 'Loading attendance…' : '');
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    if (!live) return;
+    setError(null);
+    try {
+      const result = await listCatalogDomain('kca.attendance', { perPage: 50 });
+      stashAdminRecords(result.items as Array<Record<string, unknown>>);
+      const mapped = catalogRecordsToRows(result.items as Record<string, unknown>[], ['Name', 'Lesson', 'Session', 'Status']) as Row[];
+      setRows(mapped);
+      setTotal(result.pagination.total);
+      const present = result.items.filter((item) => String((item as { status?: string }).status) === 'present').length;
+      const absent = result.items.filter((item) => String((item as { status?: string }).status) === 'absent').length;
+      const excused = result.items.filter((item) => String((item as { status?: string }).status) === 'excused').length;
+      setMessage(`${result.pagination.total} sessions · this page: ${present} present, ${absent} absent, ${excused} excused`);
+    } catch (err) {
+      setRows([]);
+      setError(catalogErrorMessage(err, 'Unable to load attendance.'));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, [live]);
+
+  async function onRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    setError(null);
+    try {
+      await executeAdminAction({
+        route: screen.route,
+        label: 'Record attendance',
+        payload: {
+          kca_enrollment_id: String(form.get('kca_enrollment_id') ?? ''),
+          kca_lesson_id: String(form.get('kca_lesson_id') ?? ''),
+          status: String(form.get('status') ?? 'present'),
+          session_on: String(form.get('session_on') ?? ''),
+        },
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      event.currentTarget.reset();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to record attendance.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const metrics = live
+    ? []
+    : (screen.metrics ?? []);
+
+  return (
+    <div className="kca-attendance">
+      {metrics.length ? <KcaMetrics metrics={metrics} /> : null}
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {live ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      <form className="card settings-card" onSubmit={(event) => void onRecord(event)}>
+        <div className="form-grid">
+          <label><span>Student *</span><EntitySearchSelect name="kca_enrollment_id" catalog="kcaEnrollment" required placeholder="Search student by name" /></label>
+          <label><span>Lesson *</span><EntitySearchSelect name="kca_lesson_id" catalog="kcaLesson" required placeholder="Search lesson by name" /></label>
+          <label><span>Session date *</span><input name="session_on" type="date" required /></label>
+          <label>
+            <span>Status *</span>
+            <select name="status" defaultValue="present">
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+              <option value="excused">Excused</option>
+            </select>
+          </label>
+        </div>
+        <div className="form-footer">
+          <button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Record attendance'}</button>
+        </div>
+      </form>
+      <article className="card kca-table-card">
+        <table className="kca-table" aria-label="Attendance sessions">
+          <thead><tr><th>Student</th><th>Lesson</th><th>Session</th><th>Status</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4}>{live ? 'No attendance recorded yet.' : 'Design fixtures are disabled for attendance.'}</td></tr>
+            ) : rows.map((row, index) => (
+              <tr key={`${row.__id ?? index}`}>
+                <td>{row.Name ?? '—'}</td>
+                <td>{row.Lesson ?? '—'}</td>
+                <td>{row.Session ?? '—'}</td>
+                <td><KcaBadge value={row.Status ?? '—'} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {total ? <p className="maps-settings-lead">Total {total}</p> : null}
+      </article>
+    </div>
+  );
 }
 
 function KcaCertificate({ screen }: { screen: AdminScreen }) {
@@ -894,7 +974,15 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
 
   return (
     <div className="kca-managed-table">
-      {screen.metrics && <KcaMetrics metrics={screen.metrics} />}
+      {screen.metrics && !live ? <KcaMetrics metrics={screen.metrics} /> : null}
+      {live && screen.id === 'H-01' ? (
+        <KcaMetrics
+          metrics={[
+            { label: 'Enrolled', value: String(total || rows.length) },
+            { label: 'On this page', value: String(rows.length) },
+          ]}
+        />
+      ) : null}
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
       <KcaTable screen={screen} rows={rows} reviewLabel={reviewLabel} total={total || rows.length} />

@@ -66,7 +66,7 @@ export function SearchSelect({
     placeholder ?? t('common.searchAndSelect', { defaultMessage: 'Search and select…' });
   const rootRef = useRef<HTMLDivElement>(null);
   const requestSeq = useRef(0);
-  const fixtureOptions =
+  const fixtureOptions: SearchSelectOption[] =
     staticOptions ??
     (catalog && catalog in catalogOptions
       ? catalogOptions[catalog as keyof typeof catalogOptions]

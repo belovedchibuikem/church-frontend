@@ -187,6 +187,32 @@ test('executeAdminAction maps KCA application Edit onto POST /admin/kca/applicat
   assert.equal((result.data as { status?: string }).status, 'accepted');
 });
 
+test('executeAdminAction maps home church Edit onto PUT /admin/church/home-churches/{id}', async () => {
+  const homeChurchId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  installFetch((call) => {
+    assert.match(call.url, new RegExp(`/admin/church/home-churches/${homeChurchId}$`));
+    assert.equal(call.method, 'PUT');
+    const payload = JSON.parse(call.body ?? '{}') as Record<string, string>;
+    assert.equal(payload.name, 'Family House Home Church - Allen');
+    assert.equal(payload.leader_person_id, USER_ULID);
+    return jsonResponse({ id: homeChurchId, name: payload.name, status: 'active' });
+  });
+
+  const result = await executeAdminAction({
+    route: `/admin/home-churches/${homeChurchId}`,
+    label: `Edit Family House Home Church - Allen ${homeChurchId}`,
+    recordId: homeChurchId,
+    payload: {
+      name: 'Family House Home Church - Allen',
+      leader_person_id: USER_ULID,
+      status: 'active',
+    },
+  });
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal((result.data as { name?: string }).name, 'Family House Home Church - Allen');
+});
+
 test('executeAdminAction maps Admit on the KCA decision page onto transitions', async () => {
   const applicationId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
   installFetch((call) => {

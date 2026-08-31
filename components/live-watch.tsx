@@ -134,7 +134,11 @@ export function LiveWatchExperience() {
         <div className="live-player-meta">
           <span className={live ? 'live' : 'status'}>{live ? '● LIVE' : (stream.status ?? 'scheduled').toUpperCase()}</span>
           <small>
-            {stream.viewer_count ?? 0} watching · {stream.reaction_count ?? 0} reactions
+            {typeof stream.reaction_count === 'number' && stream.reaction_count > 0
+              ? `${stream.reaction_count} likes`
+              : live
+                ? 'On air'
+                : 'Service'}
           </small>
         </div>
         {stream.embed_url ? (
@@ -164,7 +168,7 @@ export function LiveWatchExperience() {
             Prayer
           </Link>
           <button className="site-button secondary" onClick={() => void onReact()} type="button">
-            ♥ {stream.reaction_count ?? 0}
+            Like{stream.reaction_count ? ` · ${stream.reaction_count}` : ''}
           </button>
         </div>
       </section>
@@ -173,7 +177,7 @@ export function LiveWatchExperience() {
         <h3>Live chat</h3>
         {chatError ? <p role="status">{chatError}</p> : null}
         <div className="live-chat-list">
-          {comments.length === 0 ? <p>Be the first to share a word of faith.</p> : null}
+          {comments.length === 0 ? <p>No comments yet.</p> : null}
           {comments.map((item) => (
             <div className="list-row" key={item.id ?? `${item.person_name}-${item.created_at}`}>
               <div>
@@ -188,7 +192,7 @@ export function LiveWatchExperience() {
           <input
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            placeholder="Type a message..."
+            placeholder="Write a comment"
             maxLength={500}
           />
           <button className="site-button" disabled={busy || !message.trim()} type="submit">

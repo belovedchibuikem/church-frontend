@@ -38,6 +38,7 @@ import {
   updatePersonPhone,
   type AdminScope,
 } from '../lib/admin-operations-api';
+import { EntitySearchSelect } from './entity-search-select';
 import { fetchUserCapabilities } from '../lib/user-api';
 import { ChurchSettingsPanel } from './church-settings-panel';
 
@@ -308,7 +309,7 @@ function Person360({ screen, requestedScope }: ScopeProps) {
             setBusy(true);
             void mergePeople(id, mergeId, scope).then(setRecord).catch((err) => setError(operationsErrorMessage(err, 'Merge failed.'))).finally(() => setBusy(false));
           }}>
-            <label><span>Merge duplicate person id</span><input value={mergeId} onChange={(event) => setMergeId(event.target.value)} required /></label>
+            <label><span>Merge duplicate person</span><EntitySearchSelect name="source_person_id" required value={mergeId} onValueChange={setMergeId} /></label>
             <button className="danger-button" disabled={busy} type="submit">Review merge</button>
           </form>
           <button type="button" className="danger-button" disabled={busy} onClick={() => {
@@ -380,8 +381,8 @@ function FollowUpPanel({ requestedScope }: { requestedScope?: string }) {
           .then(() => load()).catch((err) => setError(operationsErrorMessage(err, 'Unable to assign follow-up.')));
       }}>
         <div className="form-grid">
-          <label><span>First timer id *</span><input name="first_timer_id" required /></label>
-          <label><span>Assignee person id</span><input name="assigned_to_person_id" /></label>
+          <label><span>First timer *</span><EntitySearchSelect name="first_timer_id" required /></label>
+          <label><span>Assignee</span><EntitySearchSelect name="assigned_to_person_id" /></label>
           <label><span>Due</span><input name="due_at" type="datetime-local" /></label>
         </div>
         <button className="primary-button" type="submit">Assign</button>
@@ -428,8 +429,8 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
             .catch((err) => window.alert(operationsErrorMessage(err, 'Unable to register first timer.')));
         }}>
           <div className="form-grid">
-            <label><span>Existing person id *</span><input name="person_id" required /></label>
-            <label><span>Church id *</span><input name="church_id" required /></label>
+            <label><span>Existing person *</span><EntitySearchSelect name="person_id" required /></label>
+            <label><span>Church *</span><EntitySearchSelect name="church_id" required /></label>
           </div>
           <button className="primary-button" type="submit">Register first timer</button>
         </form>
@@ -449,8 +450,8 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
             .catch((err) => window.alert(operationsErrorMessage(err, 'Unable to record conversion.')));
         }}>
           <div className="form-grid">
-            <label><span>Person id *</span><input name="person_id" required /></label>
-            <label><span>Church id *</span><input name="church_id" required /></label>
+            <label><span>Person *</span><EntitySearchSelect name="person_id" required /></label>
+            <label><span>Church *</span><EntitySearchSelect name="church_id" required /></label>
             <label><span>Converted on</span><input name="converted_at" type="date" /></label>
           </div>
           <button className="primary-button" type="submit">Record conversion</button>
@@ -479,7 +480,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
             .catch((err) => window.alert(operationsErrorMessage(err, 'Unable to submit prayer request.')));
         }}>
           <div className="form-grid">
-            <label><span>Person id *</span><input name="person_id" required /></label>
+            <label><span>Person *</span><EntitySearchSelect name="person_id" required /></label>
             <label><span>Subject *</span><input name="subject" required /></label>
             <label className="full"><span>Private request *</span><textarea name="body" required /></label>
           </div>
@@ -488,11 +489,19 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
         <SimpleQueue title="Prayer requests" loader={(next) => listPrayerRequests({ scope: next, perPage: 50 })} columns={['subject', 'person_name', 'status', '']} >
           {(row, reload) => (
             <>
-              <button type="button" className="ghost-button" onClick={() => {
-                const assignee = window.prompt('Assignee person id');
-                if (!assignee) return;
-                void assignPrayerRequest(String(row.id), { assigned_to_person_id: assignee }, scope).then(reload);
-              }}>Assign</button>
+              <form
+                className="row-assign-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  const assignee = String(form.get('assigned_to_person_id') || '');
+                  if (!assignee) return;
+                  void assignPrayerRequest(String(row.id), { assigned_to_person_id: assignee }, scope).then(reload);
+                }}
+              >
+                <EntitySearchSelect name="assigned_to_person_id" required placeholder="Search assignee" />
+                <button type="submit" className="ghost-button">Assign</button>
+              </form>
               <button type="button" className="ghost-button" onClick={() => void transitionPrayerRequest(String(row.id), 'answered', scope).then(reload)}>Close</button>
             </>
           )}
@@ -511,7 +520,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
             .catch((err) => window.alert(operationsErrorMessage(err, 'Unable to submit need.')));
         }}>
           <div className="form-grid">
-            <label><span>Person id *</span><input name="person_id" required /></label>
+            <label><span>Person *</span><EntitySearchSelect name="person_id" required /></label>
             <label><span>Category *</span><input name="category" required /></label>
             <label className="full"><span>Summary *</span><textarea name="summary" required /></label>
           </div>
@@ -544,8 +553,8 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           }, scope).then(() => window.location.reload()).catch((err) => window.alert(operationsErrorMessage(err, 'Unable to submit testimony.')));
         }}>
           <div className="form-grid">
-            <label><span>Person id *</span><input name="person_id" required /></label>
-            <label><span>Church id *</span><input name="church_id" required /></label>
+            <label><span>Person *</span><EntitySearchSelect name="person_id" required /></label>
+            <label><span>Church *</span><EntitySearchSelect name="church_id" required /></label>
             <label><span>Title *</span><input name="title" required /></label>
             <label className="full"><span>Body *</span><textarea name="body" required /></label>
           </div>
@@ -571,7 +580,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           <div className="form-grid">
             <label><span>Concern type *</span><input name="concern_type" required /></label>
             <label><span>Severity *</span><select name="severity" required><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option></select></label>
-            <label><span>Subject person id</span><input name="subject_person_id" /></label>
+            <label><span>Subject</span><EntitySearchSelect name="subject_person_id" /></label>
             <label className="full"><span>Restricted summary *</span><textarea name="restricted_summary" required /></label>
           </div>
           <button className="danger-button" type="submit">Escalate now</button>
