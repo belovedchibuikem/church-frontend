@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { kcaHrefForDestination, kcaIsActivatedStudent, kcaPrimaryCta } from '../lib/kca-access.ts';
 import { getAdminScreen } from '../lib/admin-routes.ts';
@@ -25,6 +26,12 @@ test('KCA admin landings are catalogued', () => {
     assert.ok(getAdminScreen(route), route);
     assert.ok(isCanonicalAdminRoute(route), route);
   }
+});
+
+test('KCA application Edit and View open the decision workflow', async () => {
+  const shell = await readFile(new URL('../components/admin-interaction-shell.tsx', import.meta.url), 'utf8');
+  assert.match(shell, /action === 'view' \|\| action === 'edit'/);
+  assert.match(shell, /\/admin\/kca\/applications\/\$\{recordId\}\/decision/);
 });
 
 test('KCA application ULID decision route resolves', () => {

@@ -37,6 +37,7 @@ const EDITABLE_ROUTE_PATTERNS: RegExp[] = [
   /^\/admin\/kca\/cohorts/,
   /^\/admin\/kca\/lecturers/,
   /^\/admin\/kca\/mentors/,
+  // Edit opens the admission decision workflow (POST …/transitions), not a generic PATCH.
   /^\/admin\/kca\/applications/,
   /^\/admin\/kca\/review-queue/,
   /^\/admin\/people\/prayer-requests/,

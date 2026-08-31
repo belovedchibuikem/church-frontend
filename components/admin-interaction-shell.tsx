@@ -345,11 +345,13 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       const recordId = extractUlid(record);
       const entityKey = button.dataset.entity ?? resolveEntityKey(route);
       const action = button.dataset.adminAction;
-      if (action === 'view' && recordId) {
+      if ((action === 'view' || action === 'edit') && recordId) {
         if (route.includes('/kca/applications') || route === '/admin/kca/review-queue') {
           navigate(`/admin/kca/applications/${recordId}/decision`);
           return;
         }
+      }
+      if (action === 'view' && recordId) {
         if (route.includes('/home-churches/applications')) {
           navigate(`/admin/home-churches/applications/${recordId}/decision`);
           return;

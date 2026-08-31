@@ -294,9 +294,34 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_application: {
     entity: 'KCA application',
     fields: [
-      { label: 'Applicant', name: 'person_name', type: 'text' },
-      { label: 'Status', name: 'status', type: 'text' },
-      { label: 'Submitted at', name: 'submitted_at', type: 'text' },
+      {
+        label: 'Status',
+        name: 'status',
+        type: 'select',
+        required: true,
+        options: [
+          'draft',
+          'received',
+          'information_required',
+          'interview',
+          'reviewed',
+          'accepted',
+          'provisionally_accepted',
+          'deferred',
+          'not_accepted',
+          'withdrawn',
+          'suspended',
+          'revoked',
+        ],
+        helpText: 'Admission status is changed through the Laravel transition endpoint, not a generic record update.',
+      },
+      {
+        label: 'Reason code',
+        name: 'reason_code',
+        type: 'text',
+        placeholder: 'e.g. deferred_capacity',
+        helpText: 'Required for deferred, not accepted, suspended, and revoked.',
+      },
     ],
   },
   kca_certificate: {

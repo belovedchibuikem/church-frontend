@@ -166,6 +166,27 @@ test('executeAdminAction maps identity assign onto POST /admin/users/{id}/role-a
   assert.equal((result.data as { role_id?: string }).role_id, ROLE_ULID);
 });
 
+test('executeAdminAction maps KCA application Edit onto POST /admin/kca/applications/{id}/transitions', async () => {
+  const applicationId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  installFetch((call) => {
+    assert.match(call.url, new RegExp(`/admin/kca/applications/${applicationId}/transitions$`));
+    assert.equal(call.method, 'POST');
+    const payload = JSON.parse(call.body ?? '{}') as Record<string, string | null>;
+    assert.equal(payload.status, 'accepted');
+    return jsonResponse({ id: applicationId, status: 'accepted' });
+  });
+
+  const result = await executeAdminAction({
+    route: '/admin/kca/applications',
+    label: `Edit Samuel ${applicationId}`,
+    recordId: applicationId,
+    payload: { status: 'accepted', person_name: 'Samuel' },
+  });
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal((result.data as { status?: string }).status, 'accepted');
+});
+
 test('executeAdminAction refuses unmapped actions instead of faking success', async () => {
   installFetch(() => {
     throw new Error('unmapped actions must not call the API');

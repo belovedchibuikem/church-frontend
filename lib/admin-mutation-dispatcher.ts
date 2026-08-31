@@ -1235,7 +1235,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     const recommendationId = requireId(firstUlid(payload.recommendation_id, ctx.recordId), 'recommendation');
     return mutate(`admin/kca/recommendations/${encodeURIComponent(recommendationId)}/verify`, {}, opts);
   }
-  if (routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') && labelIs(label, /transition|approv|defer|accept|reject|not accepted|decision|submit/)) {
+  if (routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') && labelIs(label, /transition|approv|defer|accept|reject|not accepted|decision|submit|edit|update|save/)) {
     const status =
       field(payload, 'status') ??
       (labelIs(label, /request info|information required/)
