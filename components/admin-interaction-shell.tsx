@@ -336,6 +336,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     if (button.closest('.search-select, .search-select-menu, [role="listbox"]')) return;
     if (button.closest('.table-card, .home-church-workspace, .person-summary')) return;
     if (button.closest('form') && !button.closest('.interaction-overlay')) return;
+    if (button.closest('.table-toolbar') && !button.closest('.interaction-overlay')) return;
     if (button.closest('.branding-settings, .maps-settings') && !button.closest('.interaction-overlay')) return;
     const label = (button.getAttribute('aria-label') || button.textContent || '').trim();
     const clean = normalize(label);

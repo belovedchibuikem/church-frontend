@@ -110,7 +110,8 @@ function PeopleDirectory({ requestedScope }: { requestedScope?: string }) {
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const payload = {
       given_name: String(form.get('given_name')),
       family_name: String(form.get('family_name')),
@@ -130,7 +131,7 @@ function PeopleDirectory({ requestedScope }: { requestedScope?: string }) {
       await createPerson({ ...payload, confirm_new: true }, scope);
       setOpen(false);
       setMatches([]);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to create person.'));
@@ -144,7 +145,7 @@ function PeopleDirectory({ requestedScope }: { requestedScope?: string }) {
       <p className="maps-settings-lead">Each row is one canonical person. Roles are badges, not duplicate records. Total {total} distinct people in this scope.</p>
       <div className="table-toolbar">
         <label className="search-box"><span>⌕</span><input aria-label="Search people" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
-        <button type="button" className="primary-button" onClick={() => { setOpen((value) => !value); setMatches([]); }}>+ Add person</button>
+        <button type="button" className="primary-button" data-interaction-native="true" onClick={() => { setOpen((value) => !value); setMatches([]); }}>+ Add person</button>
       </div>
       <StatusLine error={error} onRetry={() => void load()} />
       {open ? (
