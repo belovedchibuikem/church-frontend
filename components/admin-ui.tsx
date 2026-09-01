@@ -4009,7 +4009,7 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo }: 
   const breadcrumbs = getAdminBreadcrumbs(screen);
   const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, screenKind: screen.kind, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
   if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen} returnTo={returnTo}/>;
-  const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-01b','H-02','H-06','H-08','H-10','H-13','H-17','H-19','H-20','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id)
+  const rendererOwnsHeader = new Set(['B-03','G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-01b','H-02','H-06','H-08','H-10','H-13','H-17','H-19','H-20','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id)
     || (/^\/admin\/home-churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route) && !screen.route.includes('/applications/'))
     || /^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route);
   const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);

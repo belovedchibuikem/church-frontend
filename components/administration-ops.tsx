@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 
+import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
+import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
+
 import type { AdminScreen } from '../lib/admin-routes';
 import {
   archiveAdminRole,
@@ -555,11 +558,28 @@ function UserDetail({ screen, requestedScope }: ScopeProps) {
         }}
       >
         <Status error={error} />
-        <label>Display name<input name="name" defaultValue={user.name} required /></label>
-        <label>Given name<input name="given_name" defaultValue={user.profile?.given_name ?? ''} required /></label>
-        <label>Family name<input name="family_name" defaultValue={user.profile?.family_name ?? ''} required /></label>
-        <label>Preferred name<input name="preferred_name" defaultValue={user.profile?.preferred_name ?? ''} /></label>
-        <button className="primary-button" type="submit" data-interaction-native="true">Save</button>
+        <div className="form-grid">
+          <label className="full">
+            <span>Display name</span>
+            <input name="name" defaultValue={user.name} required />
+          </label>
+          <label>
+            <span>Given name *</span>
+            <input name="given_name" defaultValue={user.profile?.given_name ?? ''} required />
+          </label>
+          <label>
+            <span>Family name *</span>
+            <input name="family_name" defaultValue={user.profile?.family_name ?? ''} required />
+          </label>
+          <label>
+            <span>Preferred name</span>
+            <input name="preferred_name" defaultValue={user.profile?.preferred_name ?? ''} />
+          </label>
+        </div>
+        <footer className="form-footer">
+          <Link className="ghost-button link-button" href={`/admin/users/${user.id}`}>Cancel</Link>
+          <button className="primary-button" type="submit" data-interaction-native="true">Save changes</button>
+        </footer>
       </form>
     );
   }
@@ -592,53 +612,257 @@ function UserDetail({ screen, requestedScope }: ScopeProps) {
   );
 }
 
-function CreateUserForm({ requestedScope }: { requestedScope?: string }) {
+function CreateUserForm({ screen, requestedScope }: ScopeProps) {
   const scope = useMemo(() => defaultAdminScope(requestedScope), [requestedScope]);
+  const steps = screen.tabs ?? ['Details', 'Roles & Permissions', 'Church / Scope', 'Review'];
+  const wizard = useAdminWizardStep(steps);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [createdUser, setCreatedUser] = useState<AdminUser | null>(null);
+  const [draft, setDraft] = useState({
+    given_name: '',
+    family_name: '',
+    preferred_name: '',
+    email: '',
+    role_id: '',
+  });
 
   useEffect(() => {
     void listAdminRoles({ scope, perPage: 50 }).then((result) => setRoles(result.data)).catch(() => setRoles([]));
   }, [scope]);
 
+  function updateDraft(field: keyof typeof draft, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function validateStep(step: number): string | null {
+    if (step === 0) {
+      if (!draft.given_name.trim()) return 'Given name is required.';
+      if (!draft.family_name.trim()) return 'Family name is required.';
+      if (!draft.email.trim()) return 'Email is required.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) return 'Enter a valid email address.';
+    }
+    return null;
+  }
+
+  async function submit() {
+    const validationError = validateStep(0);
+    if (validationError) {
+      setError(validationError);
+      wizard.goToStep(0);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const user = await createAdminUser({
+        email: draft.email.trim(),
+        profile: {
+          given_name: draft.given_name.trim(),
+          family_name: draft.family_name.trim(),
+          preferred_name: draft.preferred_name.trim() || null,
+        },
+        role_id: draft.role_id || null,
+      }, scope);
+      setCreatedUser(user);
+      setMessage(`Created ${user.name}. A password setup email was sent to ${user.email}.`);
+    } catch (err) {
+      setError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const selectedRole = roles.find((role) => role.id === draft.role_id);
+  const displayName = [draft.given_name, draft.family_name].filter(Boolean).join(' ').trim() || 'New user';
+
+  if (createdUser) {
+    return (
+      <div className="create-user-wizard" data-admin-wizard="true">
+        <header className="page-header create-user-header">
+          <div>
+            <h1 className="page-title">User created</h1>
+            <p className="page-subtitle">The account is ready. The user can sign in after setting a password from the email we sent.</p>
+          </div>
+        </header>
+        <article className="card form-card create-user-success">
+          <div className="interaction-confirm-summary">
+            <span aria-hidden="true">✓</span>
+            <div>
+              <strong>{createdUser.name}</strong>
+              <p>{createdUser.email}</p>
+            </div>
+          </div>
+          <dl className="wizard-review-summary">
+            <div><dt>User ID</dt><dd><code>{createdUser.id}</code></dd></div>
+            <div><dt>Status</dt><dd>{createdUser.account_status}</dd></div>
+            {selectedRole ? <div><dt>Initial role</dt><dd>{selectedRole.name}</dd></div> : null}
+          </dl>
+          <footer className="form-footer">
+            <Link className="ghost-button link-button" href="/admin/users">Back to users</Link>
+            <Link className="primary-button link-button" href={`/admin/users/${createdUser.id}`}>View user</Link>
+          </footer>
+        </article>
+      </div>
+    );
+  }
+
   return (
-    <form
-      className="card form-card"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const form = new FormData(event.currentTarget);
-        setBusy(true);
-        setError(null);
-        void createAdminUser({
-          email: String(form.get('email') ?? ''),
-          profile: {
-            given_name: String(form.get('given_name') ?? ''),
-            family_name: String(form.get('family_name') ?? ''),
-            preferred_name: String(form.get('preferred_name') ?? '') || null,
-          },
-          role_id: String(form.get('role_id') ?? '') || null,
-        }, scope).then((user) => {
-          setMessage(`Created ${user.name} (${user.id}). A password reset email was sent.`);
-        }).catch((err) => setError(identityErrorMessage(err))).finally(() => setBusy(false));
-      }}
-    >
-      <Status error={error} message={message} />
-      <label>Given name *<input name="given_name" required /></label>
-      <label>Family name *<input name="family_name" required /></label>
-      <label>Preferred name<input name="preferred_name" /></label>
-      <label>Email *<input name="email" type="email" required /></label>
-      <label>Role
-        <select name="role_id" defaultValue="">
-          <option value="">None yet</option>
-          {roles.filter((role) => !role.is_system || role.code !== 'super_administrator').map((role) => (
-            <option key={role.id} value={role.id}>{role.name}</option>
-          ))}
-        </select>
-      </label>
-      <button className="primary-button" type="submit" disabled={busy} data-interaction-native="true">{busy ? 'Creating…' : 'Create user'}</button>
-    </form>
+    <div className="create-user-wizard" data-admin-wizard="true">
+      <header className="page-header create-user-header">
+        <div>
+          <h1 className="page-title">{screen.title}</h1>
+          <p className="page-subtitle">{screen.subtitle}</p>
+        </div>
+        <div className="header-actions">
+          <Link className="ghost-button link-button" href="/admin/users">Cancel</Link>
+        </div>
+      </header>
+
+      <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} />
+
+      <form
+        className="card form-card"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (wizard.isLast) void submit();
+        }}
+      >
+        <Status error={error} message={message} />
+
+        {wizard.currentStep === 0 && (
+          <>
+            <h2 className="section-title">Personal details</h2>
+            <p className="field-help full create-user-lead">Enter the user&apos;s legal name and work email. They will receive a message to set their password.</p>
+            <div className="form-grid">
+              <label>
+                <span>Given name *</span>
+                <input
+                  name="given_name"
+                  type="text"
+                  autoComplete="given-name"
+                  placeholder="e.g. Grace"
+                  value={draft.given_name}
+                  onChange={(event) => updateDraft('given_name', event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                <span>Family name *</span>
+                <input
+                  name="family_name"
+                  type="text"
+                  autoComplete="family-name"
+                  placeholder="e.g. Ezekiel"
+                  value={draft.family_name}
+                  onChange={(event) => updateDraft('family_name', event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                <span>Preferred name</span>
+                <input
+                  name="preferred_name"
+                  type="text"
+                  autoComplete="nickname"
+                  placeholder="Optional display name"
+                  value={draft.preferred_name}
+                  onChange={(event) => updateDraft('preferred_name', event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Email *</span>
+                <input
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@organization.org"
+                  value={draft.email}
+                  onChange={(event) => updateDraft('email', event.target.value)}
+                  required
+                />
+              </label>
+            </div>
+          </>
+        )}
+
+        {wizard.currentStep === 1 && (
+          <>
+            <h2 className="section-title">Roles &amp; permissions</h2>
+            <p className="field-help full create-user-lead">Optionally assign an initial role now. You can add more roles and fine-grained permissions after the account is created.</p>
+            <div className="form-grid">
+              <label className="full">
+                <span>Initial role</span>
+                <select
+                  name="role_id"
+                  value={draft.role_id}
+                  onChange={(event) => updateDraft('role_id', event.target.value)}
+                >
+                  <option value="">No role yet — assign later</option>
+                  {roles.filter((role) => !role.is_system || role.code !== 'super_administrator').map((role) => (
+                    <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {selectedRole ? (
+              <p className="field-help full" role="status">
+                {selectedRole.assignment_count ?? 0} users currently have this role.
+              </p>
+            ) : null}
+          </>
+        )}
+
+        {wizard.currentStep === 2 && (
+          <>
+            <h2 className="section-title">Church / scope</h2>
+            <p className="field-help full create-user-lead">
+              New users inherit access from roles and scoped assignments. After creation, use{' '}
+              <Link href="/admin/access/user-role-assignment">User role assignment</Link> to attach church, home church, or country scope.
+            </p>
+            <dl className="wizard-review-summary">
+              <div><dt>Creating from scope</dt><dd>{scope === 'global' ? 'Global' : scope}</dd></div>
+              <div><dt>User preview</dt><dd>{displayName}</dd></div>
+              <div><dt>Email</dt><dd>{draft.email || '—'}</dd></div>
+            </dl>
+          </>
+        )}
+
+        {wizard.currentStep >= 3 && (
+          <>
+            <h2 className="section-title">Review &amp; create</h2>
+            <p className="field-help full create-user-lead">Confirm the details below. Creating the user sends a password setup email immediately.</p>
+            <dl className="wizard-review-summary">
+              <div><dt>Full name</dt><dd>{displayName}</dd></div>
+              {draft.preferred_name ? <div><dt>Preferred name</dt><dd>{draft.preferred_name}</dd></div> : null}
+              <div><dt>Email</dt><dd>{draft.email}</dd></div>
+              <div><dt>Initial role</dt><dd>{selectedRole?.name ?? 'None — assign after creation'}</dd></div>
+              <div><dt>Admin scope</dt><dd>{scope === 'global' ? 'Global' : scope}</dd></div>
+            </dl>
+          </>
+        )}
+
+        <AdminWizardFooter
+          wizard={wizard}
+          finishLabel={busy ? 'Creating…' : 'Create user'}
+          onBeforeAdvance={() => {
+            const validationError = validateStep(wizard.currentStep);
+            if (validationError) {
+              setError(validationError);
+              return false;
+            }
+            setError(null);
+            return true;
+          }}
+          onFinish={() => {
+            if (!busy) void submit();
+          }}
+        />
+      </form>
+    </div>
   );
 }
 
@@ -736,7 +960,7 @@ export function AdministrationScreenContent({ screen, requestedScope }: ScopePro
   if (route === '/admin/activity') return <ActivityFeed requestedScope={requestedScope} />;
   if (route === '/admin/tasks') return <TasksBoard requestedScope={requestedScope} />;
   if (route === '/admin/quick-actions') return <QuickActionsLive />;
-  if (route === '/admin/users/create') return <CreateUserForm requestedScope={requestedScope} />;
+  if (route === '/admin/users/create') return <CreateUserForm screen={screen} requestedScope={requestedScope} />;
   if (route === '/admin/roles/create') return <CreateRoleForm requestedScope={requestedScope} />;
   if (route === '/admin/access/impersonation') return <ImpersonationPolicy />;
   if (/^\/admin\/users\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(route)) return <UserDetail screen={screen} requestedScope={requestedScope} />;

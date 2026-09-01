@@ -72,7 +72,7 @@ type FooterProps = {
   primaryClassName?: string;
   secondaryClassName?: string;
   onFinish?: () => void;
-  onBeforeAdvance?: () => void;
+  onBeforeAdvance?: () => boolean | void;
 };
 
 export function AdminWizardFooter({
@@ -110,11 +110,12 @@ export function AdminWizardFooter({
         className={primaryClassName}
         data-interaction-native="true"
         onClick={() => {
-          if (wizard.isLast) onFinish?.();
-          else {
-            onBeforeAdvance?.();
-            wizard.goToStep(wizard.currentStep + 1);
+          if (wizard.isLast) {
+            onFinish?.();
+            return;
           }
+          if (onBeforeAdvance?.() === false) return;
+          wizard.goToStep(wizard.currentStep + 1);
         }}
       >
         {wizard.isLast ? resolvedFinish : nextStepLabel}
