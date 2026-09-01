@@ -47,7 +47,7 @@ type Props = {
   items?: string[];
 };
 
-const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request|retry|resolve|deliver|attempt|prepare/i;
+const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request|retry|resolve|deliver|attempt|prepare|end membership|end assignment/i;
 const filePattern = /download|export|print|upload|preview pdf|send receipt/i;
 const emptyTabs: string[] = [];
 
@@ -334,6 +334,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     // SearchSelect option rows are buttons; do not treat them as admin page actions
     // (that was replacing Create Church with an "AfghanistanAF" actions drawer).
     if (button.closest('.search-select, .search-select-menu, [role="listbox"]')) return;
+    if (button.closest('.table-card, .home-church-workspace, .person-summary')) return;
     if (button.closest('form') && !button.closest('.interaction-overlay')) return;
     if (button.closest('.branding-settings, .maps-settings') && !button.closest('.interaction-overlay')) return;
     const label = (button.getAttribute('aria-label') || button.textContent || '').trim();

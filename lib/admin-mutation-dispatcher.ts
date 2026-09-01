@@ -1020,7 +1020,10 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (route.includes('/membership') && labelIs(label, /end membership|close membership|remove member/)) {
+  if (
+    (route.includes('/membership') || route.includes('/members')) &&
+    labelIs(label, /end membership|close membership|remove member/)
+  ) {
     return mutate(
       `admin/church/memberships/${encodeURIComponent(requireId(pickRecord(ctx, 'membership_id', 'id'), 'membership'))}/end`,
       { reason_code: reasonCode(payload, 'membership_ended') ?? 'membership_ended' },

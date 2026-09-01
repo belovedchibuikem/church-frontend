@@ -41,7 +41,7 @@ export function inferActionSurfaceMode(label: string): ActionSurfaceMode {
   if (/assign|distribute/.test(value)) return 'assign';
   if (/create|add|new|register|request access|submit manuscript|submit testimony|record assessment|record attendance/.test(value)) return 'create';
   if (/edit|update/.test(value)) return 'edit';
-  if (/approve|reject|defer|activate|suspend|close|delete|remove|save|submit|publish|send|notify|issue|escalate|reconcile|refund|confirm|process|decision|take action|retry|resolve|deliver|attempt|prepare/.test(value)) return 'confirm';
+  if (/approve|reject|defer|activate|suspend|close|delete|remove|save|submit|publish|send|notify|issue|escalate|reconcile|refund|confirm|process|decision|take action|retry|resolve|deliver|attempt|prepare|end membership|end assignment/.test(value)) return 'confirm';
   if (/view|open|details|review|report/.test(value)) return 'preview';
   return 'actions';
 }

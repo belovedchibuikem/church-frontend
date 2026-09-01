@@ -669,7 +669,7 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
                 <td>{row.church_name ?? '—'}</td>
                 <td>{row.status}</td>
                 <td>{row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '—'}</td>
-                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEnd(row.id)}>End membership</button> : null}</td>
+                <td>{row.status === 'active' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void onEnd(row.id)}>End membership</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -910,8 +910,8 @@ function NeedsPanel({ screen, requestedScope }: ScopeProps) {
                 <td>{row.person_name ?? '—'}</td>
                 <td>{row.status}</td>
                 <td>
-                  {row.status === 'open' ? <button type="button" className="ghost-button" onClick={() => void transitionPastoralNeed(row.id, 'approved', scope).then(load)}>Approve</button> : null}
-                  {row.status === 'approved' ? <button type="button" className="ghost-button" onClick={() => void transitionPastoralNeed(row.id, 'closed', scope).then(load)}>Close</button> : null}
+                  {row.status === 'open' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void transitionPastoralNeed(row.id, 'approved', scope).then(load)}>Approve</button> : null}
+                  {row.status === 'approved' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void transitionPastoralNeed(row.id, 'closed', scope).then(load)}>Close</button> : null}
                 </td>
               </tr>
             ))}

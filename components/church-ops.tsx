@@ -484,7 +484,7 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
                 <td>{String(row.title ?? row.name ?? '—')}</td>
                 <td>{String(row.church_name ?? '—')}</td>
                 <td>{String(row.status ?? '—')}</td>
-                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEnd(String(row.id))}>End assignment</button> : null}</td>
+                <td>{row.status === 'active' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void onEnd(String(row.id))}>End assignment</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -564,7 +564,7 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
                 <td>{row.church_name ?? '—'}</td>
                 <td>{row.status}</td>
                 <td>{row.joined_at ? new Date(row.joined_at).toLocaleDateString() : '—'}</td>
-                <td>{row.status === 'active' ? <button type="button" className="ghost-button" onClick={() => void onEndMembership(row)}>End membership</button> : null}</td>
+                <td>{row.status === 'active' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void onEndMembership(row)}>End membership</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -723,7 +723,7 @@ function ConvertsPanel({ screen, requestedScope }: ScopeProps) {
                 <td>{row.converted_at ? new Date(String(row.converted_at)).toLocaleDateString() : '—'}</td>
                 <td>{String(row.source ?? 'Not provided')}</td>
                 <td>{String(row.status ?? '—')}</td>
-                <td><button type="button" className="ghost-button" onClick={() => void enrolDisciple(row)}>Enrol disciple</button></td>
+                <td><button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void enrolDisciple(row)}>Enrol disciple</button></td>
               </tr>
             ))}
           </tbody>
@@ -815,7 +815,7 @@ function NamedCrudPanel({
                 <td>{String(row.name ?? row.title ?? '—')}</td>
                 <td>{String(row.church_name ?? '—')}</td>
                 <td>{String(row.status ?? '—')}</td>
-                <td><button type="button" className="ghost-button" onClick={() => void onArchive(String(row.id))}>Remove from active list</button></td>
+                <td><button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void onArchive(String(row.id))}>Remove from active list</button></td>
               </tr>
             ))}
           </tbody>
