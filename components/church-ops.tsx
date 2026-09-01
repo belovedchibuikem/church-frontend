@@ -48,6 +48,12 @@ function churchIdFromRoute(route: string): string {
   return match?.[1] ?? '';
 }
 
+/** Capture the form before any await — React nulls event.currentTarget after yield. */
+function readSubmitForm(event: FormEvent<HTMLFormElement>): HTMLFormElement {
+  event.preventDefault();
+  return event.currentTarget;
+}
+
 function StatusLine({ error, message, onRetry }: { error?: string | null; message?: string | null; onRetry?: () => void }) {
   if (!error && !message) return null;
   return (
@@ -197,8 +203,8 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
   useEffect(() => { void load(); }, [load]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     setBusy(true);
     setError(null);
     try {
@@ -208,7 +214,7 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
         administrative_unit_id: String(form.get('administrative_unit_id')),
       }, scope);
       setOpen(false);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to create church.'));
@@ -419,8 +425,8 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
   useEffect(() => { void load(); }, [load]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     const selectedChurch = churchId || String(form.get('church_id'));
     setBusy(true);
     setError(null);
@@ -432,7 +438,7 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
         title: String(form.get('title')),
         ...(String(form.get('started_at') || '') ? { started_at: String(form.get('started_at')) } : {}),
       }, scope);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to assign. Duplicate active roles are blocked.'));
@@ -515,8 +521,8 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
   useEffect(() => { void load(); }, [load]);
 
   async function onAdd(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     setBusy(true);
     setError(null);
     try {
@@ -524,7 +530,7 @@ function MembersPanel({ screen, requestedScope }: ScopeProps) {
         person_id: String(form.get('person_id')),
         church_id: churchId || String(form.get('church_id')),
       }, scope);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to add member. Duplicate active memberships are blocked.'));
@@ -595,8 +601,8 @@ function FirstTimersPanel({ screen, requestedScope }: ScopeProps) {
   useEffect(() => { void load(); }, [load]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     setBusy(true);
     setError(null);
     try {
@@ -604,7 +610,7 @@ function FirstTimersPanel({ screen, requestedScope }: ScopeProps) {
         person_id: String(form.get('person_id')),
         church_id: churchId || String(form.get('church_id')),
       }, scope);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to register first timer. Existing people are reused.'));
@@ -664,8 +670,8 @@ function ConvertsPanel({ screen, requestedScope }: ScopeProps) {
   useEffect(() => { void load(); }, [load]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     setBusy(true);
     setError(null);
     try {
@@ -675,7 +681,7 @@ function ConvertsPanel({ screen, requestedScope }: ScopeProps) {
         converted_at: String(form.get('converted_at') || '') || new Date().toISOString(),
         source: String(form.get('source') || '') || null,
       }, scope);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to record conversion. Duplicate active convert records are blocked.'));
@@ -756,8 +762,8 @@ function NamedCrudPanel({
   useEffect(() => { void load(); }, [load]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     const payload: Record<string, string | boolean | number> = { church_id: churchId || String(form.get('church_id')) };
     for (const field of fields) {
       const value = String(form.get(field.name) || '');
@@ -767,7 +773,7 @@ function NamedCrudPanel({
     setError(null);
     try {
       await mutateMinistryRecord(path, 'POST', payload, scope);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, `Unable to create ${title.toLowerCase()}.`));
@@ -851,8 +857,8 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
   useEffect(() => { void load(); }, [load]);
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
     setBusy(true);
     setError(null);
     try {
@@ -864,7 +870,7 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
         first_timers: Number(form.get('first_timers') || 0),
         notes: String(form.get('notes') || ''),
       }, scope);
-      event.currentTarget.reset();
+      formEl.reset();
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to record attendance. Duplicate home church and date is merged, not doubled.'));

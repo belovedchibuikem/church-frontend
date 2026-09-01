@@ -339,7 +339,15 @@ function toOpsError(error: unknown, fallback: string): AdminOperationsApiError {
     );
   }
   if (error instanceof Error) {
-    return new AdminOperationsApiError(503, error.message || fallback, 'NETWORK_ERROR');
+    const looksLikeNetwork =
+      error.message === 'Failed to fetch' ||
+      error.message === 'Load failed' ||
+      error.message.toLowerCase().includes('network');
+    return new AdminOperationsApiError(
+      503,
+      error.message || fallback,
+      looksLikeNetwork ? 'NETWORK_ERROR' : 'CLIENT_ERROR',
+    );
   }
   return new AdminOperationsApiError(503, fallback, 'UNKNOWN');
 }
