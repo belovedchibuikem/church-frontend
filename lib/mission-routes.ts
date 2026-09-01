@@ -183,7 +183,7 @@ export const missionScreens: AdminScreen[] = [
     columns: ['Mentor', 'Soul', 'Program', 'Date', 'Status'],
     rows: [
       { Mentor: 'Sister Mary', Soul: 'Aisha Mohammed', Program: 'Leadership', Date: 'May 20, 2024', Status: 'Pending' },
-      { Mentor: 'Brother Daniel', Soul: 'Chinedu Okafor', Program: 'Bible Study', Date: 'May 20, 2024', Status: 'Pending' },
+      { Mentor: 'Brother Daniel', Soul: 'Chinedu Okafor', Program: 'Study Manuals', Date: 'May 20, 2024', Status: 'Pending' },
       { Mentor: 'Pastor Samuel', Soul: 'Tunde Adeleke', Program: 'Welfare', Date: 'May 18, 2024', Status: 'Assigned' },
       { Mentor: 'Sister Grace', Soul: 'Blessing Nwosu', Program: 'Engagement', Date: 'May 20, 2024', Status: 'Assigned' },
     ],

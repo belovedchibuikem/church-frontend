@@ -1234,6 +1234,40 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
+  if (routeStarts(route, '/admin/kca/chapters', '/admin/kca/lessons') && labelIs(label, /create chapter|add chapter|save chapter/)) {
+    const lessonId = requireId(firstUlid(payload.kca_lesson_id, payload.lesson_id, ctx.recordId), 'lesson');
+    return mutate(
+      `admin/kca/lessons/${encodeURIComponent(lessonId)}/chapters`,
+      {
+        code: field(payload, 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        sequence: asInt(field(payload, 'sequence')) ?? 1,
+        summary: field(payload, 'summary') || '',
+        body: field(payload, 'body') || '',
+        content_url: field(payload, 'content_url') || '',
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /create assignment|add assignment|save assignment/)) {
+    const levelsRaw = field(payload, 'soul_tree_levels') ?? '';
+    const levels = levelsRaw
+      .split(/[,\s]+/)
+      .map((part) => Number.parseInt(part, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    return mutate(
+      'admin/kca/assignments',
+      {
+        kca_enrollment_id: requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id), 'enrollment'),
+        kca_module_id: requireId(firstUlid(payload.kca_module_id, payload.module_id), 'module'),
+        title: field(payload, 'title', 'name') ?? '',
+        assignment_kind: /soul/i.test(field(payload, 'assignment_kind') ?? '') ? 'soul_winning' : 'standard',
+        soul_tree_levels: levels,
+        due_at: field(payload, 'due_at', 'dueDate') || null,
+      },
+      opts,
+    );
+  }
   if (route.includes('/prerequisites') && labelIs(label, /add prerequisite|create prerequisite|save prerequisite|save|submit/)) {
     const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
     return mutate(

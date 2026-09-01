@@ -829,7 +829,7 @@ function ActivitiesPanel({ screen, requestedScope }: ScopeProps) {
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
           <label><span>Title *</span><input name="title" required /></label>
-          <label><span>Type</span><select name="activity_type"><option value="fellowship">Fellowship</option><option value="bible_study">Bible study</option><option value="prayer">Prayer</option><option value="outreach">Outreach</option></select></label>
+          <label><span>Type</span><select name="activity_type"><option value="fellowship">Fellowship</option><option value="bible_study">Study Manuals</option><option value="prayer">Prayer</option><option value="outreach">Outreach</option></select></label>
           <label><span>When</span><input name="occurred_at" type="datetime-local" /></label>
         </div>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Add activity</button></div>

@@ -128,14 +128,36 @@ export type UserPaymentIntent = {
 
 export type KcaDashboard = {
   enrolled?: boolean;
+  is_mentor?: boolean;
   enrollment?: JsonObject | null;
   modules_total?: number;
   modules_with_progress?: number;
+  curriculum_percent?: number;
+  lessons_completed?: number;
+  lessons_total?: number;
+  chapters_completed?: number;
+  chapters_total?: number;
   assignments_open?: number;
   assignments_due_soon?: number;
   attendance_recorded?: number;
   mentor?: JsonObject | null;
   certificate?: JsonObject | null;
+  activity?: JsonObject | null;
+};
+
+export type KcaChapterSummary = {
+  id?: string;
+  lesson_id?: string | null;
+  module_id?: string | null;
+  code?: string | null;
+  title?: string | null;
+  sequence?: number | null;
+  summary?: string | null;
+  body?: string | null;
+  content_url?: string | null;
+  estimated_minutes?: number | null;
+  completed?: boolean;
+  unlocked?: boolean;
 };
 
 export type KcaModuleSummary = {
@@ -153,6 +175,8 @@ export type KcaModuleSummary = {
     unlocked?: boolean;
     day_index?: number | null;
     lock_reason?: string;
+    chapters_count?: number | null;
+    chapters?: KcaChapterSummary[];
   }>;
 };
 
@@ -171,14 +195,25 @@ export type KcaLessonDetail = {
   unlocked?: boolean;
   unlock_token?: string | null;
   requires_acknowledgement?: boolean;
+  chapters?: KcaChapterSummary[];
 };
 
 export type KcaAssignmentSummary = {
   id?: string;
   title?: string | null;
   state?: string | null;
+  assignment_kind?: string | null;
   due_at?: string | null;
   module?: { id?: string; code?: string | null; title?: string | null } | null;
+  soul_tree?: {
+    kind?: string;
+    levels?: number[];
+    required_souls?: number;
+    recorded_souls?: number;
+    complete?: boolean;
+    open?: boolean;
+    tree?: Array<JsonObject>;
+  } | null;
 };
 
 export type UserPaymentTransaction = {
@@ -1330,6 +1365,84 @@ export async function completeKcaLesson(
 /** GET /user/kca/lessons/{id} — published body only when the daily bundle is unlocked. */
 export async function fetchKcaLesson(lessonId: string): Promise<KcaLessonDetail> {
   return apiRequestData<KcaLessonDetail>(`user/kca/lessons/${encodeURIComponent(lessonId)}`, {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function fetchKcaChapter(chapterId: string): Promise<KcaChapterSummary> {
+  return apiRequestData<KcaChapterSummary>(`user/kca/chapters/${encodeURIComponent(chapterId)}`, {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function completeKcaChapter(
+  chapterId: string,
+  options: { acknowledged?: boolean; idempotencyKey?: string; unlockToken?: string } = {},
+): Promise<{ id?: string; completed_at?: string }> {
+  return apiRequestData(`user/kca/chapters/${encodeURIComponent(chapterId)}/complete`, {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify({
+      acknowledged: options.acknowledged ?? true,
+      idempotency_key: options.idempotencyKey ?? undefined,
+      unlock_token: options.unlockToken ?? undefined,
+    }),
+  });
+}
+
+export async function createKcaStudyNote(input: {
+  title?: string;
+  body: string;
+  lessonId?: string;
+  chapterId?: string;
+}): Promise<{ id?: string }> {
+  return apiRequestData('user/kca/notes', {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body,
+      lesson_id: input.lessonId,
+      chapter_id: input.chapterId,
+    }),
+  });
+}
+
+export async function createKcaDevotionalReading(input: {
+  title: string;
+  source?: string;
+  reflection?: string;
+}): Promise<{ id?: string }> {
+  return apiRequestData('user/kca/devotionals', {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function recordKcaSoulWin(
+  assignmentId: string,
+  input: { given_name: string; family_name?: string; phone?: string; email?: string; notes?: string; parent_id?: string },
+): Promise<{ id?: string; soul_tree?: KcaAssignmentSummary['soul_tree'] }> {
+  return apiRequestData(`user/kca/assignments/${encodeURIComponent(assignmentId)}/souls`, {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchKcaMentees(): Promise<Array<JsonObject>> {
+  const data = await apiRequestData<unknown>('user/kca/mentees', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<JsonObject>(data);
+}
+
+export async function fetchKcaMentee(enrollmentId: string): Promise<JsonObject> {
+  return apiRequestData<JsonObject>(`user/kca/mentees/${encodeURIComponent(enrollmentId)}`, {
     method: 'GET',
     headers: await serverSessionHeaders(),
   });

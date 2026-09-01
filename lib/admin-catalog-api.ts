@@ -26,6 +26,7 @@ export const CATALOG_PATHS = {
   'kca.cohorts': 'kca/cohorts',
   'kca.modules': 'kca/modules',
   'kca.lessons': 'kca/lessons',
+  'kca.chapters': 'kca/chapters',
   'kca.prerequisites': 'kca/prerequisites',
   'kca.lecturer_assignments': 'kca/lecturer-assignments',
   'kca.mentor_assignments': 'kca/mentor-assignments',
@@ -244,6 +245,7 @@ export const FORM_TO_DOMAIN_CATALOG: Partial<Record<string, CatalogDomainKey>> =
   kcaCohort: 'kca.cohorts',
   kcaModule: 'kca.modules',
   kcaLesson: 'kca.lessons',
+  kcaChapter: 'kca.chapters',
   kcaEnrollment: 'kca.enrollments',
   kcaCertificate: 'kca.certificates',
   platformFile: 'platform.files',
@@ -332,6 +334,7 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/years') return 'kca.years';
   if (route === '/admin/kca/modules') return 'kca.modules';
   if (route === '/admin/kca/lessons') return 'kca.lessons';
+  if (route === '/admin/kca/chapters') return 'kca.chapters';
   if (route === '/admin/kca/attendance') return 'kca.attendance';
   if (route.includes('/admin/kca/modules/') && route.endsWith('/prerequisites')) return 'kca.prerequisites';
   if (route === '/admin/kca/alumni') return 'kca.certificates';

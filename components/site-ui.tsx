@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import type { JsonObject } from '@/lib/api-types';
 import type { SiteRoute } from '@/lib/site-routes';
 import { isMemberNavActive, memberNavGroups } from '@/lib/site-routes';
 import { AppBrand } from './app-brand';
@@ -31,7 +32,7 @@ import {
 import { useAuth } from '@/components/auth-provider';
 import { AuthScreen, MemberLogoutButton } from '@/components/auth-ui';
 import { InteractiveMap, type MapMarker } from '@/components/interactive-map';
-import { LocaleSwitcher } from '@/components/locale-switcher';
+import { BibleExperience } from '@/components/bible-ui';
 import { useLocale } from '@/components/locale-provider';
 import { localeMeta, supportedLocales, type TranslateOptions } from '@/lib/i18n/types.ts';
 import { translateRouteCopy } from '@/lib/i18n.ts';
@@ -75,6 +76,7 @@ import {
   loadOnlineChurchContent,
   loadPressPublication,
   loadPressPublications,
+  loadDevotionalPublications,
   loadSectionLandingCards,
   loadSermons,
   pathEntityId,
@@ -107,6 +109,12 @@ import {
   fetchKcaModules,
   fetchKcaLesson,
   fetchKcaAssignment,
+  fetchKcaChapter,
+  fetchKcaMentees,
+  fetchKcaMentee,
+  completeKcaChapter,
+  createKcaStudyNote,
+  recordKcaSoulWin,
   fetchKcaOrientation,
   fetchKcaPracticalService,
   fetchKcaDirectory,
@@ -114,6 +122,7 @@ import {
   downloadKcaCertificatePdf,
   completeKcaLesson,
   type KcaLessonDetail,
+  type KcaChapterSummary,
   fetchUserConsents,
   fetchUserConversationMessages,
   fetchUserDevices,
@@ -159,6 +168,7 @@ import {
   type EventTicket,
   type KcaAssignmentSummary,
   type KcaDashboard,
+
   type KcaAccess,
   type KcaModuleSummary,
   type UserConsent,
@@ -308,6 +318,7 @@ const nav = [
   ['nav.kca', 'KCA', '/kca'],
   ['nav.press', 'Press', '/press'],
   ['nav.online', 'Online', '/online-church'],
+  ['nav.bible', 'Bible', '/bible'],
   ['nav.events', 'Events', '/events'],
   ['nav.give', 'Give', '/give'],
 ] as const;
@@ -332,6 +343,7 @@ const memberItemKeys: Record<string, string> = {
   '/account/kca': 'member.kca',
   '/account/events': 'member.events',
   '/account/calendar': 'member.calendar',
+  '/bible': 'member.bible',
   '/account/prayer-requests': 'member.prayer',
   '/account/need-requests': 'member.needs',
   '/account/giving': 'member.giving',
@@ -1523,6 +1535,7 @@ function listingLoaderFor(route: SiteRoute): (() => Promise<{ data: ContentCard[
   if (route.path.includes('/find-church') || route.path.includes('/churches') || route.path.includes('/home-churches')) {
     return () => loadChurches({ per_page: 50 });
   }
+  if (route.path.includes('/press/devotionals')) return () => loadDevotionalPublications();
   if (route.path.includes('/press')) return () => loadPressPublications({ per_page: 50 });
   if (route.path.includes('/account/giving')) {
     return async () => {
@@ -1633,15 +1646,19 @@ function Listing({ route }: { route: SiteRoute }) {
   const { t } = useLocale();
   const [filter, setFilter] = useState('all');
   const [applied, setApplied] = useState('all');
+  const [devotionalKind, setDevotionalKind] = useState<'all' | 'devotional' | 'bible_study'>('all');
+  const isDevotionals = route.path === '/press/devotionals';
   const apiLoader = listingLoaderFor(route);
   const listState = useAsyncList(
     () =>
-      apiLoader
-        ? apiLoader()
-        : designFixturesEnabled()
-          ? Promise.resolve({ data: listingFor(route.section, route.path) })
-          : Promise.resolve({ data: [] as ContentCard[] }),
-    [route.path, route.section],
+      isDevotionals
+        ? loadDevotionalPublications(devotionalKind)
+        : apiLoader
+          ? apiLoader()
+          : designFixturesEnabled()
+            ? Promise.resolve({ data: listingFor(route.section, route.path) })
+            : Promise.resolve({ data: [] as ContentCard[] }),
+    [route.path, route.section, isDevotionals, devotionalKind],
   );
   const rows = listState.status === 'ready' ? listState.items : [];
   const isMap = route.kind === 'map' || route.path.includes('/map') || route.path.includes('/directions');
@@ -1688,6 +1705,33 @@ function Listing({ route }: { route: SiteRoute }) {
           {t('common.filters', { defaultMessage: 'Filters' })}
         </button>
       </div>
+      {isDevotionals ? (
+        <>
+          <p className="muted" style={{ margin: '0 0 12px' }}>
+            Daily devotionals and Study Manuals live here. The type is marked on every title.
+          </p>
+          <div className="bible-toggles" role="tablist" aria-label="Devotional type">
+          {(
+            [
+              ['all', 'All'],
+              ['devotional', 'Devotional'],
+              ['bible_study', 'Study Manual'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={devotionalKind === id}
+              className={devotionalKind === id ? 'is-active' : undefined}
+              onClick={() => setDevotionalKind(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        </>
+      ) : null}
       <div className={`content-grid ${isMap ? 'map-grid' : ''}`}>
         <section className="panel table-panel">
           <DataStatus state={listState} emptyLabel={emptyListingMessage(route.path)} />
@@ -2633,7 +2677,7 @@ function HomeChurchScheduleFields() {
     ['saturday', 'Sat', 'Fellowship'],
   ] as const;
   const times = ['09:00', '10:00', '17:00', '18:00', '19:00', '20:00'];
-  const activities = ['Main service', 'Midweek service', 'Prayer meeting', 'Fellowship', 'Bible study', 'Gathering'];
+  const activities = ['Main service', 'Midweek service', 'Prayer meeting', 'Fellowship', 'Study Manuals', 'Gathering'];
   const draft = typeof window === 'undefined' ? {} : readHomeChurchDraft();
   let initial: Array<{ day: string; time: string; activity: string }> = [{ day: 'sunday', time: '09:00', activity: 'Main service' }];
   try {
@@ -2996,12 +3040,16 @@ function KcaLiveStudentDashboard() {
   if (state === 'loading') return <p className="panel">Loading KCA dashboard…</p>;
   if (state === 'error') return <KcaUnavailable title="KCA Student Dashboard" message={error ?? undefined} />;
 
-  const total = dashboard?.modules_total ?? 0;
-  const progress = dashboard?.modules_with_progress ?? 0;
-  const pct = total > 0 ? Math.round((progress / total) * 100) : 0;
+  const total = dashboard?.lessons_total ?? dashboard?.modules_total ?? 0;
+  const progress = dashboard?.lessons_completed ?? dashboard?.modules_with_progress ?? 0;
+  const pct = dashboard?.curriculum_percent ?? (total > 0 ? Math.round((progress / total) * 100) : 0);
   const mentorName = dashboard?.mentor
     ? `${String(dashboard.mentor.preferred_name ?? dashboard.mentor.given_name ?? 'Mentor')} ${String(dashboard.mentor.family_name ?? '')}`.trim()
     : 'Unassigned';
+  const activity = dashboard?.activity as Record<string, any> | undefined;
+  const bible = activity?.bible?.enrollment;
+  const notes = activity?.notes;
+  const devotionals = activity?.devotionals;
 
   return (
     <>
@@ -3015,6 +3063,11 @@ function KcaLiveStudentDashboard() {
           <Link className="site-button" href="/account/kca/modules">
             Continue Learning
           </Link>
+          {dashboard?.is_mentor ? (
+            <Link className="site-button secondary" href="/account/kca/mentees">
+              My mentees
+            </Link>
+          ) : null}
         </div>
       </div>
       <section className="panel kca-progress">
@@ -3026,15 +3079,18 @@ function KcaLiveStudentDashboard() {
           <b style={{ width: `${pct}%` }} />
         </i>
         <small>
-          {progress}/{total} modules with activity
+          {dashboard?.chapters_completed ?? 0}/{dashboard?.chapters_total ?? 0} chapters · {progress}/{total} lessons
         </small>
       </section>
       <div className="metric-grid">
         {[
-          ['Modules', '/account/kca/modules', `${progress}/${total}`],
+          ['Modules', '/account/kca/modules', `${dashboard?.modules_with_progress ?? 0}/${dashboard?.modules_total ?? 0}`],
           ['Assignments', '/account/kca/assignments', String(dashboard?.assignments_open ?? 0)],
           ['Attendance', '/account/kca/attendance', String(dashboard?.attendance_recorded ?? 0)],
           ['Mentor', '/account/kca/mentor', mentorName],
+          ['Bible plan', '/bible', bible ? `${bible.percent ?? 0}%` : 'Not enrolled'],
+          ['Notes', '/account/kca', String(notes?.count ?? 0)],
+          ['Devotionals', '/press/devotionals', String(devotionals?.count ?? 0)],
         ].map(([label, href, value]) => (
           <Link href={href} key={label} style={{ textDecoration: 'none' }}>
             <article>
@@ -3044,6 +3100,32 @@ function KcaLiveStudentDashboard() {
           </Link>
         ))}
       </div>
+      {Array.isArray(notes?.recent) && notes.recent.length > 0 ? (
+        <section className="panel">
+          <h3>Study notes</h3>
+          {notes.recent.slice(0, 5).map((note: JsonObject) => (
+            <div className="list-row" key={String(note.id)}>
+              <div>
+                <b>{String(note.title ?? 'Untitled note')}</b>
+                <small>{String(note.body ?? '').slice(0, 160)}</small>
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+      {Array.isArray(devotionals?.recent) && devotionals.recent.length > 0 ? (
+        <section className="panel">
+          <h3>Devotionals</h3>
+          {devotionals.recent.slice(0, 5).map((row: JsonObject) => (
+            <div className="list-row" key={String(row.id)}>
+              <div>
+                <b>{String(row.title ?? 'Devotional')}</b>
+                <small>{String(row.reflection ?? row.read_at ?? '')}</small>
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
       {dashboard?.certificate ? (
         <Link className="panel" href="/account/kca/certificate" style={{ display: 'block', textDecoration: 'none' }}>
           <span className="eyebrow">CERTIFICATE</span>
@@ -3420,7 +3502,7 @@ function KcaLiveModuleDetail({ route }: { route: SiteRoute }) {
             {module.code ? `${module.code} · ` : ''}
             {module.title}
           </h2>
-          <p>Published curriculum lessons for this module.</p>
+          <p>Published curriculum: Module → Lesson → Chapter.</p>
         </div>
         <Link className="site-button" href="/account/kca/modules">
           All Modules
@@ -3440,8 +3522,26 @@ function KcaLiveModuleDetail({ route }: { route: SiteRoute }) {
                 </b>
                 <small>
                   Lesson {lesson.sequence ?? '—'}
+                  {lesson.chapters_count ? ` · ${lesson.chapters_count} chapters` : ''}
                   {lesson.unlocked === false ? ' · Locked' : ''}
                 </small>
+                {lesson.unlocked !== false && (lesson.chapters ?? []).length > 0 ? (
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                    {lesson.chapters!.map((chapter) => (
+                      <li key={chapter.id ?? chapter.code}>
+                        {chapter.id ? (
+                          <Link href={`/account/kca/chapters/${chapter.id}`}>
+                            Chapter {chapter.sequence ?? ''} · {chapter.title}
+                          </Link>
+                        ) : (
+                          <>
+                            Chapter {chapter.sequence ?? ''} · {chapter.title}
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
               {lesson.id && lesson.unlocked !== false ? (
                 <Link className="ghost-link" href={`/account/kca/lessons/${lesson.id}`}>
@@ -3516,22 +3616,176 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
           Modules
         </Link>
       </div>
+      {(lesson?.chapters ?? []).length > 0 ? (
+        <section className="panel">
+          <h3>Chapters</h3>
+          {lesson!.chapters!.map((chapter) => (
+            <div className="list-row" key={chapter.id ?? chapter.code}>
+              <div>
+                <b>
+                  Chapter {chapter.sequence ?? ''} · {chapter.title}
+                </b>
+                <small>
+                  {chapter.completed ? 'Completed' : chapter.unlocked === false ? 'Locked' : 'Open'}
+                </small>
+              </div>
+              {chapter.id && chapter.unlocked !== false ? (
+                <Link className="ghost-link" href={`/account/kca/chapters/${chapter.id}`}>
+                  Open
+                </Link>
+              ) : null}
+            </div>
+          ))}
+        </section>
+      ) : (
+        <section className="panel">
+          {lesson?.content_url ? (
+            <p>
+              <a href={lesson.content_url} rel="noreferrer" target="_blank">
+                Open linked resource
+              </a>
+            </p>
+          ) : null}
+          <div style={{ whiteSpace: 'pre-wrap' }}>{lesson?.body || 'This lesson has no body yet.'}</div>
+          {error ? <p role="alert">{error}</p> : null}
+          {done ? <p>Lesson marked complete.</p> : null}
+          <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>
+            {busy ? 'Saving…' : 'Mark complete'}
+          </button>
+        </section>
+      )}
+      {lesson?.id ? <KcaStudyNoteForm lessonId={lesson.id} /> : null}
+    </>
+  );
+}
+
+function KcaChapterPlayer({ route }: { route: SiteRoute }) {
+  const chapterId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [chapter, setChapter] = useState<KcaChapterSummary | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaChapter(chapterId)
+      .then((data) => {
+        if (!cancelled) {
+          setChapter(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(formatUserApiError(err));
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterId]);
+
+  async function onComplete() {
+    if (!chapter?.id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completeKcaChapter(chapter.id, { acknowledged: true });
+      setDone(true);
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) return <p className="panel">Loading chapter…</p>;
+  if (error && !chapter) return <KcaUnavailable title={route.title} message={error} />;
+
+  return (
+    <>
+      <div className="welcome">
+        <div>
+          <span className="eyebrow">KCA CHAPTER</span>
+          <h2>{chapter?.title ?? route.title}</h2>
+          <p>{chapter?.summary ?? 'Read this chapter, then continue.'}</p>
+        </div>
+        {chapter && 'lesson_id' in chapter && chapter.lesson_id ? (
+          <Link className="site-button" href={`/account/kca/lessons/${String(chapter.lesson_id)}`}>
+            Lesson
+          </Link>
+        ) : (
+          <Link className="site-button" href="/account/kca/modules">
+            Modules
+          </Link>
+        )}
+      </div>
       <section className="panel">
-        {lesson?.content_url ? (
+        {chapter?.content_url ? (
           <p>
-            <a href={lesson.content_url} rel="noreferrer" target="_blank">
+            <a href={chapter.content_url} rel="noreferrer" target="_blank">
               Open linked resource
             </a>
           </p>
         ) : null}
-        <div style={{ whiteSpace: 'pre-wrap' }}>{lesson?.body || 'This lesson has no body yet.'}</div>
+        <div style={{ whiteSpace: 'pre-wrap' }}>{chapter?.body || 'This chapter has no body yet.'}</div>
         {error ? <p role="alert">{error}</p> : null}
-        {done ? <p>Lesson marked complete.</p> : null}
+        {done ? <p>Chapter marked complete.</p> : null}
         <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>
-          {busy ? 'Saving…' : 'Mark complete'}
+          {busy ? 'Saving…' : 'Mark chapter complete'}
         </button>
       </section>
+      {chapter?.id ? <KcaStudyNoteForm chapterId={chapter.id} /> : null}
     </>
+  );
+}
+
+function KcaStudyNoteForm({ lessonId, chapterId }: { lessonId?: string; chapterId?: string }) {
+  const [body, setBody] = useState('');
+  const [title, setTitle] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!body.trim()) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await createKcaStudyNote({ title: title.trim() || undefined, body: body.trim(), lessonId, chapterId });
+      setBody('');
+      setTitle('');
+      setMessage('Note saved to your KCA dashboard.');
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <h3>Study notes</h3>
+      <form onSubmit={(event) => void onSubmit(event)}>
+        <label>
+          Title
+          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <label>
+          Note
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} required rows={4} />
+        </label>
+        <button className="site-button" type="submit" disabled={busy}>
+          {busy ? 'Saving…' : 'Save note'}
+        </button>
+      </form>
+      {error ? <p role="alert">{error}</p> : null}
+      {message ? <p role="status">{message}</p> : null}
+    </section>
   );
 }
 
@@ -3539,15 +3793,20 @@ function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
   const assignmentId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
   const [title, setTitle] = useState(route.title);
   const [stateLabel, setStateLabel] = useState<string | null>(null);
+  const [assignment, setAssignment] = useState<KcaAssignmentSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [soulName, setSoulName] = useState('');
+  const [soulFamily, setSoulFamily] = useState('');
+  const [soulParent, setSoulParent] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     void fetchKcaAssignment(assignmentId)
       .then((row) => {
         if (cancelled) return;
+        setAssignment(row);
         setTitle(row.title ?? route.title);
         setStateLabel(row.state ?? null);
       })
@@ -3558,6 +3817,12 @@ function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
       cancelled = true;
     };
   }, [assignmentId, route.title]);
+
+  async function reloadAssignment() {
+    const row = await fetchKcaAssignment(assignmentId);
+    setAssignment(row);
+    setStateLabel(row.state ?? null);
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3588,24 +3853,176 @@ function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
     }
   }
 
+  async function onSoul(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!soulName.trim()) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await recordKcaSoulWin(assignmentId, {
+        given_name: soulName.trim(),
+        family_name: soulFamily.trim() || undefined,
+        parent_id: soulParent.trim() || undefined,
+      });
+      setSoulName('');
+      setSoulFamily('');
+      setSoulParent('');
+      setMessage('Soul recorded.');
+      await reloadAssignment();
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (error && !stateLabel) return <KcaUnavailable title={route.title} message={error} />;
+  const tree = assignment?.soul_tree;
+  const soulOpen = tree?.open === true;
 
   return (
     <section className="panel">
       <h2>{title}</h2>
       <p>Status: {stateLabel ?? 'assigned'}</p>
+      {tree ? (
+        <>
+          <p>
+            Soul-winning tree: {tree.recorded_souls ?? 0}/{tree.required_souls ?? 0} souls
+            {tree.levels?.length ? ` · levels ${tree.levels.join(' → ')}` : ''}
+            {soulOpen ? ' · Open until the tree is complete' : ' · Tree complete'}
+          </p>
+          <SoulTreeList nodes={tree.tree ?? []} />
+          {soulOpen ? (
+            <form onSubmit={(event) => void onSoul(event)}>
+              <label>
+                Given name
+                <input value={soulName} onChange={(event) => setSoulName(event.target.value)} required />
+              </label>
+              <label>
+                Family name
+                <input value={soulFamily} onChange={(event) => setSoulFamily(event.target.value)} />
+              </label>
+              <label>
+                Parent soul id (blank for people you won)
+                <input value={soulParent} onChange={(event) => setSoulParent(event.target.value)} placeholder="Leave blank for your direct souls" />
+              </label>
+              <button className="site-button" type="submit" disabled={busy}>
+                {busy ? 'Saving…' : 'Record soul'}
+              </button>
+            </form>
+          ) : null}
+        </>
+      ) : null}
       <form onSubmit={(event) => void onSubmit(event)}>
         <label>
           Evidence file
-          <input name="evidence" type="file" required />
+          <input name="evidence" type="file" required={!soulOpen} disabled={soulOpen} />
         </label>
-        <button className="site-button" type="submit" disabled={busy}>
-          {busy ? 'Submitting…' : 'Submit evidence'}
+        <button className="site-button" type="submit" disabled={busy || soulOpen}>
+          {soulOpen ? 'Complete the soul tree first' : busy ? 'Submitting…' : 'Submit evidence'}
         </button>
       </form>
       {error ? <p role="alert">{error}</p> : null}
       {message ? <p role="status">{message}</p> : null}
     </section>
+  );
+}
+
+function SoulTreeList({ nodes }: { nodes: Array<JsonObject> }) {
+  if (nodes.length === 0) return <p>No souls recorded yet.</p>;
+  return (
+    <ul>
+      {nodes.map((node) => (
+        <li key={String(node.id)}>
+          {String(node.given_name ?? '')} {String(node.family_name ?? '')}{' '}
+          <small>({String(node.id)})</small>
+          {Array.isArray(node.children) && node.children.length > 0 ? (
+            <SoulTreeList nodes={node.children as Array<JsonObject>} />
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function KcaMenteesPanel() {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<Array<JsonObject>>([]);
+  const [selected, setSelected] = useState<JsonObject | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaMentees()
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data);
+        setState('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatUserApiError(err));
+        setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state === 'loading') return <p className="panel">Loading mentees…</p>;
+  if (state === 'error') return <KcaUnavailable title="My mentees" message={error ?? undefined} />;
+
+  return (
+    <>
+      <div className="welcome">
+        <div>
+          <span className="eyebrow">KCA MENTOR</span>
+          <h2>Mentee reports</h2>
+          <p>Module progress, assignments, Bible reading, devotionals, and study notes.</p>
+        </div>
+      </div>
+      <section className="panel table-panel">
+        {rows.length === 0 ? <p>No mentees are assigned to you.</p> : null}
+        {rows.map((row) => {
+          const id = String(row.enrollment_id ?? '');
+          const person = (row.person as JsonObject | undefined) ?? {};
+          return (
+            <div className="list-row" key={id}>
+              <div>
+                <b>{String(person.name ?? 'Student')}</b>
+                <small>
+                  Curriculum {String(row.curriculum_percent ?? 0)}% · Assignments open {String(row.assignments_open ?? 0)} ·
+                  Notes {String(row.notes_count ?? 0)} · Devotionals {String(row.devotionals_count ?? 0)}
+                  {row.bible_percent != null ? ` · Bible ${String(row.bible_percent)}%` : ''}
+                </small>
+              </div>
+              {id ? (
+                <button
+                  className="ghost-link"
+                  type="button"
+                  onClick={() => {
+                    void fetchKcaMentee(id).then(setSelected).catch((err) => setError(formatUserApiError(err)));
+                  }}
+                >
+                  Open report
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </section>
+      {selected ? (
+        <section className="panel">
+          <h3>{String((selected.person as JsonObject | undefined)?.name ?? 'Mentee report')}</h3>
+          <p>Curriculum {String((selected.curriculum as JsonObject | undefined)?.percent ?? 0)}%</p>
+          <p>Assignments open {String((selected.assignments as JsonObject | undefined)?.open ?? 0)}</p>
+          <p>Notes {String((selected.notes as JsonObject | undefined)?.count ?? 0)}</p>
+          <p>Devotionals {String((selected.devotionals as JsonObject | undefined)?.count ?? 0)}</p>
+        </section>
+      ) : null}
+      {error ? <p role="alert">{error}</p> : null}
+    </>
   );
 }
 
@@ -3935,10 +4352,12 @@ function Dashboard({ route }: { route: SiteRoute }) {
   if (route.path === '/account/kca/modules') return <KcaModulesList />;
   if (route.path === '/account/kca/assignments') return <KcaAssignmentsList />;
   if (route.path === '/account/kca/mentor') return <KcaMentorPanel />;
+  if (route.path === '/account/kca/mentees') return <KcaMenteesPanel />;
   if (route.path === '/account/kca/attendance') return <KcaAttendanceList />;
   if (route.path.startsWith('/account/kca/modules/')) return <KcaModuleDetail route={route} />;
   if (route.path.startsWith('/account/kca/assignments/')) return <KcaAssignmentDetail route={route} />;
   if (route.path.startsWith('/account/kca/lessons/')) return <KcaLessonPlayer route={route} />;
+  if (route.path.startsWith('/account/kca/chapters/')) return <KcaChapterPlayer route={route} />;
   if (route.path === '/account/kca/certificate') return <LiveCertificateDocument route={route} />;
   if (route.path === '/account/kca/orientation') return <KcaOrientationMember />;
   if (route.path === '/account/kca/practical-service') return <KcaPracticalServiceMember />;
@@ -5756,6 +6175,11 @@ function PressLandingExtras() {
   const pressState = useAsyncList(() => loadPressPublications({ per_page: 6 }), []);
   return (
     <>
+      <div className="section-heading">
+        <h3>Devotionals</h3>
+        <Link href="/press/devotionals">Open devotionals and Study Manuals</Link>
+      </div>
+      <p className="muted">Daily devotionals and Study Manuals share this shelf. Each title shows its type.</p>
       <DataStatus state={pressState} emptyLabel="No publications yet." />
       {pressState.status === 'ready' ? <CardGrid cards={pressState.items} /> : null}
     </>
@@ -5852,6 +6276,7 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
     route.kind === 'media' ||
     route.kind === 'success' ||
     route.kind === 'hub' ||
+    route.kind === 'bible' ||
     route.kind === 'calendar' ||
     route.surface === 'auth' ||
     route.path === '/account/kca' ||
@@ -5871,6 +6296,9 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
     }
     if (route.path === '/account/giving/recurring') return <GiveRecurringScreen route={route} />;
     if (route.path === '/account/giving') return <LiveGivingHistoryPage route={route} />;
+    if (route.kind === 'bible' || route.path === '/bible' || route.path.startsWith('/bible/')) {
+      return <BibleExperience route={route} />;
+    }
     if (route.kind === 'landing') return <Landing route={route} />;
     if (route.kind === 'hub' || route.path === '/events') return <EventsHub route={route} />;
     if (route.kind === 'calendar') return <CalendarView route={route} />;

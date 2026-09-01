@@ -232,14 +232,36 @@ export function eventToItem(event: PublicEvent): EventItem {
   };
 }
 
+export function pressPublicationTypeLabel(type?: string | null): string {
+  switch ((type ?? '').toLowerCase()) {
+    case 'bible_study':
+      return 'Study Manual';
+    case 'devotional':
+      return 'Devotional';
+    case 'document_pdf':
+      return 'Document';
+    case 'sermon':
+      return 'Sermon';
+    case 'book':
+      return 'Book';
+    default:
+      return type && type.trim() !== '' ? type.replace(/_/g, ' ') : 'Press';
+  }
+}
+
+export function isDevotionalFamilyType(type?: string | null): boolean {
+  const value = (type ?? '').toLowerCase();
+  return value === 'devotional' || value === 'bible_study';
+}
+
 export function pressToCard(publication: PublicPressPublication): ContentCard {
   return {
     title: publication.title,
     body: publication.subtitle || publication.summary || publication.description || 'Family House Press resource.',
     href: `/press/${publication.id}`,
-    meta: [publication.publication_type, publication.format, publication.category].filter(Boolean).join(' · ') || 'Press',
+    meta: [pressPublicationTypeLabel(publication.publication_type), publication.format, publication.category].filter(Boolean).join(' · ') || 'Press',
     status: publication.availability ?? undefined,
-    icon: '📘',
+    icon: isDevotionalFamilyType(publication.publication_type) ? '📙' : '📘',
     action: 'Read',
     image: publication.image_url ?? undefined,
   };
@@ -395,6 +417,30 @@ export async function loadPressPublications(query?: Record<string, string | numb
     },
     () => fixturePress,
   );
+}
+
+export async function loadDevotionalPublications(kind?: 'devotional' | 'bible_study' | 'all'): Promise<{ data: ContentCard[]; source: 'api' | 'fixtures' }> {
+  const wanted = kind && kind !== 'all' ? [kind] : (['devotional', 'bible_study'] as const);
+  const results = await Promise.all(
+    wanted.map((type) => loadPressPublications({ per_page: 50, 'filter[publication_type]': type })),
+  );
+  const seen = new Set<string>();
+  const data: ContentCard[] = [];
+  for (const result of results) {
+    for (const card of result.data) {
+      if (seen.has(card.href)) continue;
+      seen.add(card.href);
+      data.push(card);
+    }
+  }
+  const fixtures = results.some((result) => result.source === 'fixtures');
+  const filtered = fixtures
+    ? data.filter((card) => {
+        const meta = (card.meta ?? '').toLowerCase();
+        return meta.includes('devotional') || meta.includes('study manual');
+      })
+    : data;
+  return { data: filtered, source: results[0]?.source ?? 'api' };
 }
 
 export async function loadPressPublication(id: string): Promise<{ data: ContentCard; source: 'api' | 'fixtures'; raw?: PublicPressPublication }> {

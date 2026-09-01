@@ -2410,7 +2410,7 @@ function FormFields() {
               </option>
               {field.options?.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                {option === 'bible_study' ? 'Study Manual' : option === 'devotional' ? 'Devotional' : option}
                 </option>
               ))}
             </select>

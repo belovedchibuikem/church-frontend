@@ -23,9 +23,12 @@ test('every major public experience has a canonical entry route', () => {
     '/kca',
     '/kca/gate',
     '/press',
+    '/press/devotionals',
     '/events',
     '/give',
     '/online-church',
+    '/bible',
+    '/bible/plans',
     '/login',
     '/register',
     '/account',
@@ -70,6 +73,13 @@ test('live KCA module and assignment links resolve as protected member pages', (
   assert.equal(module?.kind, 'detail');
   assert.equal(assignment?.surface, 'member');
   assert.equal(assignment?.kind, 'detail');
+});
+
+test('bible chapter paths resolve as a public reader', () => {
+  const chapter = findSiteRoute('/bible/john/3');
+  assert.equal(chapter?.kind, 'bible');
+  assert.equal(chapter?.surface, 'public');
+  assert.equal(findSiteRoute('/bible')?.kind, 'bible');
 });
 
 test('member community, mission, and journey stage routes match mobile member surfaces', () => {

@@ -38,6 +38,19 @@ function missing(value?: string | null): string {
   return value && value.trim() !== '' && value !== '—' ? value : 'Not provided';
 }
 
+function publicationTypeLabel(type?: string | null): string {
+  switch ((type ?? '').toLowerCase()) {
+    case 'bible_study':
+      return 'Study Manual';
+    case 'devotional':
+      return 'Devotional';
+    case 'document_pdf':
+      return 'Document';
+    default:
+      return missing(type);
+  }
+}
+
 export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const id = screen.route.split('/').pop() ?? '';
@@ -92,7 +105,7 @@ export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
   }
 
   const details: Array<[string, string]> = [
-    ['Type', missing(data.publication_type)],
+    ['Type', publicationTypeLabel(data.publication_type)],
     ['Format', missing(data.format)],
     ['Status', missing(data.status)],
     ['Author', missing(data.author_name)],

@@ -43,6 +43,7 @@ export function catalogForIdField(name: string): LiveCatalogKey | undefined {
   if (n === 'user_id' || n.endsWith('_user_id')) return 'user';
   if (n === 'kca_module_id' || n === 'module_id' || n === 'prerequisite_module_id') return 'kcaModule';
   if (n === 'kca_lesson_id' || n === 'lesson_id') return 'kcaLesson';
+  if (n === 'kca_chapter_id' || n === 'chapter_id') return 'kcaChapter';
   if (n === 'kca_cohort_id' || n === 'cohort_id') return 'kcaCohort';
   if (n === 'year_id' || n === 'kca_year_id') return 'kcaYear';
   if (n === 'kca_enrollment_id') return 'kcaEnrollment';

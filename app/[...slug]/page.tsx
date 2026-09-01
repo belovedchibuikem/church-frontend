@@ -16,6 +16,10 @@ export default async function PublicMemberPage({ params }: { params: Promise<{ s
     return <LogoutScreen />;
   }
 
+  if (path === '/online-church/bible-study') {
+    redirect('/press/devotionals');
+  }
+
   const route = findSiteRoute(path);
   if (!route) notFound();
 

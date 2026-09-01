@@ -11,7 +11,8 @@ export type SiteKind =
   | 'map'
   | 'document'
   | 'calendar'
-  | 'hub';
+  | 'hub'
+  | 'bible';
 
 export type SiteRoute = {
   path: string;
@@ -34,6 +35,7 @@ const subtitles: Record<string, string> = {
   Home: 'One family. One mission.',
   Auth: 'Secure access to your Family House journey.',
   Press: 'Books, sermons, and devotionals for every season.',
+  Bible: 'Read Scripture and follow a paced yearly plan.',
 };
 
 const make = (section: string, surface: SiteSurface, kind: SiteKind, rows: Array<[string, string, string?]>): SiteRoute[] =>
@@ -210,6 +212,7 @@ export const siteRoutes: SiteRoute[] = [
     ['/account/kca/assignments', 'My Assignments'],
     ['/account/kca/assignments/personal-devotional-journal', 'Assignment: Personal Devotional Journal'],
     ['/account/kca/mentor', 'My Mentor'],
+    ['/account/kca/mentees', 'My Mentees'],
     ['/account/kca/attendance', 'KCA Attendance'],
     ['/account/kca/orientation', 'KCA Orientation'],
     ['/account/kca/practical-service', 'KCA Practical Service'],
@@ -259,10 +262,13 @@ export const siteRoutes: SiteRoute[] = [
     ['/online-church/sermons/walking-in-gods-purpose', 'Walking in God’s Purpose', 'Watch Full Sermon'],
     ['/online-church/sermons/faith-that-moves-mountains', 'Faith That Moves Mountains', 'Watch Full Sermon'],
     ['/online-church/sermons/the-power-of-agreement', 'The Power of Agreement', 'Watch Full Sermon'],
-    ['/online-church/bible-study', 'Bible Study'],
     ['/online-church/prayer', 'Prayer Meeting', 'Join Prayer Meeting'],
     ['/online-church/children', 'Children Service', 'Watch Now'],
     ['/online-church/youth', 'Youth Service', 'Join Youth Service'],
+  ]),
+  ...make('Bible', 'public', 'bible', [
+    ['/bible', 'Bible', 'Read today'],
+    ['/bible/plans', 'Reading plans', 'Start a plan'],
   ]),
   ...make('Online', 'workflow', 'form', [
     ['/online-church/counselling', 'Counselling Request', 'Next Step'],
@@ -270,6 +276,7 @@ export const siteRoutes: SiteRoute[] = [
   ]),
   ...make('Online', 'workflow', 'success', [['/online-church/welcome', 'Welcome Home!', 'Connect With Us']]),
   ...make('Press', 'public', 'landing', [['/press', 'Family House Press', 'Explore Library']]),
+  ...make('Press', 'public', 'listing', [['/press/devotionals', 'Devotionals', 'Read']]),
   ...make('Press', 'public', 'detail', [
     ['/press/kingdom-leadership', 'Kingdom Leadership', 'Read Now'],
     ['/press/walking-in-purpose', 'Walking in Purpose', 'Read Now'],
@@ -283,6 +290,18 @@ const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/i;
 export const findSiteRoute = (path: string): SiteRoute | undefined => {
   const exact = siteRoutes.find((route) => route.path === path);
   if (exact) return exact;
+
+  const bibleMatch = path.match(/^\/bible\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(\d+)$/i);
+  if (bibleMatch) {
+    return {
+      path,
+      title: 'Bible',
+      subtitle: subtitles.Bible,
+      surface: 'public',
+      kind: 'bible',
+      section: 'Bible',
+    };
+  }
 
   const churchMatch = path.match(/^\/churches\/([0-9A-HJKMNP-TV-Z]{26})(?:\/(directions|contact))?$/i);
   if (churchMatch) {
@@ -336,6 +355,19 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
     return {
       path,
       title: 'KCA Lesson',
+      action: 'Continue',
+      subtitle: subtitles.KCA,
+      surface: 'member',
+      kind: 'detail',
+      section: 'KCA',
+    };
+  }
+
+  const kcaChapterMatch = path.match(/^\/account\/kca\/chapters\/([0-9A-HJKMNP-TV-Z]{26})$/i);
+  if (kcaChapterMatch) {
+    return {
+      path,
+      title: 'KCA Chapter',
       action: 'Continue',
       subtitle: subtitles.KCA,
       surface: 'member',
@@ -402,6 +434,7 @@ export const memberNavGroups = [
     items: [
       { href: '/account/events', label: 'Events', icon: '▣' },
       { href: '/account/calendar', label: 'Calendar', icon: '📅' },
+      { href: '/bible', label: 'Bible', icon: '📖' },
     ],
   },
   {

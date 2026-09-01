@@ -165,6 +165,7 @@ export const pressResources: ContentCard[] = [
   { title: 'Kingdom Leadership', body: 'A practical guide for leading with humility and spiritual authority.', href: '/press/kingdom-leadership', meta: 'Book · New Release', icon: '📘' },
   { title: 'Walking in Purpose', body: 'Discover God’s calling for your life and walk it out daily.', href: '/press/walking-in-purpose', meta: 'Book', icon: '📗' },
   { title: 'The Power of Prayer', body: 'Devotional readings to strengthen your prayer life.', href: '/press/the-power-of-prayer', meta: 'Devotional', icon: '📙' },
+  { title: 'Gospel of John Study Manual', body: 'A guided weekly study through John. Type: Study Manual.', href: '/press/gospel-of-john-study', meta: 'Study Manual', icon: '📘' },
   { title: 'Sunday Sermon Archive', body: 'Watch and download messages from across the Family House network.', href: '/online-church/sermons', meta: 'Sermons', icon: '🎧' },
 ];
 
@@ -212,7 +213,7 @@ export const sermons: ContentCard[] = [
 
 export const schedule: Array<[string, string, string, string]> = [
   ['Sunday Celebration', 'Sun · 10:00 AM WAT', 'Pastor Daniel David', '/online-church/live'],
-  ['Bible Study', 'Tue · 7:00 PM WAT', 'Teacher Mary Okafor', '/online-church/bible-study'],
+  ['Devotionals', 'Tue · 7:00 PM WAT', 'Teacher Mary Okafor', '/press/devotionals'],
   ['Power in Prayer', 'Wed · 7:00 PM WAT', 'Prayer Team', '/online-church/prayer'],
   ['Youth Service', 'Fri · 6:00 PM WAT', 'Youth Pastors', '/online-church/youth'],
   ['Children Service', 'Sat · 10:00 AM WAT', 'FH Kids Team', '/online-church/children'],
@@ -238,7 +239,7 @@ export const kcaAssignments: ContentCard[] = [
 export const calendarDays = [
   { day: 1, label: '' },
   { day: 2, label: '' },
-  { day: 3, label: 'Bible Study', href: '/online-church/bible-study' },
+  { day: 3, label: 'Devotionals', href: '/press/devotionals' },
   { day: 4, label: 'Prayer', href: '/online-church/prayer' },
   { day: 5, label: '' },
   { day: 6, label: 'Youth', href: '/online-church/youth' },
@@ -301,7 +302,8 @@ export const sectionCards: Record<string, ContentCard[]> = {
     { title: 'Watch Live', body: 'Join the live celebration service.', href: '/online-church/live', icon: '▶' },
     { title: 'Service Schedule', body: 'Plan your week with upcoming gatherings.', href: '/online-church/schedule', icon: '📅' },
     { title: 'Sermons', body: 'Catch up on messages anytime.', href: '/online-church/sermons', icon: '🎧' },
-    { title: 'Bible Study', body: 'Grow through guided weekly studies.', href: '/online-church/bible-study', icon: '📘' },
+    { title: 'Devotionals', body: 'Daily readings and Study Manuals, with the type marked on each title.', href: '/press/devotionals', icon: '📙' },
+    { title: 'Bible', body: 'Read Scripture and follow a 1, 2, or 3 year plan.', href: '/bible', icon: '📖' },
   ],
   Account: quickActions,
 };
@@ -504,6 +506,12 @@ export const listingFor = (section: string, path: string): ContentCard[] => {
   if (path.includes('/events') || path === '/prayer') return events;
   if (path.includes('/find-church') || path.includes('/churches') || path.includes('/home-churches')) return churches;
   if (path.includes('/online-church/sermons')) return sermons;
+  if (path.includes('/press/devotionals')) {
+    return pressResources.filter((item) => {
+      const meta = (item.meta ?? '').toLowerCase();
+      return meta.includes('devotional') || meta.includes('study manual');
+    });
+  }
   if (path.includes('/press')) return pressResources;
   if (path.includes('/account/giving')) return [
     { title: 'Mission Care Fund', body: 'May 18, 2024 · One-time · Receipt ready', href: '/give/receipt', meta: '₦5,000', status: 'Completed', icon: '🧾' },

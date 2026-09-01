@@ -17,6 +17,7 @@ test('entity id fields map to searchable catalogs', () => {
   assert.equal(catalogForIdField('mission_team_assignment_id'), 'missionTeamAssignment');
   assert.equal(catalogForIdField('year_id'), 'kcaYear');
   assert.equal(catalogForIdField('kca_lesson_id'), 'kcaLesson');
+  assert.equal(catalogForIdField('kca_chapter_id'), 'kcaChapter');
 });
 
 test('config strings that end in id are not treated as record pickers', () => {

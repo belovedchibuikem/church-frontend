@@ -47,7 +47,7 @@ const moduleRows = [
 const lessonRows = [
   { Lesson: '1. Who Am I in Christ?', Type: 'Video', Duration: '30 mins', Status: 'Published' },
   { Lesson: '2. Adopted into God’s Family', Type: 'Video', Duration: '26 mins', Status: 'Published' },
-  { Lesson: '3. New Creation', Type: 'Bible Study', Duration: '25 mins', Status: 'Published' },
+  { Lesson: '3. New Creation', Type: 'Study Manuals', Duration: '25 mins', Status: 'Published' },
   { Lesson: '4. Authority & Privileges', Type: 'Reading', Duration: '20 mins', Status: 'Published' },
   { Lesson: '5. Living by Identity', Type: 'Assignment', Duration: '30 mins', Status: 'Published' },
   { Lesson: '6. Walk as a Child of God', Type: 'Video', Duration: '22 mins', Status: 'Draft' },
@@ -95,7 +95,7 @@ export const kcaLearningScreens: AdminScreen[] = [
     id: 'H-06', batch: 'H', route: '/admin/kca/mentors/mary-okoro', title: 'Mary Okoro',
     subtitle: 'Mentor · Lagos, Nigeria', kind: 'detail', permission: 'kca.mentor.view', scope: 'assigned', nav: 'kca-mentors',
     tabs: ['Overview', 'Students (48)', 'Cohorts (2)', 'Reviews', 'Availability', 'Activity'],
-    details: { About: 'Children’s Pastor with 8 years experience in discipleship and mentoring.', Expertise: 'Discipleship, Bible Study, Leadership, Mentoring', 'Average Review Score': '4.7 / 5', Reviewed: '106', 'Review Completion': '92%', Overdue: '36' },
+    details: { About: 'Children’s Pastor with 8 years experience in discipleship and mentoring.', Expertise: 'Discipleship, Study Manuals, Leadership, Mentoring', 'Average Review Score': '4.7 / 5', Reviewed: '106', 'Review Completion': '92%', Overdue: '36' },
     items: ['On Track — 32 students', 'At Risk — 10 students', 'Completed — 6 students'],
   },
   {
@@ -128,9 +128,15 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-12', batch: 'H', route: '/admin/kca/lessons', title: 'Lessons',
-    subtitle: 'Manage lessons in this module.', kind: 'table', permission: 'kca.lesson.view', scope: 'assigned', nav: 'kca-learning', action: '+ Add Lesson',
+    subtitle: 'Manage lessons inside a module. Add chapters under each lesson (Module → Lesson → Chapter).', kind: 'table', permission: 'kca.lesson.view', scope: 'assigned', nav: 'kca-learning', action: '+ Add Lesson',
     details: { Module: 'Identity in Christ (Year 1)' },
     columns: ['Lesson', 'Type', 'Duration', 'Status'], rows: lessonRows,
+  },
+  {
+    id: 'H-12b', batch: 'H', route: '/admin/kca/chapters', title: 'Chapters',
+    subtitle: 'Chapters belong to a lesson. Students complete chapters in order inside each lesson.', kind: 'table', permission: 'kca.lesson.view', scope: 'assigned', nav: 'kca-learning', action: '+ Add Chapter',
+    columns: ['Chapter', 'Lesson', 'Sequence'],
+    rows: [],
   },
   {
     id: 'H-13', batch: 'H', route: '/admin/kca/attendance', title: 'Attendance',
@@ -140,7 +146,7 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-14', batch: 'H', route: '/admin/kca/assignments', title: 'Assignments',
-    subtitle: 'Manage module assignments.', kind: 'table', permission: 'kca.assignment.view', scope: 'assigned', nav: 'kca-learning', action: '+ Add Assignment',
+    subtitle: 'Manage module assignments. Soul-winning assignments stay open until the defined soul tree is complete.', kind: 'table', permission: 'kca.assignment.view', scope: 'assigned', nav: 'kca-learning', action: '+ Add Assignment',
     details: { Module: 'Identity in Christ' },
     columns: ['Assignment', 'Type', 'Due Date', 'Submissions'],
     rows: [
