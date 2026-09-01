@@ -976,18 +976,18 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     return mutateMinistryRecord('admin/church/attendance', 'POST', {
       home_church_id: requireId(firstUlid(payload.home_church_id), 'home church'),
       service_date: field(payload, 'service_date') ?? new Date().toISOString().slice(0, 10),
-      adults: asInt(field(payload, 'adults')) ?? 0,
+      males: asInt(field(payload, 'males', 'male')) ?? 0,
+      females: asInt(field(payload, 'females', 'female')) ?? 0,
       children: asInt(field(payload, 'children')) ?? 0,
-      first_timers: asInt(field(payload, 'first_timers')) ?? 0,
       notes: field(payload, 'notes') ?? null,
     } as JsonObject, scope);
   }
   if (route.includes('/attendance') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|add|create/)) {
     return mutateMinistryRecord(`admin/church/attendance/${encodeURIComponent(requireId(pickRecord(ctx, 'id'), 'attendance'))}`, 'PUT', {
       service_date: field(payload, 'service_date') ?? new Date().toISOString().slice(0, 10),
-      adults: asInt(field(payload, 'adults')) ?? 0,
+      males: asInt(field(payload, 'males', 'male')) ?? 0,
+      females: asInt(field(payload, 'females', 'female')) ?? 0,
       children: asInt(field(payload, 'children')) ?? 0,
-      first_timers: asInt(field(payload, 'first_timers')) ?? 0,
       notes: field(payload, 'notes') ?? null,
     } as JsonObject, scope);
   }
@@ -1183,7 +1183,20 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/kca/cohorts') && labelIs(label, /create|add|save|submit/)) {
+  if (routeStarts(route, '/admin/kca/cohorts') && labelIs(label, /edit|update/) && !labelIs(label, /delete|remove|create|add/)) {
+    const cohortId = requireId(pickRecord(ctx, 'id'), 'cohort');
+    const body: JsonObject = {
+      code: field(payload, 'code') ?? '',
+      name: field(payload, 'name', 'title') ?? '',
+      starts_on: field(payload, 'starts_on', 'starts_at', 'startDate') ?? '',
+      ends_on: field(payload, 'ends_on', 'ends_at', 'endDate') ?? '',
+      timezone: field(payload, 'timezone') || 'UTC',
+    };
+    const yearId = firstUlid(payload.year_id, payload.kca_year_id);
+    if (yearId) body.year_id = yearId;
+    return mutate(`admin/kca/cohorts/${encodeURIComponent(cohortId)}`, body, { ...opts, method: 'PATCH' });
+  }
+  if (routeStarts(route, '/admin/kca/cohorts') && labelIs(label, /create|add|save|submit/) && !labelIs(label, /edit|update|delete|remove/)) {
     const yearId = requireId(firstUlid(payload.year_id, payload.kca_year_id, ctx.recordId), 'year');
     return mutate(
       `admin/kca/years/${encodeURIComponent(yearId)}/cohorts`,
@@ -1284,6 +1297,33 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       `admin/kca/prerequisites/${encodeURIComponent(requireId(pickRecord(ctx, 'prerequisite_id', 'id'), 'prerequisite'))}`,
       undefined,
       { ...opts, method: 'DELETE' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/students/register') && labelIs(label, /register|submit|save/)) {
+    let applicationData: Record<string, string> = {};
+    if (payload.application_data_json) {
+      try {
+        applicationData = JSON.parse(payload.application_data_json) as Record<string, string>;
+      } catch {
+        throw new ApiError(422, 'Application data could not be parsed.');
+      }
+    }
+    const createLogin = payload.create_login === 'true';
+    return mutate(
+      'admin/kca/applications',
+      jsonBody({
+        person_id: firstUlid(payload.person_id) ?? undefined,
+        given_name: field(payload, 'given_name') || undefined,
+        family_name: field(payload, 'family_name') || undefined,
+        email: field(payload, 'email') || undefined,
+        phone: field(payload, 'phone') || undefined,
+        create_login: createLogin,
+        password: createLogin ? field(payload, 'password') || undefined : undefined,
+        password_confirmation: createLogin ? field(payload, 'password_confirmation') || undefined : undefined,
+        application_data: applicationData,
+        finalize: payload.finalize !== 'false',
+      }),
+      opts,
     );
   }
   if (routeStarts(route, '/admin/kca') && labelIs(label, /record attendance|mark attendance/)) {
@@ -1391,8 +1431,8 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/kca/certificates') && labelIs(label, /issue|create|save|submit/)) {
-    const enrollmentId = requireId(pickRecord(ctx, 'enrollment_id', 'id'), 'enrollment');
+  if ((routeStarts(route, '/admin/kca/certificates', '/admin/kca/alumni')) && labelIs(label, /issue|create|add|save|submit/)) {
+    const enrollmentId = requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id, pickRecord(ctx, 'enrollment_id', 'id')), 'enrollment');
     return mutate(
       `admin/kca/enrollments/${encodeURIComponent(enrollmentId)}/certificates`,
       {

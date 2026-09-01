@@ -46,6 +46,7 @@ const primaryWorkflowDestinations: Record<string, string> = {
   'G-10': '/admin/kca/review-queue',
   'G-13': '/admin/kca/applications/samuel-david/admission-letter',
   'G-18': '/admin/kca/students/samuel-david',
+  'H-01': '/admin/kca/students/register',
   'I-04': '/admin/mission/crusades/lagos-mega-crusade/planning',
   'I-19': '/admin/mission/reports',
   'J-08': '/admin/press/manuscripts/power-of-covenant/theological-review',

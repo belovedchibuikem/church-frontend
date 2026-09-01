@@ -6,6 +6,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } 
 
 import type { AdminScreen } from '../lib/admin-routes';
 import { stashAdminRecords } from '../lib/admin-record-cache';
+import { attendanceCounts } from '../lib/attendance-counts';
+import { MinistryNeedsPanel } from './ministry-needs-panel';
 import { EntitySearchSelect } from './entity-search-select';
 import { listAdminAuditEvents } from '../lib/admin-identity-api';
 import {
@@ -20,18 +22,15 @@ import {
   listHomeChurchApplications,
   listHomeChurches,
   listMemberships,
-  listPastoralNeeds,
   mutateMinistryRecord,
   operationsErrorMessage,
   startMembership,
   transitionHomeChurchApplication,
-  transitionPastoralNeed,
   updateHomeChurch,
   updateHomeChurchStatus,
   type HomeChurchApplicationRecord,
   type HomeChurchRecord,
   type MembershipRecord,
-  type PastoralNeedRecord,
 } from '../lib/admin-operations-api';
 
 type ScopeProps = { screen: AdminScreen; requestedScope?: string };
@@ -148,10 +147,6 @@ function PersonPicker({ name, required, defaultValue, defaultLabel }: { name: st
       defaultLabel={defaultLabel}
     />
   );
-}
-
-function attendanceHeadcount(row: Record<string, unknown>): number {
-  return Number(row.adults ?? 0) + Number(row.children ?? 0) + Number(row.first_timers ?? 0);
 }
 
 function ApplicationsTable({ requestedScope }: { requestedScope?: string }) {
@@ -683,14 +678,20 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
   const scope = useScope(requestedScope);
   const homeId = homeChurchIdFromRoute(screen.route);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
+  const [homes, setHomes] = useState<Array<{ id: string; name: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState({ males: 0, females: 0, children: 0 });
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const result = await listAttendance({ scope, perPage: 50, filter: homeId ? { home_church_id: homeId } : undefined });
-      setRows(result.items);
+      const [attendance, homeChurches] = await Promise.all([
+        listAttendance({ scope, perPage: 50, filter: homeId ? { home_church_id: homeId } : undefined }),
+        homeId ? Promise.resolve({ items: [] as Array<{ id: string; name: string }> }) : listHomeChurches({ scope, perPage: 100 }),
+      ]);
+      setRows(attendance.items);
+      if (!homeId) setHomes(homeChurches.items.map((item) => ({ id: item.id, name: item.name })));
     } catch (err) {
       setRows([]);
       setError(operationsErrorMessage(err, 'Unable to load attendance.'));
@@ -706,14 +707,15 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
     setError(null);
     try {
       await mutateMinistryRecord('admin/church/attendance', 'POST', {
-        home_church_id: homeId,
+        home_church_id: homeId || String(form.get('home_church_id')),
         service_date: String(form.get('service_date')),
-        adults: Number(form.get('adults') || 0),
+        males: Number(form.get('males') || 0),
+        females: Number(form.get('females') || 0),
         children: Number(form.get('children') || 0),
-        first_timers: Number(form.get('first_timers') || 0),
         notes: String(form.get('notes') || '') || null,
       }, scope);
       event.currentTarget.reset();
+      setDraft({ males: 0, females: 0, children: 0 });
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to save attendance. Duplicate dates update the existing session.'));
@@ -731,42 +733,94 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
       return true;
     });
   }, [rows]);
-  const totals = visibleRows.reduce((acc, row) => acc + attendanceHeadcount(row), 0);
+  const columnTotals = useMemo(() => visibleRows.reduce((acc, row) => {
+    const counts = attendanceCounts(row);
+    return {
+      males: acc.males + counts.males,
+      females: acc.females + counts.females,
+      children: acc.children + counts.children,
+      total: acc.total + counts.total,
+    };
+  }, { males: 0, females: 0, children: 0, total: 0 }), [visibleRows]);
+  const draftTotal = draft.males + draft.females + draft.children;
+  const colSpan = homeId ? 5 : 6;
 
   return (
     <>
       <StatusLine error={error} onRetry={() => void load()} />
       <p className="maps-settings-lead">
         {homeId ? 'Sessions for this home church. Saving the same date updates that session.' : 'Attendance across home churches in the current scope.'}
-        {' '}Sessions: {visibleRows.length}. Headcount (adults + children + guests): {totals}.
+        {' '}Sessions: {visibleRows.length}. Headcount (male + female + children): {columnTotals.total}.
       </p>
-      {homeId ? (
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
+          {homeId ? null : (
+            <label>
+              <span>Home church *</span>
+              <EntitySearchSelect name="home_church_id" required placeholder="Search home church by name" options={homes.map((item) => ({ value: item.id, label: item.name }))} />
+            </label>
+          )}
           <label><span>Service date *</span><input name="service_date" type="date" required /></label>
-          <label><span>Adults</span><input name="adults" type="number" min={0} defaultValue={0} /></label>
-          <label><span>Children</span><input name="children" type="number" min={0} defaultValue={0} /></label>
-          <label><span>First-timers / guests</span><input name="first_timers" type="number" min={0} defaultValue={0} /></label>
+          <label>
+            <span>Male</span>
+            <input name="males" type="number" min={0} value={draft.males} onChange={(event) => setDraft((current) => ({ ...current, males: Number(event.target.value || 0) }))} />
+          </label>
+          <label>
+            <span>Female</span>
+            <input name="females" type="number" min={0} value={draft.females} onChange={(event) => setDraft((current) => ({ ...current, females: Number(event.target.value || 0) }))} />
+          </label>
+          <label>
+            <span>Children</span>
+            <input name="children" type="number" min={0} value={draft.children} onChange={(event) => setDraft((current) => ({ ...current, children: Number(event.target.value || 0) }))} />
+          </label>
+          <label>
+            <span>Total</span>
+            <input readOnly value={draftTotal} aria-live="polite" />
+          </label>
           <label className="full"><span>Notes</span><input name="notes" /></label>
         </div>
-        <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Save session</button></div>
+        <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Save session'}</button></div>
       </form>
-      ) : null}
       <div className="card table-card">
         <table>
-          <thead><tr>{homeId ? null : <th>Home church</th>}<th>Date</th><th>Adults</th><th>Children</th><th>Guests</th><th>Total</th></tr></thead>
+          <thead>
+            <tr>
+              {homeId ? null : <th>Home church</th>}
+              <th>Date</th>
+              <th className="num">Male</th>
+              <th className="num">Female</th>
+              <th className="num">Children</th>
+              <th className="num">Total</th>
+            </tr>
+          </thead>
           <tbody>
-            {visibleRows.length === 0 ? <tr><td colSpan={homeId ? 5 : 6}>No attendance sessions.</td></tr> : visibleRows.map((row, index) => (
-              <tr key={String(row.id ?? `${row.home_church_id}-${row.service_date}-${index}`)}>
-                {homeId ? null : <td>{String(row.home_church_name ?? row.church_name ?? '—')}</td>}
-                <td>{String(row.service_date ?? '—')}</td>
-                <td>{String(row.adults ?? 0)}</td>
-                <td>{String(row.children ?? 0)}</td>
-                <td>{String(row.first_timers ?? 0)}</td>
-                <td>{String(attendanceHeadcount(row))}</td>
-              </tr>
-            ))}
+            {visibleRows.length === 0 ? (
+              <tr><td colSpan={colSpan}>No attendance sessions.</td></tr>
+            ) : visibleRows.map((row, index) => {
+              const counts = attendanceCounts(row);
+              return (
+                <tr key={String(row.id ?? `${row.home_church_id}-${row.service_date}-${index}`)}>
+                  {homeId ? null : <td>{String(row.home_church_name ?? row.church_name ?? '—')}</td>}
+                  <td>{String(row.service_date ?? '—')}</td>
+                  <td className="num">{counts.males}</td>
+                  <td className="num">{counts.females}</td>
+                  <td className="num">{counts.children}</td>
+                  <td className="num">{counts.total}</td>
+                </tr>
+              );
+            })}
           </tbody>
+          {visibleRows.length > 0 ? (
+            <tfoot>
+              <tr>
+                <td colSpan={homeId ? 1 : 2}>All sessions</td>
+                <td className="num">{columnTotals.males}</td>
+                <td className="num">{columnTotals.females}</td>
+                <td className="num">{columnTotals.children}</td>
+                <td className="num">{columnTotals.total}</td>
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     </>
@@ -849,77 +903,8 @@ function ActivitiesPanel({ screen, requestedScope }: ScopeProps) {
 }
 
 function NeedsPanel({ screen, requestedScope }: ScopeProps) {
-  const scope = useScope(requestedScope);
   const homeId = homeChurchIdFromRoute(screen.route);
-  const [rows, setRows] = useState<PastoralNeedRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const result = await listPastoralNeeds({ scope, perPage: 50, filter: homeId ? { home_church_id: homeId } : undefined });
-      setRows(result.items);
-    } catch (err) {
-      setRows([]);
-      setError(operationsErrorMessage(err, 'Unable to load needs.'));
-    }
-  }, [homeId, scope]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setError(null);
-    try {
-      await mutateMinistryRecord('admin/church/pastoral-needs', 'POST', {
-        person_id: String(form.get('person_id')),
-        category: String(form.get('category')),
-        summary: String(form.get('summary')),
-      }, scope);
-      event.currentTarget.reset();
-      await load();
-    } catch (err) {
-      setError(operationsErrorMessage(err, 'Unable to submit need.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <StatusLine error={error} onRetry={() => void load()} />
-      <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
-        <div className="form-grid">
-          <label><span>Person *</span><PersonPicker name="person_id" required /></label>
-          <label><span>Category *</span><input name="category" required /></label>
-          <label className="full"><span>Summary *</span><textarea name="summary" required /></label>
-        </div>
-        <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Submit need</button></div>
-      </form>
-      <div className="card table-card">
-        <table>
-          <thead><tr><th>Need</th><th>Category</th><th>Person</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            {rows.length === 0 ? <tr><td colSpan={5}>No needs in this scope.</td></tr> : rows.map((row) => (
-              <tr key={row.id}>
-                <td>{row.summary}</td>
-                <td>{row.category}</td>
-                <td>{row.person_name ?? '—'}</td>
-                <td>{row.status}</td>
-                <td>
-                  {row.status === 'open' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void transitionPastoralNeed(row.id, 'approved', scope).then(load)}>Approve</button> : null}
-                  {row.status === 'approved' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void transitionPastoralNeed(row.id, 'closed', scope).then(load)}>Close</button> : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
+  return <MinistryNeedsPanel requestedScope={requestedScope} homeChurchId={homeId || undefined} />;
 }
 
 function ReportsPanel({ screen, requestedScope }: ScopeProps) {

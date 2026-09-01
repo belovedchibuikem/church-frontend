@@ -12,7 +12,7 @@ import {
   loginBrowserUser,
   logoutBrowserUser,
 } from '../lib/auth-api';
-import { fetchUserCapabilities } from '../lib/user-api';
+import { fetchUserCapabilities, type CapabilitySnapshot } from '../lib/user-api';
 import { adminScreens, type AdminScreen, type Metric } from '../lib/admin-routes';
 import {
   AdminIdentityApiError,
@@ -478,8 +478,9 @@ function PageHeader({ screen, hideAction = false }: { screen: AdminScreen; hideA
   const showNigeriaFlag = screen.id === 'C-03' || screen.id === 'C-11';
   const platformBatch = ['J','K','L','M','N','O'].includes(screen.batch);
   const platformOwnsAction = platformBatch && ['form','wizard','workflow','approval','settings','detail','profile'].includes(screen.kind);
-  const showHeaderAction = !hideAction && !platformOwnsAction && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
-  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && screen.batch !== 'C' && <button type="button" className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button type="button" className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && screen.batch !== 'C' && !['wizard', 'workflow'].includes(screen.kind) && <Tabs tabs={screen.tabs} />}</>;
+  const homeChurchLiveOpsRoute = screen.batch === 'D' && screen.route.startsWith('/admin/home-churches') && screen.route !== '/admin/home-churches/dashboard' && !['wizard', 'workflow', 'activation'].includes(screen.kind);
+  const showHeaderAction = !hideAction && !platformOwnsAction && !homeChurchLiveOpsRoute && (['G','H','I'].includes(screen.batch) || !['D','E','F'].includes(screen.batch) || ['table','operations','finance'].includes(screen.kind));
+  return <><div className="page-header"><div><h1 className="page-title">{showNigeriaFlag && <span className="flag-ng" aria-label="Nigeria flag" />}{screen.title}</h1><p className="page-subtitle">{screen.subtitle}</p></div><div className="header-actions">{screen.action && showHeaderAction && screen.batch !== 'C' && <button type="button" className={screen.action.includes('Export') ? 'ghost-button' : 'primary-button'}>{screen.action}</button>}<button type="button" className="more-button" aria-label={t('admin.moreOptions', { defaultMessage: 'More options' })}>•••</button></div></div>{screen.tabs && !platformBatch && screen.batch !== 'C' && !['wizard', 'workflow'].includes(screen.kind) && !homeChurchLiveOpsRoute && <Tabs tabs={screen.tabs} />}</>;
 }
 
 function Tabs({ tabs }: { tabs: string[] }) {
@@ -2578,14 +2579,18 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const isOwnAdminProfile = screen.route === '/admin/profile';
   const [user, setUser] = useState<AdminProfile | null>(null);
+  const [capabilities, setCapabilities] = useState<CapabilitySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOwnAdminProfile) return;
     let cancelled = false;
-    void fetchAdminProfile()
-      .then((currentUser) => {
-        if (!cancelled) setUser(currentUser);
+    void Promise.all([fetchAdminProfile(), fetchUserCapabilities()])
+      .then(([currentUser, snapshot]) => {
+        if (!cancelled) {
+          setUser(currentUser);
+          setCapabilities(snapshot);
+        }
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load your profile.');
@@ -2617,8 +2622,62 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
   };
 
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'ME';
+  const permissionList = capabilities?.permissions ?? [];
+  const roleAssignments = capabilities?.roles ?? [];
+  const scopeList = capabilities?.scopes ?? [];
 
-  return <div className="profile-layout"><article className="card identity-card"><div className="portrait large">{initials}</div><h2>{name}</h2><StatusBadge value={status} /></article><article className="card details-card profile-details"><dl>{Object.entries(details).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card account-card"><h2>{t('admin.accountStatus', { defaultMessage: 'Account Status' })}</h2><strong className="trend">{status}</strong><p>{t('admin.lastActive', { defaultMessage: 'Last Active' })}<br/><b>{formatProfileDate(user.last_active_at)}</b></p><p>{t('admin.memberSince', { defaultMessage: 'Member Since' })}<br/><b>{formatProfileDate(user.member_since)}</b></p></article><Link href="/account/profile" className="primary-button profile-save">{t('admin.updateProfile', { defaultMessage: 'Update Profile' })}</Link></div>;
+  return (
+    <div className="profile-layout">
+      <article className="card identity-card">
+        <div className="portrait large">{initials}</div>
+        <h2>{name}</h2>
+        <StatusBadge value={status} />
+      </article>
+      <article className="card details-card profile-details">
+        <dl>{Object.entries(details).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
+      </article>
+      <article className="card account-card">
+        <h2>{t('admin.myAccess', { defaultMessage: 'My access' })}</h2>
+        {roleAssignments.length === 0 ? (
+          <p>{t('admin.noRoleAssigned', { defaultMessage: 'No role assigned' })}</p>
+        ) : (
+          <ul className="access-role-list">
+            {roleAssignments.map((role) => (
+              <li key={role.code}>
+                <strong>{role.name}</strong>
+                <span>{role.code}</span>
+                {role.scopes.length > 0 ? (
+                  <p>{role.scopes.map((scope) => `${scope.type}:${scope.key}`).join(', ')}</p>
+                ) : (
+                  <p>{t('admin.globalScope', { defaultMessage: 'Global scope' })}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {scopeList.length > 0 ? (
+          <p className="maps-settings-lead">
+            {t('admin.assignedScopes', { defaultMessage: 'Assigned scopes' })}: {scopeList.map((scope) => `${scope.type}:${scope.key}`).join(' · ')}
+          </p>
+        ) : null}
+        {permissionList.length > 0 ? (
+          <>
+            <h3>{t('admin.permissions', { defaultMessage: 'Permissions' })} ({permissionList.length})</h3>
+            <ul className="permission-list compact">
+              {permissionList.map((permission) => <li key={permission}>{permission}</li>)}
+            </ul>
+          </>
+        ) : null}
+      </article>
+      <article className="card account-card">
+        <h2>{t('admin.accountStatus', { defaultMessage: 'Account Status' })}</h2>
+        <strong className="trend">{status}</strong>
+        <p>{t('admin.lastActive', { defaultMessage: 'Last Active' })}<br /><b>{formatProfileDate(user.last_active_at)}</b></p>
+        <p>{t('admin.memberSince', { defaultMessage: 'Member Since' })}<br /><b>{formatProfileDate(user.member_since)}</b></p>
+      </article>
+      <Link href="/account/profile" className="primary-button profile-save">{t('admin.updateProfile', { defaultMessage: 'Update Profile' })}</Link>
+    </div>
+  );
 }
 
 function PermissionsView({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
@@ -3309,7 +3368,7 @@ function OperationsView({ screen, requestedScope }: { screen: AdminScreen; reque
           <OperationsLiveTable
             screen={{
               ...screen,
-              columns: ['Home Church', 'Date', 'Adults', 'Children', 'First Timers', 'Total'],
+              columns: ['Home Church', 'Date', 'Male', 'Female', 'Children', 'Total'],
             }}
             dataset={opsDataset}
           />
@@ -3950,11 +4009,11 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo }: 
   const breadcrumbs = getAdminBreadcrumbs(screen);
   const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, screenKind: screen.kind, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
   if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen} returnTo={returnTo}/>;
-  const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-02','H-06','H-08','H-10','H-19','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id)
+  const rendererOwnsHeader = new Set(['G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-01b','H-02','H-06','H-08','H-10','H-13','H-17','H-19','H-20','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id)
     || (/^\/admin\/home-churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route) && !screen.route.includes('/applications/'))
     || /^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route);
   const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
-  const rendererOwnsAction = new Set(['G-01','G-17','H-11','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
+  const rendererOwnsAction = new Set(['G-01','G-17','H-01','H-11','H-13','H-17','H-20','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
   return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
 }
 

@@ -122,6 +122,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .table-card th { color: #555d76; font-size: 14px; text-align: left; padding: 16px 18px; border-bottom: 1px solid var(--fhc-line); background: #fff; white-space: nowrap; }
 .table-card td { padding: 16px 18px; border-bottom: 1px solid #eff0f5; color: #343a54; font-size: 15px; vertical-align: middle; white-space: nowrap; }
 .table-card tbody tr:hover { background: #fbfaff; }
+.table-card th.num, .table-card td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-card tfoot td { font-weight: 750; background: #fafbfe; border-bottom: 0; color: #1d2438; }
 .actions-cell { color: var(--fhc-violet-700) !important; }
 .mini-avatar { width: 30px; height: 30px; display: inline-grid; place-items: center; margin-right: 10px; border-radius: 50%; background: #f0e8dd; color: #4f2b18; font-size: 10px; font-weight: 800; }
 .status-badge { display: inline-flex; align-items: center; min-height: 24px; border-radius: 99px; padding: 0 9px; font-size: 10px; font-weight: 800; text-transform: capitalize; }

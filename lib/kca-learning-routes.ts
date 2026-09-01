@@ -11,15 +11,6 @@ const studentRows = [
   { Name: 'Joshua Peter', ID: 'KCA-2024-0016', Cohort: '2024 Cohort A', Year: 'Year 1', Mentor: 'Mary Okoro', Status: 'Completed', Progress: '72%' },
 ];
 
-const cohortRows = [
-  { 'Cohort Name': '2024 Cohort A', Year: '2024', Region: 'Lagos', Students: '312', Mentors: '28', Status: 'Active', 'Start Date': 'Jan 15, 2024' },
-  { 'Cohort Name': '2024 Cohort B', Year: '2024', Region: 'Abuja', Students: '286', Mentors: '24', Status: 'Active', 'Start Date': 'Feb 5, 2024' },
-  { 'Cohort Name': '2024 Cohort C', Year: '2024', Region: 'Port Harcourt', Students: '198', Mentors: '20', Status: 'Active', 'Start Date': 'Mar 10, 2024' },
-  { 'Cohort Name': '2023 Cohort A', Year: '2023', Region: 'Lagos', Students: '245', Mentors: '22', Status: 'Completed', 'Start Date': 'Jan 16, 2023' },
-  { 'Cohort Name': '2023 Cohort B', Year: '2023', Region: 'Abuja', Students: '201', Mentors: '18', Status: 'Completed', 'Start Date': 'Feb 6, 2023' },
-  { 'Cohort Name': '2023 Cohort C', Year: '2023', Region: 'Port Harcourt', Students: '160', Mentors: '16', Status: 'Completed', 'Start Date': 'Mar 13, 2023' },
-];
-
 const mentorRows = [
   { Mentor: 'Mary Okoro', Region: 'Lagos', Cohorts: '2024 A, B', Students: '48', Status: 'Active' },
   { Mentor: 'Pastor Tunde', Region: 'Abuja', Cohorts: '2024 A', Students: '42', Status: 'Active' },
@@ -68,6 +59,11 @@ export const kcaLearningScreens: AdminScreen[] = [
     columns: ['Name', 'ID', 'Cohort', 'Year', 'Mentor', 'Status', 'Progress'], rows: studentRows,
   },
   {
+    id: 'H-01b', batch: 'H', route: '/admin/kca/students/register', title: 'Register KCA Student',
+    subtitle: 'Complete the eight-step KCA application on behalf of a prospective student.', kind: 'wizard',
+    permission: 'kca.applications.transition', scope: 'assigned', nav: 'kca-students',
+  },
+  {
     id: 'H-02', batch: 'H', route: '/admin/kca/students/samuel-david', title: 'Samuel David',
     subtitle: 'KCA-2024-0001', kind: 'detail', permission: 'kca.student.view', scope: 'assigned', nav: 'kca-students',
     tabs: ['Overview', 'Academics', 'Attendance', 'Assignments', 'Assessments', 'Mentor', 'Documents', 'Activity'],
@@ -78,7 +74,7 @@ export const kcaLearningScreens: AdminScreen[] = [
     id: 'H-03', batch: 'H', route: '/admin/kca/cohorts', title: 'Cohorts',
     subtitle: 'View and manage KCA cohorts.', kind: 'table', permission: 'kca.cohort.view', scope: 'assigned', nav: 'kca-cohorts', action: '+ Create Cohort',
     items: ['2024 Cohort A — 312 students · Active', '2024 Cohort B — 286 students · Active', '2024 Cohort C — 198 students · Active', '2023 Cohort A — 245 students · Completed', '2023 Cohort B — 201 students · Completed', '2023 Cohort C — 156 students · Completed'],
-    columns: ['Cohort Name', 'Year', 'Region', 'Students', 'Mentors', 'Status', 'Start Date'], rows: cohortRows,
+    columns: ['Cohort Name', 'Code', 'Year', 'Students', 'Status', 'Starts on', 'Ends on', 'Timezone'], rows: [],
   },
   {
     id: 'H-04', batch: 'H', route: '/admin/kca/years', title: 'KCA Years',

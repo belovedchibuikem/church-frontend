@@ -186,8 +186,15 @@ export type PastoralNeedRecord = {
   id: string;
   person_id?: string | null;
   person_name?: string | null;
+  church_id?: string | null;
+  church_name?: string | null;
+  home_church_id?: string | null;
+  home_church_name?: string | null;
   category: string;
   summary: string;
+  title?: string;
+  scope_type?: 'church' | 'home_church' | 'person' | string;
+  scope_label?: string;
   status: string;
   created_at?: string | null;
 };
@@ -1067,6 +1074,7 @@ export function resolveOpsDataset(screen: {
   if (route.includes('/invitations')) return 'invitations';
   if (id === 'F-10' || route === '/admin/people/prayer-requests') return 'prayer-requests';
   if (id === 'F-11' || route === '/admin/people/needs') return 'pastoral-needs';
+  if (route.includes('/needs') && !route.startsWith('/admin/people')) return 'pastoral-needs';
   if (route === '/admin/people' || id === 'F-01') return 'people';
   if (route.includes('/converts') || nav === 'converts') return 'converts';
   if (route.includes('/evangelism')) return 'evangelism-activities';
@@ -1368,15 +1376,17 @@ export function opsRecordsToRows(
           break;
         case 'pastoral-needs':
           mapped[column] =
-            column === 'Request' || column === 'Name'
-              ? humanValue(item, 'summary', 'category')
-              : column === 'Requested By'
-                ? humanValue(item, 'person_name')
-                : column === 'Date'
-                  ? shortDate(get('created_at') === '—' ? null : get('created_at'))
-                  : column === 'Status'
-                    ? get('status')
-                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+            column === 'Request' || column === 'Name' || column === 'Title' || column === 'Need'
+              ? humanValue(item, 'title', 'summary', 'category')
+              : column === 'Scope'
+                ? humanValue(item, 'scope_label', 'scope_type')
+                : column === 'Requested By' || column === 'Contact'
+                  ? humanValue(item, 'person_name')
+                  : column === 'Date'
+                    ? shortDate(get('created_at') === '—' ? null : get('created_at'))
+                    : column === 'Status'
+                      ? get('status')
+                      : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'people':
           mapped[column] =
@@ -1495,13 +1505,13 @@ export function opsRecordsToRows(
               ? humanValue(item, 'home_church_name', 'church_name', 'name')
               : column === 'Date' || column === 'Service Date'
                 ? shortDate(get('service_date') === '—' ? null : get('service_date'))
-                : column === 'Adults'
-                  ? get('adults')
-                  : column === 'Children'
+                : column === 'Male' || column === 'Males'
+                  ? get('males')
+                  : column === 'Female' || column === 'Females'
+                    ? get('females')
+                    : column === 'Children'
                     ? get('children')
-                    : column === 'First Timers'
-                      ? get('first_timers')
-                      : column === 'Total'
+                    : column === 'Total'
                         ? get('total')
                         : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;

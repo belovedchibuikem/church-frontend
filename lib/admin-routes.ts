@@ -447,7 +447,7 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     return { ...template, route, title: 'Author', subtitle: pressAuthorDetail[1], kind: 'profile' };
   }
 
-  const churchNested = route.match(/^\/admin\/churches\/([0-7][0-9A-HJKMNP-TV-Z]{25})(?:\/(edit|leadership|members|first-timers|converts|disciples|workers|departments|small-groups|evangelism|attendance|reports|finance|settings))?$/i);
+  const churchNested = route.match(/^\/admin\/churches\/([0-7][0-9A-HJKMNP-TV-Z]{25})(?:\/(edit|leadership|members|first-timers|converts|disciples|workers|departments|small-groups|evangelism|attendance|needs|reports|finance|settings))?$/i);
   if (churchNested) {
     const suffix = churchNested[2];
     const idMap: Record<string, string> = {
@@ -462,6 +462,7 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
       'small-groups': 'E-12',
       evangelism: 'E-13',
       attendance: 'E-30',
+      needs: 'E-31',
       reports: 'E-14',
       finance: 'E-15',
       settings: 'E-16',
@@ -480,6 +481,7 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
       'small-groups': 'Small groups',
       evangelism: 'Evangelism',
       attendance: 'Attendance',
+      needs: 'Needs',
       reports: 'Reports',
       finance: 'Finance',
       settings: 'Settings',

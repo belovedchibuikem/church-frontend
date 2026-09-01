@@ -47,7 +47,7 @@ type Props = {
   items?: string[];
 };
 
-const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request|retry|resolve|deliver|attempt|prepare|end membership|end assignment/i;
+const mutationPattern = /approve|reject|defer|assign|activate|suspend|close|delete|remove|save|submit|publish|send|issue|escalate|reconcile|refund|confirm|register|create|add|new|edit|update|process|request|retry|resolve|deliver|attempt|prepare|record|end membership|end assignment/i;
 const filePattern = /download|export|print|upload|preview pdf|send receipt/i;
 const emptyTabs: string[] = [];
 

@@ -37,6 +37,11 @@ export type CurrentUser = {
 export type CapabilitySnapshot = {
   permissions: string[];
   scopes: Array<{ type: string; key: string }>;
+  roles?: Array<{
+    code: string;
+    name: string;
+    scopes: Array<{ type: string; key: string }>;
+  }>;
 };
 
 export type UserConsent = {

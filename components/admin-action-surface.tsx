@@ -123,7 +123,7 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
   ];
 }
 
-function FieldControl({ field, required, defaultValue }: { field: Field; required?: boolean; defaultValue?: string }) {
+function FieldControl({ field, required, defaultValue, defaultLabel }: { field: Field; required?: boolean; defaultValue?: string; defaultLabel?: string }) {
   const { t } = useLocale();
   const placeholder = field.placeholder
     ? t(`admin.placeholder.${field.name}`, { defaultMessage: field.placeholder })
@@ -142,6 +142,7 @@ function FieldControl({ field, required, defaultValue }: { field: Field; require
         catalog={searchCatalog}
         options={fixtureOptions ?? []}
         defaultValue={defaultValue}
+        defaultLabel={defaultLabel}
         placeholder={placeholder ?? placeholderForIdField(field.name)}
         required={required}
       />
@@ -355,7 +356,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
 
   return <form className="interaction-action-form" onSubmit={save}>
     <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{entity}</h3><p>{t('admin.completeFieldsBelow', { defaultMessage: 'Complete the fields below. Required values are marked.' })}</p></div>
-    <div className="interaction-form-grid">{fields.map((field) => <label className={field.type === 'textarea' ? 'wide' : ''} key={field.name}>{t(`admin.field.${field.name}`, { defaultMessage: field.label })}{field.required && <b aria-hidden="true"> *</b>}<FieldControl field={field} required={field.required} defaultValue={mode === 'edit' ? defaultValueForField(field, normalizedDetails) : undefined}/></label>)}</div>
+    <div className="interaction-form-grid">{fields.map((field) => <label className={field.type === 'textarea' ? 'wide' : ''} key={field.name}>{t(`admin.field.${field.name}`, { defaultMessage: field.label })}{field.required && <b aria-hidden="true"> *</b>}<FieldControl field={field} required={field.required} defaultValue={mode === 'edit' ? defaultValueForField(field, normalizedDetails) : undefined} defaultLabel={mode === 'edit' ? normalizedDetails[`${field.name}_label`] : undefined}/></label>)}</div>
     <div className="interaction-context-strip"><span>{t('admin.scopeLabel', { defaultMessage: 'Scope:' })} <b>{scope}</b></span><span>{t('admin.permissionLabel', { defaultMessage: 'Permission:' })} <b>{permission}</b></span></div>
     {errorNote}
     {footerButtons(submitLabel)}

@@ -35,7 +35,10 @@ import {
 } from '../lib/admin-operations-api';
 import { ChurchSettingsPanel } from './church-settings-panel';
 import { EntitySearchSelect } from './entity-search-select';
+import { attendanceCounts } from '../lib/attendance-counts';
+import { MinistryNeedsPanel } from './ministry-needs-panel';
 import { createLocation, updateLocation } from '../lib/admin-organization-api';
+import { CHURCH_LEADERSHIP_TITLES, MAX_ACTIVE_CHURCH_LEADERS } from '../lib/church-leadership';
 
 type ScopeProps = { screen: AdminScreen; requestedScope?: string };
 
@@ -76,6 +79,7 @@ const CHURCH_SECTIONS = [
   { suffix: '/small-groups', label: 'Groups' },
   { suffix: '/evangelism', label: 'Evangelism' },
   { suffix: '/attendance', label: 'Attendance' },
+  { suffix: '/needs', label: 'Needs' },
   { suffix: '/reports', label: 'Reports' },
   { suffix: '/finance', label: 'Finance' },
   { suffix: '/settings', label: 'Settings' },
@@ -457,7 +461,12 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [grantAdminAccess, setGrantAdminAccess] = useState(false);
   const loader = roleType === 'leader' ? listLeaders : roleType === 'worker' ? listWorkers : listDisciples;
+  const activeLeaderCount = roleType === 'leader'
+    ? rows.filter((row) => row.status === 'active').length
+    : 0;
+  const leaderCapReached = roleType === 'leader' && activeLeaderCount >= MAX_ACTIVE_CHURCH_LEADERS;
 
   const load = useCallback(async () => {
     setError(null);
@@ -485,11 +494,20 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
         role_type: roleType,
         title: String(form.get('title')),
         ...(String(form.get('started_at') || '') ? { started_at: String(form.get('started_at')) } : {}),
+        ...(roleType === 'leader' && form.get('grant_admin_access') === 'on'
+          ? {
+              grant_admin_access: true,
+              ...(String(form.get('admin_email') || '') ? { admin_email: String(form.get('admin_email')) } : {}),
+            }
+          : {}),
       }, scope);
       formEl.reset();
+      setGrantAdminAccess(false);
       await load();
     } catch (err) {
-      setError(operationsErrorMessage(err, 'Unable to assign. Duplicate active roles are blocked.'));
+      setError(operationsErrorMessage(err, roleType === 'leader'
+        ? 'Unable to appoint leader. Check the title, leader cap, and admin email if granting access.'
+        : 'Unable to assign. Duplicate active roles are blocked.'));
     } finally {
       setBusy(false);
     }
@@ -519,24 +537,78 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
   return (
     <>
       <StatusLine error={error} onRetry={() => void load()} />
+      {roleType === 'leader' ? (
+        <p className="maps-settings-lead">
+          Active leaders: {activeLeaderCount}/{MAX_ACTIVE_CHURCH_LEADERS}. Appointing a leader also ensures church membership.
+        </p>
+      ) : null}
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
           {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
           <label><span>Person *</span><PersonPicker name="person_id" required /></label>
-          <label><span>Title *</span><input name="title" required placeholder={roleType === 'worker' ? 'e.g. Usher' : 'Role title'} /></label>
+          {roleType === 'leader' ? (
+            <label>
+              <span>Position *</span>
+              <select name="title" required defaultValue="">
+                <option value="" disabled>Select leadership position</option>
+                {CHURCH_LEADERSHIP_TITLES.map((title) => (
+                  <option key={title} value={title}>{title}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label><span>Title *</span><input name="title" required placeholder={roleType === 'worker' ? 'e.g. Usher' : 'Role title'} /></label>
+          )}
           <label><span>Start date</span><input name="started_at" type="date" /></label>
+          {roleType === 'leader' ? (
+            <>
+              <label className="full checkbox-label">
+                <input
+                  name="grant_admin_access"
+                  type="checkbox"
+                  checked={grantAdminAccess}
+                  onChange={(event) => setGrantAdminAccess(event.target.checked)}
+                />
+                <span>Grant church admin login (scoped to this church)</span>
+              </label>
+              {grantAdminAccess ? (
+                <label className="full">
+                  <span>Login email *</span>
+                  <input name="admin_email" type="email" required placeholder="pastor@church.org" />
+                </label>
+              ) : null}
+            </>
+          ) : null}
         </div>
-        <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Assign {roleType}</button></div>
+        <div className="form-footer">
+          <button className="primary-button" disabled={busy || leaderCapReached} type="submit">
+            {roleType === 'leader' ? 'Appoint leader' : `Assign ${roleType}`}
+          </button>
+        </div>
       </form>
       <div className="card table-card">
         <table>
-          <thead><tr><th>Person</th><th>Title</th><th>Church</th><th>Status</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>{roleType === 'leader' ? 'Position' : 'Title'}</th>
+              <th>Church</th>
+              {roleType === 'leader' ? <th>Admin access</th> : null}
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
-            {rows.length === 0 ? <tr><td colSpan={5}>No {roleType}s in this scope.</td></tr> : rows.map((row) => (
+            {rows.length === 0 ? (
+              <tr><td colSpan={roleType === 'leader' ? 6 : 5}>No {roleType}s in this scope.</td></tr>
+            ) : rows.map((row) => (
               <tr key={String(row.id)}>
                 <td>{String(row.person_name ?? '—')}</td>
                 <td>{String(row.title ?? row.name ?? '—')}</td>
                 <td>{String(row.church_name ?? '—')}</td>
+                {roleType === 'leader' ? (
+                  <td>{row.admin_access_granted ? 'Granted' : '—'}</td>
+                ) : null}
                 <td>{String(row.status ?? '—')}</td>
                 <td>{row.status === 'active' ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => void onEnd(String(row.id))}>End assignment</button> : null}</td>
               </tr>
@@ -886,6 +958,7 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
   const [homes, setHomes] = useState<Array<{ id: string; name: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState({ males: 0, females: 0, children: 0 });
 
   const load = useCallback(async () => {
     setError(null);
@@ -913,12 +986,13 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
       await mutateMinistryRecord('admin/church/attendance', 'POST', {
         home_church_id: String(form.get('home_church_id')),
         service_date: String(form.get('service_date')),
-        adults: Number(form.get('adults') || 0),
+        males: Number(form.get('males') || 0),
+        females: Number(form.get('females') || 0),
         children: Number(form.get('children') || 0),
-        first_timers: Number(form.get('first_timers') || 0),
-        notes: String(form.get('notes') || ''),
+        notes: String(form.get('notes') || '') || null,
       }, scope);
       formEl.reset();
+      setDraft({ males: 0, females: 0, children: 0 });
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to record attendance. Duplicate home church and date is merged, not doubled.'));
@@ -927,38 +1001,97 @@ function AttendancePanel({ screen, requestedScope }: ScopeProps) {
     }
   }
 
+  const columnTotals = useMemo(() => rows.reduce((acc, row) => {
+    const counts = attendanceCounts(row);
+    return {
+      males: acc.males + counts.males,
+      females: acc.females + counts.females,
+      children: acc.children + counts.children,
+      total: acc.total + counts.total,
+    };
+  }, { males: 0, females: 0, children: 0, total: 0 }), [rows]);
+  const draftTotal = draft.males + draft.females + draft.children;
+
   return (
     <>
       <StatusLine error={error} onRetry={() => void load()} />
+      <p className="maps-settings-lead">
+        Home church session attendance in the current church scope.
+        {' '}Sessions: {rows.length}. Headcount (male + female + children): {columnTotals.total}.
+      </p>
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
           <label><span>Home church *</span><EntitySearchSelect name="home_church_id" required placeholder="Search home church by name" options={homes.map((item) => ({ value: item.id, label: item.name }))} /></label>
           <label><span>Service date *</span><input name="service_date" type="date" required /></label>
-          <label><span>Adults</span><input name="adults" type="number" min={0} defaultValue={0} /></label>
-          <label><span>Children</span><input name="children" type="number" min={0} defaultValue={0} /></label>
-          <label><span>First timers</span><input name="first_timers" type="number" min={0} defaultValue={0} /></label>
+          <label>
+            <span>Male</span>
+            <input name="males" type="number" min={0} value={draft.males} onChange={(event) => setDraft((current) => ({ ...current, males: Number(event.target.value || 0) }))} />
+          </label>
+          <label>
+            <span>Female</span>
+            <input name="females" type="number" min={0} value={draft.females} onChange={(event) => setDraft((current) => ({ ...current, females: Number(event.target.value || 0) }))} />
+          </label>
+          <label>
+            <span>Children</span>
+            <input name="children" type="number" min={0} value={draft.children} onChange={(event) => setDraft((current) => ({ ...current, children: Number(event.target.value || 0) }))} />
+          </label>
+          <label>
+            <span>Total</span>
+            <input readOnly value={draftTotal} aria-live="polite" />
+          </label>
           <label className="full"><span>Notes</span><input name="notes" /></label>
         </div>
         <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Record session'}</button></div>
       </form>
       <div className="card table-card">
         <table>
-          <thead><tr><th>Home church</th><th>Date</th><th>Adults</th><th>Children</th><th>First timers</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Home church</th>
+              <th>Date</th>
+              <th className="num">Male</th>
+              <th className="num">Female</th>
+              <th className="num">Children</th>
+              <th className="num">Total</th>
+            </tr>
+          </thead>
           <tbody>
-            {rows.length === 0 ? <tr><td colSpan={5}>No attendance sessions in this scope.</td></tr> : rows.map((row) => (
-              <tr key={String(row.id)}>
-                <td>{String(row.home_church_name ?? row.home_church_id ?? '—')}</td>
-                <td>{String(row.service_date ?? '—')}</td>
-                <td>{String(row.adults ?? 0)}</td>
-                <td>{String(row.children ?? 0)}</td>
-                <td>{String(row.first_timers ?? 0)}</td>
-              </tr>
-            ))}
+            {rows.length === 0 ? (
+              <tr><td colSpan={6}>No attendance sessions in this scope.</td></tr>
+            ) : rows.map((row) => {
+              const counts = attendanceCounts(row);
+              return (
+                <tr key={String(row.id)}>
+                  <td>{String(row.home_church_name ?? row.home_church_id ?? '—')}</td>
+                  <td>{String(row.service_date ?? '—')}</td>
+                  <td className="num">{counts.males}</td>
+                  <td className="num">{counts.females}</td>
+                  <td className="num">{counts.children}</td>
+                  <td className="num">{counts.total}</td>
+                </tr>
+              );
+            })}
           </tbody>
+          {rows.length > 0 ? (
+            <tfoot>
+              <tr>
+                <td colSpan={2}>All sessions</td>
+                <td className="num">{columnTotals.males}</td>
+                <td className="num">{columnTotals.females}</td>
+                <td className="num">{columnTotals.children}</td>
+                <td className="num">{columnTotals.total}</td>
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     </>
   );
+}
+
+function NeedsPanel({ screen, requestedScope }: ScopeProps) {
+  const churchId = churchIdFromRoute(screen.route);
+  return <MinistryNeedsPanel requestedScope={requestedScope} churchId={churchId || undefined} />;
 }
 
 function ReportsPanel({ screen, requestedScope }: ScopeProps) {
@@ -1055,6 +1188,7 @@ export function ChurchScreenContent({ screen, requestedScope }: ScopeProps) {
     return wrap(<NamedCrudPanel screen={screen} requestedScope={requestedScope} title="Activities" list={listEvangelismActivities} path="admin/church/evangelism-activities" fields={[{ name: 'title', label: 'Title', required: true }, { name: 'activity_type', label: 'Type' }]} />);
   }
   if (/\/attendance$/.test(route) || route === '/admin/church/attendance') return wrap(<AttendancePanel screen={screen} requestedScope={requestedScope} />);
+  if (/\/needs$/.test(route) || route === '/admin/church/needs') return wrap(<NeedsPanel screen={screen} requestedScope={requestedScope} />);
   if (/\/reports$/.test(route) || route === '/admin/church/reports') return wrap(<ReportsPanel screen={screen} requestedScope={requestedScope} />);
   if (/\/finance$/.test(route) || route === '/admin/church/finance') return wrap(<FinancePanel screen={screen} requestedScope={requestedScope} />);
   if (/\/settings$/.test(route) || route === '/admin/church/settings') return wrap(<SettingsPanel screen={screen} requestedScope={requestedScope} />);

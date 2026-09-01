@@ -11,6 +11,7 @@ const landings = [
   '/admin/kca/applications',
   '/admin/kca/review-queue',
   '/admin/kca/students',
+  '/admin/kca/students/register',
   '/admin/kca/cohorts',
   '/admin/kca/years',
   '/admin/kca/mentors',
@@ -81,4 +82,32 @@ test('create cohort is not treated as a preview overlay', async () => {
   const shell = await readFile(new URL('../components/admin-interaction-shell.tsx', import.meta.url), 'utf8');
   assert.match(shell, /view\|open\|details\|website/);
   assert.doesNotMatch(shell, /view\|open\|details\|cohort\|website/);
+});
+
+test('KCA module builder preserves basic info across wizard steps', async () => {
+  const source = await readFile(new URL('../components/kca-ui.tsx', import.meta.url), 'utf8');
+  assert.match(source, /captureModuleFields/);
+  assert.match(source, /onBeforeAdvance=\{captureModuleFields\}/);
+  assert.match(source, /Module code, title, sequence, and learning days are required/);
+});
+
+test('KCA student registration includes login account fields', async () => {
+  const { kcaRegistrationSteps, flattenKcaRegistrationPayload } = await import('../lib/kca-registration-steps.ts');
+  const churchStep = kcaRegistrationSteps[0]!;
+  assert.ok(churchStep.fields.some((field) => field.name === 'create_login'));
+  assert.ok(churchStep.fields.some((field) => field.name === 'password'));
+  const payload = flattenKcaRegistrationPayload({
+    given_name: 'Ada',
+    family_name: 'Okafor',
+    email: 'ada@example.org',
+    create_login: 'true',
+    password: 'StudentPass123',
+    password_confirmation: 'StudentPass123',
+    why: 'Ministry growth',
+  });
+  assert.equal(payload.create_login, true);
+  assert.equal(payload.password, 'StudentPass123');
+  assert.equal(payload.email, 'ada@example.org');
+  assert.equal(payload.application_data.why, 'Ministry growth');
+  assert.equal(payload.application_data.password, undefined);
 });

@@ -19,6 +19,7 @@ import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-a
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
+import { flattenKcaRegistrationPayload, kcaRegistrationSteps } from '../lib/kca-registration-steps';
 import { EntitySearchSelect } from './entity-search-select';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
@@ -482,7 +483,8 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const fields = fieldsForEntity('kca_module');
   const live = !shouldUseDesignFixtures();
-  const values = live ? {} : normalizeDetailValues(screen.details ?? {});
+  const fixtureValues = normalizeDetailValues(screen.details ?? {});
+  const [values, setValues] = useState<Record<string, string>>(() => (live ? {} : fixtureValues));
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
   const [busy, setBusy] = useState(false);
@@ -490,14 +492,33 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
   const [error, setError] = useState<string | null>(null);
   const [moduleId, setModuleId] = useState<string | null>(null);
 
-  async function onFinishModule() {
-    if (!live) return;
+  function captureModuleFields(): Record<string, string> {
     const card = document.querySelector('.kca-form-card');
-    const payload: Record<string, string> = {};
+    const nextValues = { ...values };
     card?.querySelectorAll('input[name], select[name], textarea[name]').forEach((node) => {
       const el = node as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-      if (el.name) payload[el.name] = el.value;
+      if (!el.name) return;
+      if (el.type === 'checkbox') {
+        nextValues[el.name] = (el as HTMLInputElement).checked ? 'true' : '';
+      } else {
+        nextValues[el.name] = el.value;
+      }
     });
+    setValues(nextValues);
+    return nextValues;
+  }
+
+  async function onFinishModule() {
+    if (!live) return;
+    const payload = captureModuleFields();
+    const code = payload.code?.trim();
+    const title = payload.title?.trim();
+    const sequence = payload.sequence?.trim();
+    const durationDays = payload.duration_days?.trim();
+    if (!code || !title || !sequence || !durationDays) {
+      setError('Module code, title, sequence, and learning days are required. Return to Basic Info and complete those fields.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -513,7 +534,7 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
         ? 'Module created. Add lessons, then map learning days and publish.'
         : 'Module created. Add lessons from the Lessons screen.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Module creation failed.');
+      setError(formatAdminMutationError(err));
     } finally {
       setBusy(false);
     }
@@ -565,7 +586,7 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
 
         {wizard.currentStep >= 4 && (
           <dl className="kca-review-summary">
-            {Object.entries(values).map(([key, value]) => (
+            {Object.entries(values).filter(([, value]) => value.trim() !== '').map(([key, value]) => (
               <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{value}</dd></div>
             ))}
             <div><dt>{t('member.kca.lessons', { defaultMessage: 'Lessons' })}</dt><dd>{t('member.kca.addAfterCreate', { defaultMessage: 'Add via Lessons after module is created' })}</dd></div>
@@ -640,6 +661,7 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
           finishLabel={busy ? t('common.saving', { defaultMessage: 'Saving…' }) : t('member.kca.createModule', { defaultMessage: 'Create module' })}
           secondaryClassName="ghost-button"
           primaryClassName="primary-button"
+          onBeforeAdvance={captureModuleFields}
           onFinish={() => void onFinishModule()}
         />
       </article>
@@ -805,6 +827,363 @@ function KcaPrerequisites({ screen }: { screen: AdminScreen }) {
   );
 }
 
+function KcaAssessment({ screen }: { screen: AdminScreen }) {
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState(live ? 'Loading assessments…' : '');
+  const [busy, setBusy] = useState(false);
+  const [audience, setAudience] = useState('One student');
+
+  async function load() {
+    if (!live) return;
+    setError(null);
+    try {
+      const result = await listCatalogDomain('kca.assessments', { perPage: 50 });
+      stashAdminRecords(result.items as Array<Record<string, unknown>>);
+      const mapped = catalogRecordsToRows(result.items as Record<string, unknown>[], ['Student', 'Assessment', 'Result', 'Score']) as Row[];
+      setRows(mapped);
+      setTotal(result.pagination.total);
+      setMessage(`${result.pagination.total} assessment results recorded`);
+    } catch (err) {
+      setRows([]);
+      setError(catalogErrorMessage(err, 'Unable to load assessments.'));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, [live]);
+
+  async function onRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    setError(null);
+    try {
+      await executeAdminAction({
+        route: screen.route,
+        label: 'Record Assessment',
+        payload: Object.fromEntries(form.entries()) as Record<string, string>,
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      event.currentTarget.reset();
+      setAudience('One student');
+      await load();
+      setMessage('Assessment recorded.');
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="kca-attendance">
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {live && message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      <form className="card settings-card" onSubmit={(event) => void onRecord(event)}>
+        <header className="kca-form-card-header">
+          <div>
+            <span className="kca-overline">Record assessment</span>
+            <h2 className="card-title">Assessment results</h2>
+            <p className="maps-settings-lead">Record pass/fail results for one student, an entire year, or all enrolled students.</p>
+          </div>
+        </header>
+        <div className="form-grid">
+          <label>
+            <span>Who is this for? *</span>
+            <select name="audience" required value={audience} onChange={(event) => setAudience(event.target.value)}>
+              <option>One student</option>
+              <option>A student year</option>
+              <option>All enrolled students</option>
+            </select>
+          </label>
+          {/one student/i.test(audience) ? (
+            <label><span>Student *</span><EntitySearchSelect name="kca_enrollment_id" catalog="kcaEnrollment" required placeholder="Search enrolled KCA student" /></label>
+          ) : null}
+          {/year/i.test(audience) ? (
+            <label><span>KCA year *</span><EntitySearchSelect name="year_id" catalog="kcaYear" required placeholder="Search academic year" /></label>
+          ) : null}
+          <label><span>Module</span><EntitySearchSelect name="kca_module_id" catalog="kcaModule" placeholder="Optional module" /></label>
+          <label><span>Lesson</span><EntitySearchSelect name="kca_lesson_id" catalog="kcaLesson" placeholder="Optional lesson" /></label>
+          <label><span>Assessment name *</span><input name="assessment_code" required placeholder="e.g. Identity final" /></label>
+          <label>
+            <span>Result *</span>
+            <select name="result_code" defaultValue="pass" required>
+              <option value="pass">Pass</option>
+              <option value="fail">Fail</option>
+              <option value="distinction">Distinction</option>
+              <option value="incomplete">Incomplete</option>
+            </select>
+          </label>
+          <label><span>Score</span><input name="score" type="number" min={0} max={100} placeholder="0–100" /></label>
+        </div>
+        <div className="form-footer">
+          <button className="primary-button" disabled={busy || !live} type="submit">{busy ? 'Saving…' : 'Record assessment'}</button>
+        </div>
+      </form>
+      <article className="card kca-table-card">
+        <table className="kca-table" aria-label="Assessment results">
+          <thead><tr><th>Student</th><th>Assessment</th><th>Result</th><th>Score</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4}>{live ? 'No assessment results recorded yet.' : 'Enable live API to record assessments.'}</td></tr>
+            ) : rows.map((row, index) => (
+              <tr key={`${row.__id ?? index}`}>
+                <td>{row.Student ?? '—'}</td>
+                <td>{row.Assessment ?? '—'}</td>
+                <td><KcaBadge value={String(row.Result ?? '—')} /></td>
+                <td>{row.Score ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {total ? <p className="maps-settings-lead">Total {total}</p> : null}
+      </article>
+    </div>
+  );
+}
+
+function KcaAlumni({ screen }: { screen: AdminScreen }) {
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState(live ? 'Loading alumni…' : '');
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    if (!live) return;
+    setError(null);
+    try {
+      const result = await listCatalogDomain('kca.certificates', { perPage: 50 });
+      stashAdminRecords(result.items as Array<Record<string, unknown>>);
+      const mapped = catalogRecordsToRows(result.items as Record<string, unknown>[], ['Student', 'Certificate', 'Issued', 'Status']) as Row[];
+      setRows(mapped);
+      setTotal(result.pagination.total);
+      setMessage(`${result.pagination.total} alumni certificates on record`);
+    } catch (err) {
+      setRows([]);
+      setError(catalogErrorMessage(err, 'Unable to load alumni records.'));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, [live]);
+
+  async function onAdd(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBusy(true);
+    setError(null);
+    try {
+      await executeAdminAction({
+        route: screen.route,
+        label: 'Add Alumni',
+        payload: Object.fromEntries(form.entries()) as Record<string, string>,
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      event.currentTarget.reset();
+      await load();
+      setMessage('Alumni certificate issued.');
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="kca-alumni">
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {live && message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      <form className="card settings-card" onSubmit={(event) => void onAdd(event)}>
+        <header className="kca-form-card-header">
+          <div>
+            <span className="kca-overline">Add alumni</span>
+            <h2 className="card-title">Graduate a KCA student</h2>
+            <p className="maps-settings-lead">Issue a completion certificate for an enrolled student to add them to the alumni network.</p>
+          </div>
+        </header>
+        <div className="form-grid">
+          <label><span>Student *</span><EntitySearchSelect name="kca_enrollment_id" catalog="kcaEnrollment" required placeholder="Search enrolled KCA student" /></label>
+          <label><span>Certificate number *</span><input name="certificate_number" required placeholder="e.g. KCA/CERT/2026/0042" /></label>
+          <label><span>Completion date *</span><input name="completion_on" type="date" required /></label>
+          <label><span>Verification code *</span><input name="verification_code" required placeholder="Unique verification code" /></label>
+        </div>
+        <div className="form-footer">
+          <button className="primary-button" disabled={busy || !live} type="submit">{busy ? 'Saving…' : 'Issue certificate'}</button>
+        </div>
+      </form>
+      <article className="card kca-table-card">
+        <table className="kca-table" aria-label="Alumni certificates">
+          <thead><tr><th>Student</th><th>Certificate</th><th>Issued</th><th>Status</th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4}>{live ? 'No alumni certificates issued yet.' : 'Enable live API to manage alumni.'}</td></tr>
+            ) : rows.map((row, index) => (
+              <tr key={`${row.__id ?? index}`}>
+                <td>{row.Student ?? '—'}</td>
+                <td>{row.Certificate ?? '—'}</td>
+                <td>{row.Issued ?? '—'}</td>
+                <td><KcaBadge value={String(row.Status ?? 'Issued')} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {total ? <p className="maps-settings-lead">Total {total}</p> : null}
+      </article>
+    </div>
+  );
+}
+
+function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const wizard = useAdminWizardStep(kcaRegistrationSteps.map((step) => step.title));
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const step = kcaRegistrationSteps[wizard.currentStep] ?? kcaRegistrationSteps[0];
+
+  function captureStepValues() {
+    const card = document.querySelector('.kca-registration-form');
+    const nextValues = { ...values };
+    card?.querySelectorAll('input[name], select[name], textarea[name]').forEach((node) => {
+      const el = node as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      if (!el.name) return;
+      if (el.type === 'checkbox') {
+        nextValues[el.name] = (el as HTMLInputElement).checked ? 'true' : '';
+      } else {
+        nextValues[el.name] = el.value;
+      }
+    });
+    setValues(nextValues);
+    return nextValues;
+  }
+
+  async function submitRegistration(finalize: boolean) {
+    const merged = captureStepValues();
+    if (!live) {
+      setError('Live API is required to register KCA students.');
+      return;
+    }
+    if (!finalize) {
+      setMessage('Draft captured on this device. Continue through all steps before submitting.');
+      return;
+    }
+    const payload = flattenKcaRegistrationPayload(merged);
+    if (!payload.person_id && (!payload.given_name || !payload.family_name)) {
+      setError('Given name and family name are required for a new applicant.');
+      return;
+    }
+    if (payload.create_login) {
+      if (!payload.email) {
+        setError('Email is required when creating a student login account.');
+        return;
+      }
+      if (!payload.password || payload.password.length < 8) {
+        setError('A password of at least 8 characters is required when creating a login account.');
+        return;
+      }
+      if (payload.password !== payload.password_confirmation) {
+        setError('Password confirmation does not match.');
+        return;
+      }
+    }
+    if (Object.keys(payload.application_data).length === 0) {
+      setError('Complete the application fields before submitting.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await executeAdminAction({
+        route: '/admin/kca/students/register',
+        label: 'Register KCA student',
+        payload: {
+          person_id: payload.person_id ?? '',
+          given_name: payload.given_name ?? '',
+          family_name: payload.family_name ?? '',
+          email: payload.email ?? '',
+          phone: payload.phone ?? '',
+          create_login: payload.create_login ? 'true' : 'false',
+          password: payload.password ?? '',
+          password_confirmation: payload.password_confirmation ?? '',
+          application_data_json: JSON.stringify(payload.application_data),
+          finalize: finalize ? 'true' : 'false',
+        },
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      setMessage(result.id ? `Application submitted (${result.id}). Review it in Applications.` : 'KCA application submitted.');
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="kca-flow-layout" data-admin-wizard="true">
+      <KcaStepRail current={step.title} />
+      <article className="card kca-form-card kca-registration-form">
+        <header>
+          <div>
+            <span className="kca-overline">KCA student registration</span>
+            <h2>{step.title}</h2>
+            <p>{step.subtitle}</p>
+          </div>
+          <KcaBadge value={`Step ${wizard.currentStep + 1} of ${kcaRegistrationSteps.length}`} />
+        </header>
+        <AdminFormFields fields={step.fields} values={values} />
+        {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+        {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+        <footer className="form-footer">
+          {!wizard.isFirst ? (
+            <button type="button" className="ghost-button" data-interaction-native="true" onClick={() => wizard.goToStep(wizard.currentStep - 1)}>
+              Back
+            </button>
+          ) : (
+            <Link className="ghost-button" href="/admin/kca/students">Cancel</Link>
+          )}
+          <div>
+            <button className="ghost-button" type="button" disabled={busy} onClick={() => { captureStepValues(); setMessage('Progress saved on this device.'); }}>
+              Save draft
+            </button>
+            {wizard.isLast ? (
+              <button className="primary-button" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitRegistration(true)}>
+                {busy ? 'Submitting…' : 'Submit application'}
+              </button>
+            ) : (
+              <button
+                className="primary-button"
+                type="button"
+                data-interaction-native="true"
+                disabled={busy}
+                onClick={() => {
+                  captureStepValues();
+                  wizard.goToStep(wizard.currentStep + 1);
+                }}
+              >
+                Save & continue
+              </button>
+            )}
+          </div>
+        </footer>
+        <p className="maps-settings-lead">
+          <Link href="/admin/kca/applications">View submitted applications</Link>
+          {' · '}
+          <Link href="/admin/kca/students">Back to students</Link>
+        </p>
+      </article>
+    </div>
+  );
+}
+
 function KcaAttendance({ screen }: { screen: AdminScreen }) {
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
   const [rows, setRows] = useState<Row[]>([]);
@@ -872,6 +1251,13 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       {live ? <p className="maps-settings-lead" role="status">{message}</p> : null}
       <form className="card settings-card" onSubmit={(event) => void onRecord(event)}>
+        <header className="kca-form-card-header">
+          <div>
+            <span className="kca-overline">Lesson attendance</span>
+            <h2 className="card-title">Record attendance</h2>
+            <p className="maps-settings-lead">Select an enrolled KCA student, the lesson taught, and the session date.</p>
+          </div>
+        </header>
         <div className="form-grid">
           <label><span>Student *</span><EntitySearchSelect name="kca_enrollment_id" catalog="kcaEnrollment" required placeholder="Search student by name" /></label>
           <label><span>Lesson *</span><EntitySearchSelect name="kca_lesson_id" catalog="kcaLesson" required placeholder="Search lesson by name" /></label>
@@ -976,12 +1362,15 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
     <div className="kca-managed-table">
       {screen.metrics && !live ? <KcaMetrics metrics={screen.metrics} /> : null}
       {live && screen.id === 'H-01' ? (
-        <KcaMetrics
-          metrics={[
-            { label: 'Enrolled', value: String(total || rows.length) },
-            { label: 'On this page', value: String(rows.length) },
-          ]}
-        />
+        <div className="kca-students-toolbar">
+          <KcaMetrics
+            metrics={[
+              { label: 'Enrolled', value: String(total || rows.length) },
+              { label: 'On this page', value: String(rows.length) },
+            ]}
+          />
+          <Link className="primary-button link-button" href="/admin/kca/students/register">+ Register KCA student</Link>
+        </div>
       ) : null}
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
@@ -1000,6 +1389,8 @@ export function KcaScreenContent({ screen, requestedScope }: { screen: AdminScre
     case 'G-13': case 'G-14': case 'G-15': case 'G-18': return <KcaOutcome screen={screen}/>;
     case 'G-16': return <KcaLetter screen={screen}/>;
     case 'G-17': return <KcaOrientation screen={screen}/>;
+    case 'H-01': return <KcaManagedTable screen={screen} />;
+    case 'H-01b': return <KcaStudentRegistration screen={screen} />;
     case 'H-02': case 'H-06': case 'H-08': return <KcaEntityDetail screen={screen}/>;
     case 'H-03':
     case 'H-04':
@@ -1007,7 +1398,9 @@ export function KcaScreenContent({ screen, requestedScope }: { screen: AdminScre
     case 'H-10': return <KcaModuleBuilder screen={screen}/>;
     case 'H-11': return <KcaPrerequisites screen={screen}/>;
     case 'H-13': return <KcaAttendance screen={screen}/>;
+    case 'H-17': return <KcaAssessment screen={screen} />;
     case 'H-19': return <KcaCertificate screen={screen}/>;
+    case 'H-20': return <KcaAlumni screen={screen} />;
     default: return <KcaManagedTable screen={screen}/>;
   }
 }

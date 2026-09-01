@@ -485,7 +485,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('specialization') || key.includes('module')) {
         mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
       } else if (key.includes('student')) {
-        mapped[column] = get('student_name', 'person_name', 'enrollment_id');
+        mapped[column] = get('students_count', 'enrollments_count', 'student_name', 'person_name', 'enrollment_id');
       } else if (key.includes('church')) {
         mapped[column] = get('church_name', 'home_church_name', 'church');
       } else if (key.includes('batch')) {
