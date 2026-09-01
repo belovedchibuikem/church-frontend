@@ -126,6 +126,7 @@ test('KCA modules and lessons screens support editing saved lessons', async () =
   assert.match(source, /function KcaLessonForm/);
   assert.match(source, /function KcaModuleLessonsManager/);
   assert.match(source, /function KcaLessonsPanel/);
+  assert.match(source, /function nextLessonFormDefaults/);
   assert.match(source, /label: isEdit \? 'Save lesson changes' : 'Add lesson'/);
   assert.match(source, /Manage lessons/);
 });

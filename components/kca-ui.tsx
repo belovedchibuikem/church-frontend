@@ -1427,6 +1427,30 @@ function lessonFormValuesFromRecord(record: Record<string, unknown>): Record<str
   return values;
 }
 
+function nextLessonFormDefaults(lessons: Array<Record<string, unknown>>): Record<string, string> {
+  let maxSequence = 0;
+  let maxCodeNumber = 0;
+  for (const lesson of lessons) {
+    const sequence = Number(lesson.sequence ?? 0);
+    if (Number.isFinite(sequence) && sequence > maxSequence) {
+      maxSequence = sequence;
+    }
+    const codeMatch = String(lesson.code ?? '').match(/(\d+)\s*$/);
+    if (codeMatch) {
+      const codeNumber = Number(codeMatch[1]);
+      if (Number.isFinite(codeNumber) && codeNumber > maxCodeNumber) {
+        maxCodeNumber = codeNumber;
+      }
+    }
+  }
+  const nextSequence = maxSequence + 1;
+  const nextCodeNumber = maxCodeNumber > 0 ? maxCodeNumber + 1 : nextSequence;
+  return {
+    sequence: String(nextSequence),
+    code: `L${String(nextCodeNumber).padStart(2, '0')}`,
+  };
+}
+
 function KcaLessonForm({
   moduleId,
   moduleTitle,
@@ -1620,8 +1644,10 @@ function KcaModuleLessonsManager({
       ) : null}
       {showAddForm && !editingLesson ? (
         <KcaLessonForm
+          key={`add-lesson-${lessons.length}-${lessons.map((lesson) => String(lesson.id ?? '')).join('-')}`}
           moduleId={moduleId}
           moduleTitle={moduleTitle}
+          initialValues={nextLessonFormDefaults(lessons)}
           onCancel={() => setShowAddForm(false)}
           onSaved={() => {
             setShowAddForm(false);
