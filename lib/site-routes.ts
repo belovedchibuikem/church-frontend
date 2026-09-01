@@ -464,7 +464,8 @@ export const memberNavigation = memberNavGroups.flatMap((group) =>
   group.items.map((item) => [item.href, item.label] as const),
 );
 
-export const isMemberNavActive = (pathname: string, href: string): boolean => {
-  if (href === '/account') return pathname === '/account';
-  return pathname === href || pathname.startsWith(`${href}/`);
+export const isMemberNavActive = (pathname: string | null | undefined, href: string): boolean => {
+  const path = pathname ?? '';
+  if (href === '/account') return path === '/account';
+  return path === href || path.startsWith(`${href}/`);
 };

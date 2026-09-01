@@ -364,7 +364,7 @@ function BrandName() {
 }
 
 function Header() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const fixtures = useFixtures();
   const { t } = useLocale();
   const { user, ready } = useAuth();
@@ -422,7 +422,7 @@ function Header() {
 }
 
 function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const fixtures = useFixtures();
   const { t } = useLocale();
   const { user } = useAuth();
@@ -5566,7 +5566,7 @@ function Settings({ route }: { route: SiteRoute }) {
 }
 
 function Media({ route }: { route: SiteRoute }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const fixtures = designFixturesEnabled();
   const [onlineLoading, setOnlineLoading] = useState(!fixtures);
   const [onlineError, setOnlineError] = useState<string | null>(null);

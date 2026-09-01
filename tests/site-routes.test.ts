@@ -47,6 +47,8 @@ test('member navigation keeps unique hrefs and nested-route active matching', ()
   assert.equal(isMemberNavActive('/account/church', '/account'), false);
   assert.equal(isMemberNavActive('/account/kca/modules', '/account/kca'), true);
   assert.equal(isMemberNavActive('/account/giving/recurring', '/account/giving'), true);
+  assert.equal(isMemberNavActive(null, '/account/kca'), false);
+  assert.equal(isMemberNavActive(undefined, '/account'), false);
 });
 
 test('events and KCA flows expose register, ticket, modules and mentor routes', () => {
