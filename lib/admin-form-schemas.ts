@@ -172,32 +172,28 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   follow_up_task: {
     entity: 'Follow-up task',
     fields: [
-      { label: 'Person', name: 'person_name', type: 'text' },
-      { label: 'Type', name: 'type', type: 'text' },
-      { label: 'Status', name: 'status', type: 'text' },
-      { label: 'Due at', name: 'due_at', type: 'text' },
-      { label: 'Assignee', name: 'assigned_to_name', type: 'text' },
+      { label: 'Assignee', name: 'assigned_to_person_id', type: 'search-select', catalog: 'person', placeholder: 'Search assignee' },
+      { label: 'Due at', name: 'due_at', type: 'date' },
+      { label: 'Status', name: 'status', type: 'text', helpText: 'Use Complete to close this task. Status is read-only here.' },
     ],
   },
   prayer_request: {
     entity: 'Prayer request',
     fields: [
-      { label: 'Person', name: 'person_name', type: 'text' },
-      { label: 'Summary', name: 'summary', type: 'textarea', wide: true },
-      { label: 'Status', name: 'status', type: 'text' },
-      { label: 'Category', name: 'category', type: 'text' },
+      { label: 'Subject', name: 'subject', type: 'text', required: true },
+      { label: 'Body', name: 'body', type: 'textarea', wide: true, required: true },
+      { label: 'Status', name: 'status', type: 'select', options: ['open', 'assigned', 'rejected', 'answered'] },
     ],
   },
   pastoral_need: {
     entity: 'Need',
     fields: [
-      { label: 'Need belongs to', name: 'scope_kind', type: 'select', options: ['Home church', 'Church'] },
       { label: 'Home church', name: 'home_church_id', type: 'search-select', catalog: 'homeChurch', placeholder: 'Search home church' },
       { label: 'Church', name: 'church_id', type: 'search-select', catalog: 'church', placeholder: 'Search church' },
       { label: 'Contact person', name: 'person_id', type: 'search-select', catalog: 'person', placeholder: 'Optional contact' },
       { label: 'Category', name: 'category', type: 'text', required: true },
       { label: 'Summary', name: 'summary', type: 'textarea', wide: true, required: true },
-      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Status', name: 'status', type: 'select', options: ['open', 'approved', 'rejected', 'closed'] },
     ],
   },
   convert: {
@@ -307,11 +303,8 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   soul: {
     entity: 'Soul journey',
     fields: [
-      { label: 'Person', name: 'person_name', type: 'text' },
-      { label: 'Crusade', name: 'crusade_name', type: 'text' },
-      { label: 'Connected church', name: 'connected_church_name', type: 'text' },
-      { label: 'Status', name: 'status', type: 'text' },
-      { label: 'Captured at', name: 'captured_at', type: 'text' },
+      { label: 'Connected church', name: 'church_id', type: 'search-select', catalog: 'church', placeholder: 'Search church to connect' },
+      { label: 'Status', name: 'status', type: 'select', options: ['captured', 'mentor_assigned', 'follow_up_active', 'follow_up_completed', 'converted'], helpText: 'Set to follow_up_completed to close the journey.' },
     ],
   },
   mission_invitation: {
@@ -450,6 +443,13 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Role', name: 'role', type: 'select', options: ['author', 'speaker', 'editor', 'translator', 'reviewer', 'designer', 'contributor'] },
     ],
   },
+  press_author: {
+    entity: 'Author',
+    fields: [
+      { label: 'Display name', name: 'display_name', type: 'text', required: true },
+      { label: 'Bio', name: 'bio', type: 'textarea', wide: true },
+    ],
+  },
   communication: {
     entity: 'Communication',
     fields: [
@@ -552,7 +552,7 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
   { pattern: /\/admin\/(members|users)/, entity: 'person' },
   { pattern: /\/admin\/events/, entity: 'event' },
   { pattern: /\/admin\/press\/translations/, entity: 'press_translation' },
-  { pattern: /\/admin\/press\/authors/, entity: 'press_contributor' },
+  { pattern: /\/admin\/press\/authors/, entity: 'press_author' },
   { pattern: /\/admin\/press/, entity: 'press_publication' },
   { pattern: /\/admin\/finance\/refunds/, entity: 'payment_refund' },
   { pattern: /\/admin\/finance\/(tithes|offerings|projects|donations|event-payments|kca-payments|publication-payments)/, entity: 'payment_intent' },

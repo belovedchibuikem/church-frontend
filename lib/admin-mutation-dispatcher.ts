@@ -676,6 +676,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
+  if (routeStarts(route, '/admin/kca/lecturers') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|create|add/)) {
+    return mutate(
+      `admin/kca/lecturer-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'lecturer assignment'))}`,
+      {
+        starts_at: field(payload, 'starts_at', 'startDate') ?? new Date().toISOString(),
+        ends_at: field(payload, 'ends_at', 'endDate') ?? null,
+      },
+      { ...opts, method: 'PATCH' },
+    );
+  }
   if (routeStarts(route, '/admin/kca/lecturers') && labelIs(label, /delete|remove/)) {
     return mutate(
       `admin/kca/lecturer-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'lecturer assignment'))}`,
@@ -693,6 +703,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         ends_at: field(payload, 'ends_at', 'endDate') ?? null,
       },
       opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/mentors') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|create|add/)) {
+    return mutate(
+      `admin/kca/mentor-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'mentor assignment'))}`,
+      {
+        starts_at: field(payload, 'starts_at', 'startDate') ?? new Date().toISOString(),
+        ends_at: field(payload, 'ends_at', 'endDate') ?? null,
+      },
+      { ...opts, method: 'PATCH' },
     );
   }
   if (routeStarts(route, '/admin/kca/mentors') && labelIs(label, /delete|remove/)) {
@@ -998,6 +1018,51 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       family_name: field(payload, 'family_name') ?? null,
     } as JsonObject, scope);
   }
+  if (routeStarts(route, '/admin/people/prayer-requests') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|assign|transition/)) {
+    const prayerId = requireId(pickRecord(ctx, 'id'), 'prayer request');
+    const status = field(payload, 'status');
+    if (status && !['open', 'assigned', 'rejected', 'answered'].includes(status)) {
+      return mutate(`admin/church/prayer-requests/${encodeURIComponent(prayerId)}/transitions`, { status }, opts);
+    }
+    return mutate(
+      `admin/church/prayer-requests/${encodeURIComponent(prayerId)}`,
+      {
+        subject: field(payload, 'subject', 'title', 'name', 'summary') ?? '',
+        body: field(payload, 'body', 'description', 'notes') ?? '',
+        status: status ?? null,
+      },
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/people/needs') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|transition/)) {
+    const needId = requireId(pickRecord(ctx, 'id'), 'pastoral need');
+    const status = field(payload, 'status');
+    if (status && !['open', 'approved', 'rejected', 'closed'].includes(status)) {
+      return mutate(`admin/church/pastoral-needs/${encodeURIComponent(needId)}/transitions`, { status }, opts);
+    }
+    return mutate(
+      `admin/church/pastoral-needs/${encodeURIComponent(needId)}`,
+      jsonBody({
+        person_id: firstUlid(payload.person_id) ?? null,
+        church_id: firstUlid(payload.church_id) ?? null,
+        home_church_id: firstUlid(payload.home_church_id) ?? null,
+        category: field(payload, 'category') ?? '',
+        summary: field(payload, 'summary', 'title', 'name') ?? '',
+        status: status ?? null,
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/people/follow-up') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|complete/)) {
+    return mutate(
+      `admin/church/follow-up-tasks/${encodeURIComponent(requireId(pickRecord(ctx, 'task_id', 'id'), 'follow-up task'))}`,
+      jsonBody({
+        assigned_to_person_id: firstUlid(payload.assigned_to_person_id, payload.assignee_id) ?? null,
+        due_at: field(payload, 'due_at', 'startDate') ?? null,
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
   if (routeStarts(route, '/admin/people/follow-up', '/admin/churches') && labelIs(label, /complete follow|mark complete|complete task/) ) {
     return completeFollowUpTask(
       requireId(pickRecord(ctx, 'task_id', 'id'), 'follow-up task'),
@@ -1030,7 +1095,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /create crusade|save crusade|submit crusade/) && !labelIs(label, /invitation|soul|invite/)) {
+  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /create crusade|save crusade|submit crusade/) && !labelIs(label, /invitation|soul|invite|edit|update/)) {
     return mutate(
       'admin/mission/crusades',
       {
@@ -1045,6 +1110,23 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         ends_at: field(payload, 'ends_at', 'endDate', 'end') ?? null,
       },
       opts,
+    );
+  }
+  if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /edit|update|save crusade/) && !labelIs(label, /invitation|soul|invite|transition|archive|create/)) {
+    return mutate(
+      `admin/mission/crusades/${encodeURIComponent(requireId(pickRecord(ctx, 'crusade_id', 'id'), 'crusade'))}`,
+      {
+        name: field(payload, 'name', 'title', 'crusade_name') ?? '',
+        code: field(payload, 'code') ?? null,
+        theme: field(payload, 'theme') ?? null,
+        purpose: field(payload, 'purpose') ?? null,
+        description: field(payload, 'description') ?? null,
+        timezone: field(payload, 'timezone') ?? null,
+        location_id: firstUlid(payload.location_id) ?? null,
+        starts_at: field(payload, 'starts_at', 'startDate', 'start') ?? null,
+        ends_at: field(payload, 'ends_at', 'endDate', 'end') ?? null,
+      },
+      { ...opts, method: 'PUT' },
     );
   }
   if (routeStarts(route, '/admin/mission/crusades') && labelIs(label, /transition crusade|submit for review|approve crusade|start planning|schedule crusade|activate crusade|complete crusade|report crusade|postpone|cancel crusade/)) {
@@ -1155,6 +1237,17 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       scope,
     );
   }
+  if (routeStarts(route, '/admin/mission/souls') && labelIs(label, /edit|update|save/) && !labelIs(label, /capture|register|assign|follow|delete|remove/)) {
+    const soulId = requireId(pickRecord(ctx, 'soul_id', 'id'), 'soul');
+    const churchId = firstUlid(payload.church_id, payload.connected_church_id);
+    if (churchId) {
+      return mutate(`admin/mission/souls/${encodeURIComponent(soulId)}/church-connection`, { church_id: churchId }, opts);
+    }
+    const status = field(payload, 'status');
+    if (status === 'follow_up_completed') {
+      return completeSoulFollowUp(soulId, reasonCode(payload, 'follow_up_completed') ?? 'follow_up_completed', scope);
+    }
+  }
   if (route.includes('/teams') && labelIs(label, /add team|create team|assign team|add member|assign member|save|submit/)) {
     return createTeamAssignment(
       {
@@ -1225,7 +1318,11 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       { ...opts, method: 'PATCH' },
     );
   }
-  if (routeStarts(route, '/admin/kca/lessons') && labelIs(label, /edit|update/) && !labelIs(label, /delete|remove|create|add|chapter/)) {
+  if (
+    (routeStarts(route, '/admin/kca/lessons') || (routeStarts(route, '/admin/kca/modules') && labelIs(label, /edit lesson|update lesson|save lesson changes/)))
+    && labelIs(label, /edit|update|save lesson/)
+    && !labelIs(label, /delete|remove|create|add|chapter|add lesson/)
+  ) {
     const lessonId = requireId(pickRecord(ctx, 'id', 'kca_lesson_id', 'lesson_id'), 'lesson');
     return mutate(
       `admin/kca/lessons/${encodeURIComponent(lessonId)}`,
@@ -1541,7 +1638,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/press/authors') && labelIs(label, /add author|create author|save|submit/)) {
+  if (routeStarts(route, '/admin/press/authors') && labelIs(label, /add author|create author|save|submit/) && !labelIs(label, /edit|update/)) {
     return mutate(
       'admin/press/authors',
       {
@@ -1550,6 +1647,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         bio: field(payload, 'bio', 'about') ?? null,
       },
       opts,
+    );
+  }
+  if (routeStarts(route, '/admin/press/authors') && labelIs(label, /edit|update|save/) && !labelIs(label, /add|create/)) {
+    return mutate(
+      `admin/press/authors/${encodeURIComponent(requireId(pickRecord(ctx, 'author_id', 'id'), 'author'))}`,
+      {
+        display_name: field(payload, 'display_name', 'name', 'fullName') ?? '',
+        bio: field(payload, 'bio', 'about') ?? null,
+      },
+      { ...opts, method: 'PUT' },
     );
   }
   if (routeStarts(route, '/admin/press') && labelIs(label, /add contributor|assign contributor/)) {

@@ -258,6 +258,32 @@ test('executeAdminAction maps Request Information and Interview labels onto tran
   }
 });
 
+test('executeAdminAction maps KCA lesson edit onto PATCH /admin/kca/lessons/{id}', async () => {
+  const lessonId = '01ARZ3NDEKTSV4RRFFQ69G5FBX';
+  installFetch((call) => {
+    assert.match(call.url, new RegExp(`/admin/kca/lessons/${lessonId}$`));
+    assert.equal(call.method, 'PATCH');
+    const payload = JSON.parse(call.body ?? '{}') as Record<string, string>;
+    assert.equal(payload.title, 'Who Am I in Christ?');
+    assert.equal(payload.body, 'Updated lesson body.');
+    return jsonResponse({ id: lessonId, title: 'Who Am I in Christ?' }, 200);
+  });
+
+  await executeAdminAction({
+    route: '/admin/kca/lessons',
+    label: 'Save lesson changes',
+    recordId: lessonId,
+    payload: {
+      code: 'L01',
+      title: 'Who Am I in Christ?',
+      sequence: '1',
+      body: 'Updated lesson body.',
+    },
+  });
+
+  assert.equal(fetchCalls.length, 1);
+});
+
 test('executeAdminAction refuses unmapped actions instead of faking success', async () => {
   installFetch(() => {
     throw new Error('unmapped actions must not call the API');

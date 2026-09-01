@@ -121,6 +121,15 @@ test('KCA module builder preserves basic info across wizard steps', async () => 
   assert.match(source, /label: 'Create module'/);
 });
 
+test('KCA modules and lessons screens support editing saved lessons', async () => {
+  const source = await readFile(new URL('../components/kca-ui.tsx', import.meta.url), 'utf8');
+  assert.match(source, /function KcaLessonForm/);
+  assert.match(source, /function KcaModuleLessonsManager/);
+  assert.match(source, /function KcaLessonsPanel/);
+  assert.match(source, /label: isEdit \? 'Save lesson changes' : 'Add lesson'/);
+  assert.match(source, /Manage lessons/);
+});
+
 test('KCA student registration includes login account fields', async () => {
   const { kcaRegistrationSteps, flattenKcaRegistrationPayload } = await import('../lib/kca-registration-steps.ts');
   const churchStep = kcaRegistrationSteps[0]!;

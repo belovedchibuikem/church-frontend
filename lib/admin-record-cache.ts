@@ -41,6 +41,7 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
     ['lecturer_person_id', 'lecturer_name'],
     ['mentor_person_id', 'mentor_name'],
     ['kca_module_id', 'module_title'],
+    ['module_id', 'module_title'],
     ['kca_cohort_id', 'cohort_name'],
     ['year_id', 'year_name'],
     ['kca_year_id', 'year_name'],
@@ -51,6 +52,10 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
     const labelValue = asText(item[nameKey]);
     if (idValue) details[idKey] = idValue;
     if (labelValue) details[`${idKey}_label`] = labelValue;
+  }
+  if (details.module_id && !details.kca_module_id) {
+    details.kca_module_id = details.module_id;
+    if (details.module_id_label) details.kca_module_id_label = details.module_id_label;
   }
 
   // Friendly preview fields.
