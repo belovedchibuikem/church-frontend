@@ -1,16 +1,6 @@
 import { apiRequestData } from './api-client.ts';
-import { isBrowserRuntime } from './api-config.ts';
-import { serializeForwardedCookies } from './laravel-dev-proxy.ts';
 import { publicRequest } from './public-api.ts';
-
-async function serverSessionHeaders(): Promise<HeadersInit | undefined> {
-  if (isBrowserRuntime()) return undefined;
-  const { cookies } = await import('next/headers');
-  const jar = await cookies();
-  const pairs = jar.getAll();
-  if (pairs.length === 0) return undefined;
-  return { Cookie: serializeForwardedCookies(pairs) };
-}
+import { serverSessionHeaders } from './server-session-headers.ts';
 
 export const BIBLE_VERSION_KEY = 'fhc.bible.version';
 

@@ -363,8 +363,8 @@ function BrandName() {
   return <>{app_name}</>;
 }
 
-function Header() {
-  const pathname = usePathname() ?? '';
+function Header({ path }: { path: string }) {
+  const pathname = path;
   const fixtures = useFixtures();
   const { t } = useLocale();
   const { user, ready } = useAuth();
@@ -6314,7 +6314,7 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
 
   return (
     <div className={`site-app surface-${route.surface}`}>
-      <Header />
+      <Header path={route.path} />
       <Progress route={route} />
       <div className={hasSidebar ? 'member-layout' : 'site-layout'}>
         {isMember ? <Sidebar /> : null}

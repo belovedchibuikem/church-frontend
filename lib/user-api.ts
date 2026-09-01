@@ -5,8 +5,8 @@ import {
   apiRequestResponse,
   type ApiSuccessEnvelope,
 } from './api-client.ts';
-import { BROWSER_SESSION_COOKIE, isBrowserRuntime } from './api-config.ts';
-import { serializeForwardedCookies } from './laravel-dev-proxy.ts';
+import { BROWSER_SESSION_COOKIE } from './api-config.ts';
+import { serverSessionHeaders, hasIncomingCookie } from './server-session-headers.ts';
 import type { JsonObject } from './api-types.ts';
 
 export type UserPreferences = {
@@ -463,18 +463,6 @@ export const EVENT_TICKET_UNAVAILABLE_MESSAGE =
 export const KCA_EVIDENCE_SUBMIT_UNAVAILABLE_MESSAGE =
   'Upload a file first, then submit it as evidence for this assignment.';
 
-/** Forward browser session cookies on RSC/server fetches (credentials alone is not enough cross-origin). */
-async function serverSessionHeaders(): Promise<HeadersInit | undefined> {
-  if (isBrowserRuntime()) return undefined;
-
-  // Dynamic import keeps this module safe for client components.
-  const { cookies } = await import('next/headers');
-  const jar = await cookies();
-  const pairs = jar.getAll();
-  if (pairs.length === 0) return undefined;
-  return { Cookie: serializeForwardedCookies(pairs) };
-}
-
 function asList<T>(data: unknown): T[] {
   if (Array.isArray(data)) return data as T[];
   if (data && typeof data === 'object' && Array.isArray((data as { items?: unknown }).items)) {
@@ -543,12 +531,7 @@ export async function checkUserAuthorization(input: AuthorizationCheckInput): Pr
 
 /** True when a Laravel browser session cookie is present on the incoming request. */
 export async function hasBrowserSessionCookie(): Promise<boolean> {
-  if (isBrowserRuntime()) {
-    return typeof document !== 'undefined' && document.cookie.includes(`${BROWSER_SESSION_COOKIE}=`);
-  }
-  const { cookies } = await import('next/headers');
-  const jar = await cookies();
-  return jar.get(BROWSER_SESSION_COOKIE) !== undefined;
+  return hasIncomingCookie(BROWSER_SESSION_COOKIE);
 }
 
 /** GET /user/notifications */
