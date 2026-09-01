@@ -6,9 +6,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { useLocale } from '@/components/locale-provider';
 import type { SiteRoute } from '@/lib/site-routes';
+import { bibleChapterPath, bookAbbrev } from '@/lib/bible-paths.ts';
 import {
-  bibleChapterPath,
-  bookAbbrev,
   completeUserBibleDay,
   DEFAULT_BIBLE_VERSIONS,
   enrollUserBiblePlan,
