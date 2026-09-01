@@ -134,6 +134,16 @@ export const fr: MessageTree = {
     recoveryCode: 'Code de récupération',
     enterOtp: 'Saisissez le code à 6 chiffres de l’authentificateur.',
     enterRecoveryCode: 'Saisissez un code MFA à usage unique issu de la configuration.',
+    useFingerprint: 'Se connecter avec l’empreinte',
+    fingerprintReason: 'Confirmez votre identité pour ouvrir Family House Connect.',
+    enableFingerprint: 'Utiliser l’empreinte la prochaine fois ?',
+    enableFingerprintCopy:
+      'Déverrouillez cet appareil avec votre empreinte pendant 30 jours. Vous pourrez changer cela dans Réglages.',
+    enableFingerprintAction: 'Activer',
+    notNow: 'Pas maintenant',
+    fingerprintUnavailable: 'L’empreinte n’est pas disponible sur cet appareil.',
+    fingerprintFailed: 'Empreinte non reconnue. Réessayez ou utilisez votre mot de passe.',
+    unlocking: 'Déverrouillage…',
   },
   onboarding: {
     languageLocation: 'Langue et localisation',
@@ -185,6 +195,10 @@ export const fr: MessageTree = {
     helpCopy: 'Guides et contacts',
     logOut: 'Se déconnecter',
     couldNotLoad: 'Impossible de charger les paramètres',
+    fingerprintUnlock: 'Déverrouillage par empreinte',
+    fingerprintUnlockOn: 'Activé — utilisez l’empreinte de cet appareil au lieu du mot de passe',
+    fingerprintUnlockOff: 'Désactivé — connectez-vous avec e-mail et mot de passe',
+    fingerprintNotAvailable: 'Cet appareil ne prend pas en charge l’empreinte ou Face ID',
   },
   errors: {
     tryAgain: 'Réessayer',

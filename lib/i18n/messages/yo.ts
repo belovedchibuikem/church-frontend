@@ -134,6 +134,16 @@ export const yo: MessageTree = {
     recoveryCode: 'Kóòdù ìgbàpadà',
     enterOtp: 'Tẹ kóòdù olùmúdájú ònà mẹ́fà sílẹ̀.',
     enterRecoveryCode: 'Tẹ kóòdù MFA ẹ̀ẹ̀kan ṣoṣo láti ìṣètò olùmúdájú.',
+    useFingerprint: 'Wọlé pẹ̀lú ìtẹka ika',
+    fingerprintReason: 'Jẹ́rìí pé ìwọ ni láti ṣí Family House Connect.',
+    enableFingerprint: 'Lo ìtẹka ika lẹ́ẹ̀kẹẹ̀kan míì?',
+    enableFingerprintCopy:
+      'Ṣí ẹ̀rọ yìí pẹ̀lú ìtẹka ika fún ọjọ́ 30. O lè yí i padà nínú Ètò.',
+    enableFingerprintAction: 'Mú ṣiṣẹ́',
+    notNow: 'Kì í ṣe nísinsinyìí',
+    fingerprintUnavailable: 'Ìtẹka ika kò sí lórí ẹ̀rọ yìí.',
+    fingerprintFailed: 'A kò mọ ìtẹka ika. Gbìyànjú lẹ́ẹ̀kan sí i tàbí lo ọ̀rọ̀ ìgbaniwọlé.',
+    unlocking: 'Ń ṣí…',
   },
   onboarding: {
     languageLocation: 'Èdè àti ibùdó',
@@ -185,6 +195,10 @@ export const yo: MessageTree = {
     helpCopy: 'Ìtọ́sọ́nà àti ọ̀nà ìkànìyàn',
     logOut: 'Jáde',
     couldNotLoad: 'A kò lè kó àwọn ètò wá',
+    fingerprintUnlock: 'Ṣí pẹ̀lú ìtẹka ika',
+    fingerprintUnlockOn: 'Ṣíṣẹ́ — lo ìtẹka ika ẹ̀rọ yìí dípò ọ̀rọ̀ ìgbaniwọlé',
+    fingerprintUnlockOff: 'Pa — wọlé pẹ̀lú ímeèlì àti ọ̀rọ̀ ìgbaniwọlé',
+    fingerprintNotAvailable: 'Ẹ̀rọ yìí kò ṣe àtìlẹ́yìn ìtẹka ika tàbí Face ID',
   },
   errors: {
     tryAgain: 'Gbìyànjú lẹ́ẹ̀kan sí i',

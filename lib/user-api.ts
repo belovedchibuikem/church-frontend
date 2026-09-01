@@ -989,6 +989,121 @@ export async function fetchUserMemberships(): Promise<UserMembership[]> {
   }));
 }
 
+export type UserChurchGroup = {
+  id?: string;
+  public_id?: string;
+  name?: string | null;
+  description?: string | null;
+  church_id?: string | null;
+  church_name?: string | null;
+  member_count?: number | null;
+  membership_status?: string | null;
+  capacity?: number | null;
+};
+
+export type UserChurchAnnouncement = {
+  id?: string;
+  public_id?: string;
+  title?: string | null;
+  body?: string | null;
+  church_id?: string | null;
+  church_name?: string | null;
+  published_at?: string | null;
+};
+
+export type UserChurchDocument = {
+  id?: string;
+  public_id?: string;
+  title?: string | null;
+  description?: string | null;
+  church_id?: string | null;
+  church_name?: string | null;
+  file_asset_id?: string | null;
+  published_at?: string | null;
+};
+
+export type UserMissionSupportRequest = {
+  id?: string;
+  public_id?: string;
+  title?: string | null;
+  details?: string | null;
+  category?: string | null;
+  status?: string | null;
+};
+
+/** GET /user/groups — published groups for the member's active churches. */
+export async function fetchUserGroups(): Promise<UserChurchGroup[]> {
+  const data = await apiRequestData<unknown>('user/groups', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<UserChurchGroup>(data).map((item) => ({
+    ...item,
+    id: item.id ?? item.public_id,
+  }));
+}
+
+/** GET /user/groups/{group} */
+export async function fetchUserGroup(groupId: string): Promise<UserChurchGroup> {
+  const group = await apiRequestData<UserChurchGroup>(`user/groups/${encodeURIComponent(groupId)}`, {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return { ...group, id: group.id ?? group.public_id };
+}
+
+/** POST /user/groups/{group}/join */
+export async function joinUserGroup(groupId: string): Promise<{ id?: string; group_id?: string; status?: string }> {
+  return apiRequestData(`user/groups/${encodeURIComponent(groupId)}/join`, {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+/** POST /user/groups/{group}/leave */
+export async function leaveUserGroup(groupId: string): Promise<{ id?: string; group_id?: string; status?: string }> {
+  return apiRequestData(`user/groups/${encodeURIComponent(groupId)}/leave`, {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+/** GET /user/announcements */
+export async function fetchUserAnnouncements(): Promise<UserChurchAnnouncement[]> {
+  const data = await apiRequestData<unknown>('user/announcements', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<UserChurchAnnouncement>(data).map((item) => ({
+    ...item,
+    id: item.id ?? item.public_id,
+  }));
+}
+
+/** GET /user/documents */
+export async function fetchUserDocuments(): Promise<UserChurchDocument[]> {
+  const data = await apiRequestData<unknown>('user/documents', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<UserChurchDocument>(data).map((item) => ({
+    ...item,
+    id: item.id ?? item.public_id,
+  }));
+}
+
+/** GET /user/mission/support-requests */
+export async function fetchMissionSupportRequests(): Promise<UserMissionSupportRequest[]> {
+  const data = await apiRequestData<unknown>('user/mission/support-requests', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<UserMissionSupportRequest>(data).map((item) => ({
+    ...item,
+    id: item.id ?? item.public_id,
+  }));
+}
+
 /** GET /user/home-churches/{id} */
 export async function fetchHomeChurchDashboard(id: string): Promise<HomeChurchDashboard> {
   const data = await apiRequestData<HomeChurchDashboard>(
@@ -1280,6 +1395,67 @@ export async function fetchKcaMentor(): Promise<{ assigned?: boolean; mentor?: J
 /** GET /user/kca/attendance */
 export async function fetchKcaAttendance(): Promise<JsonObject[]> {
   const data = await apiRequestData<unknown>('user/kca/attendance', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<JsonObject>(data);
+}
+
+export type KcaOrientationStage = {
+  key?: string;
+  title?: string;
+  subtitle?: string;
+  body?: string | null;
+  module_id?: string | null;
+  lesson_id?: string | null;
+  modules?: Array<JsonObject>;
+  mentor?: JsonObject | null;
+};
+
+export type KcaOrientation = {
+  enrolled?: boolean;
+  welcome?: string;
+  stages?: KcaOrientationStage[];
+};
+
+export async function fetchKcaOrientation(): Promise<KcaOrientation> {
+  return apiRequestData<KcaOrientation>('user/kca/orientation', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export type KcaPracticalService = {
+  enrolled?: boolean;
+  departments?: Array<JsonObject>;
+  departments_count?: number;
+  hours_served?: number;
+  status?: string;
+  on_track?: boolean;
+};
+
+export async function fetchKcaPracticalService(): Promise<KcaPracticalService> {
+  return apiRequestData<KcaPracticalService>('user/kca/practical-service', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function fetchKcaDirectory(filters: {
+  q?: string;
+  scope?: string;
+  country?: string;
+  region?: string;
+  locality?: string;
+} = {}): Promise<JsonObject[]> {
+  const params = new URLSearchParams();
+  if (filters.q) params.set('q', filters.q);
+  if (filters.scope) params.set('scope', filters.scope);
+  if (filters.country) params.set('country', filters.country);
+  if (filters.region) params.set('region', filters.region);
+  if (filters.locality) params.set('locality', filters.locality);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequestData<unknown>(`user/kca/directory${suffix}`, {
     method: 'GET',
     headers: await serverSessionHeaders(),
   });

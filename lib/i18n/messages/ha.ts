@@ -134,6 +134,16 @@ export const ha: MessageTree = {
     recoveryCode: 'Lambar ceto',
     enterOtp: 'Shigar da lambar tabbatarwa mai lambobi shida.',
     enterRecoveryCode: 'Shigar da lambar MFA sau ɗaya daga saitin tabbatarwa.',
+    useFingerprint: 'Shiga da yatsa',
+    fingerprintReason: 'Tabbatar kai ne don buɗe Family House Connect.',
+    enableFingerprint: 'Yi amfani da yatsa a gaba?',
+    enableFingerprintCopy:
+      'Buɗe wannan na’ura da yatsa har tsawon kwanaki 30. Za ka iya canza shi a Saituna.',
+    enableFingerprintAction: 'Kunna',
+    notNow: 'Ba yanzu ba',
+    fingerprintUnavailable: 'Yatsa bai samu ba a wannan na’ura.',
+    fingerprintFailed: 'Ba a gane yatsa ba. Gwada kuma ko yi amfani da kalmar sirri.',
+    unlocking: 'Ana buɗewa…',
   },
   onboarding: {
     languageLocation: 'Harshe da wuri',
@@ -185,6 +195,10 @@ export const ha: MessageTree = {
     helpCopy: 'Jagorori da hanyoyin tuntuɓa',
     logOut: 'Fita',
     couldNotLoad: 'An kasa lodin saituna',
+    fingerprintUnlock: 'Buɗe da yatsa',
+    fingerprintUnlockOn: 'Kunna — yi amfani da yatsar na’urar maimakon kalmar sirri',
+    fingerprintUnlockOff: 'Kashe — shiga da imel da kalmar sirri',
+    fingerprintNotAvailable: 'Wannan na’ura ba ta goyon bayan yatsa ko Face ID',
   },
   errors: {
     tryAgain: 'Sake gwadawa',

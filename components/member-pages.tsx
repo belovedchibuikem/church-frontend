@@ -10,10 +10,16 @@ import { designFixturesEnabled, loadChurch, loadEvents, loadSermons } from '@/li
 import {
   displayNameFromUser,
   fetchCurrentUser,
+  downloadUserFile,
   fetchHomeChurchDashboard,
   fetchKcaAttendance,
   fetchKcaDashboard,
+  fetchMissionInvitations,
+  fetchMissionSupportRequests,
+  fetchUserAnnouncements,
   fetchUserDashboard,
+  fetchUserDocuments,
+  fetchUserGroups,
   fetchUserMemberships,
   fetchUserNeeds,
   fetchUserNotifications,
@@ -22,11 +28,17 @@ import {
   fetchUserPrayers,
   formatMoneyMinor,
   formatUserApiError,
+  joinUserGroup,
+  leaveUserGroup,
   submitHomeChurchReport,
   type CurrentUser,
   type HomeChurchDashboard,
   type KcaDashboard,
+  type UserChurchAnnouncement,
+  type UserChurchDocument,
+  type UserChurchGroup,
   type UserMembership,
+  type UserMissionSupportRequest,
   type UserNotification,
   type UserPastoralNeed,
   type UserPaymentIntent,
@@ -452,61 +464,84 @@ export function LiveJourneyPage({ route }: { route: SiteRoute }) {
     );
   }
 
+  const hasChurch = memberships.some((item) => (item.status ?? 'active') === 'active');
+  const hasHomeChurch = memberships.some((item) => Boolean(item.home_church_id));
+  const kcaEnrolled = Boolean(kca?.enrolled || (kca?.modules_with_progress ?? 0) > 0);
   const stages = [
-    { label: t('member.account', { defaultMessage: 'Account' }), done: true, href: '/account/profile', detail: displayName },
     {
-      label: t('nav.church', { defaultMessage: 'Church' }),
-      done: memberships.some((item) => (item.status ?? 'active') === 'active'),
-      href: '/account/church',
-      detail: memberships.length
-        ? t(memberships.length === 1 ? 'member.membershipCountOne' : 'member.membershipCountMany', {
-            defaultMessage: memberships.length === 1 ? '{count} membership' : '{count} memberships',
-            vars: { count: memberships.length },
-          })
+      path: '/account/journey/discover',
+      label: t('member.stageDiscover', { defaultMessage: 'Discover Family House' }),
+      done: true,
+      href: '/find-church',
+      detail: t('member.stageDiscoverDetail', { defaultMessage: 'Find a church or Home Church near you' }),
+    },
+    {
+      path: '/account/journey/join-church',
+      label: t('member.stageJoinChurch', { defaultMessage: 'Join Church' }),
+      done: hasChurch,
+      href: '/join-church/register',
+      detail: hasChurch
+        ? t('member.membershipCountMany', { defaultMessage: '{count} memberships', vars: { count: memberships.length } })
         : t('member.notJoined', { defaultMessage: 'Not joined' }),
     },
     {
-      label: t('member.stageHomeChurch', { defaultMessage: 'Home church' }),
-      done: memberships.some((item) => Boolean(item.home_church_id)),
-      href: '/account/home-church',
-      detail: memberships.some((item) => item.home_church_id)
-        ? t('member.linked', { defaultMessage: 'Linked' })
-        : t('member.notLinked', { defaultMessage: 'Not linked' }),
+      path: '/account/journey/member',
+      label: t('member.stageMember', { defaultMessage: 'Become a member' }),
+      done: hasChurch,
+      href: '/account/church',
+      detail: displayName,
     },
     {
-      label: t('member.kca', { defaultMessage: 'KCA' }),
-      done: Boolean(kca?.enrolled || (kca?.modules_with_progress ?? 0) > 0),
-      href: '/account/kca',
-      detail: kca?.enrolled
+      path: '/account/journey/grow',
+      label: t('member.stageGrow', { defaultMessage: 'Grow spiritually' }),
+      done: prayers.length > 0,
+      href: '/account/spiritual-growth',
+      detail: prayers.length
+        ? t('member.requestCountMany', { defaultMessage: '{count} requests', vars: { count: prayers.length } })
+        : t('member.noneYet', { defaultMessage: 'None yet' }),
+    },
+    {
+      path: '/account/journey/serve',
+      label: t('member.stageServe', { defaultMessage: 'Serve' }),
+      done: false,
+      href: '/account/ministries',
+      detail: t('member.stageServeDetail', { defaultMessage: 'Ministries and departments' }),
+    },
+    {
+      path: '/account/journey/win-souls',
+      label: t('member.stageWinSouls', { defaultMessage: 'Win souls and disciple' }),
+      done: false,
+      href: '/account/mission/invitations',
+      detail: t('member.stageWinSoulsDetail', { defaultMessage: 'Mission invitations and support' }),
+    },
+    {
+      path: '/account/journey/become-kca',
+      label: t('member.stageBecomeKca', { defaultMessage: 'Become KCA / mentor' }),
+      done: kcaEnrolled,
+      href: kcaEnrolled ? '/account/kca' : '/kca/enrol',
+      detail: kcaEnrolled
         ? t('member.modulesProgress', {
             defaultMessage: '{progress}/{total} modules',
-            vars: { progress: kca.modules_with_progress ?? 0, total: kca.modules_total ?? 0 },
+            vars: { progress: kca?.modules_with_progress ?? 0, total: kca?.modules_total ?? 0 },
           })
         : t('member.notEnrolled', { defaultMessage: 'Not enrolled' }),
     },
     {
-      label: t('member.prayer', { defaultMessage: 'Prayer' }),
-      done: prayers.length > 0,
-      href: '/account/prayer-requests',
-      detail: prayers.length
-        ? t(prayers.length === 1 ? 'member.requestCountOne' : 'member.requestCountMany', {
-            defaultMessage: prayers.length === 1 ? '{count} request' : '{count} requests',
-            vars: { count: prayers.length },
-          })
-        : t('member.noneYet', { defaultMessage: 'None yet' }),
+      path: '/account/journey/home-church',
+      label: t('member.stageHomeChurch', { defaultMessage: 'Start or develop a Home Church' }),
+      done: hasHomeChurch,
+      href: '/account/home-church',
+      detail: hasHomeChurch ? t('member.linked', { defaultMessage: 'Linked' }) : t('member.notLinked', { defaultMessage: 'Not linked' }),
     },
     {
-      label: t('member.giving', { defaultMessage: 'Giving' }),
-      done: intents.length > 0,
-      href: '/account/giving',
-      detail: intents.length
-        ? t(intents.length === 1 ? 'member.intentCountOne' : 'member.intentCountMany', {
-            defaultMessage: intents.length === 1 ? '{count} intent' : '{count} intents',
-            vars: { count: intents.length },
-          })
-        : t('member.noneYet', { defaultMessage: 'None yet' }),
+      path: '/account/journey/multiply',
+      label: t('member.stageMultiply', { defaultMessage: 'Plant Church and multiply' }),
+      done: false,
+      href: '/start-home-church',
+      detail: t('member.stageMultiplyDetail', { defaultMessage: 'Start a Home Church and raise leaders' }),
     },
   ];
+  const focused = stages.find((stage) => route.path === stage.path);
   const doneCount = stages.filter((stage) => stage.done).length;
 
   return (
@@ -532,13 +567,26 @@ export function LiveJourneyPage({ route }: { route: SiteRoute }) {
       />
       <div className="journey-steps">
         {stages.map((stage, index) => (
-          <Link className={stage.done ? 'done' : ''} href={stage.href} key={stage.label}>
+          <Link
+            className={`${stage.done ? 'done' : ''}${route.path === stage.path ? ' current' : ''}`}
+            href={stage.path}
+            key={stage.path}
+          >
             <span>{stage.done ? '✓' : index + 1}</span>
             <b>{stage.label}</b>
             <small>{stage.detail}</small>
           </Link>
         ))}
       </div>
+      {focused ? (
+        <section className="panel">
+          <h3>{focused.label}</h3>
+          <p>{focused.detail}</p>
+          <Link className="site-button" href={focused.href}>
+            {t('member.continueStage', { defaultMessage: 'Continue this stage' })}
+          </Link>
+        </section>
+      ) : null}
     </>
   );
 }
@@ -1579,5 +1627,367 @@ export function MemberQuickLinks() {
           </Link>
         ))}
     </div>
+  );
+}
+
+function isActiveGroupMembership(status?: string | null): boolean {
+  const value = (status ?? '').toLowerCase();
+  return value === 'active' || value === 'member' || value === 'joined';
+}
+
+export function LiveGroupsPage({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [groups, setGroups] = useState<UserChurchGroup[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const reload = () =>
+    fetchUserGroups()
+      .then((items) => {
+        setGroups(items);
+        setError(null);
+      })
+      .catch((err) => {
+        setGroups([]);
+        setError(formatUserApiError(err, t('member.unableToLoadGroups', { defaultMessage: 'Unable to load groups.' })));
+      });
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void reload()
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const toggleMembership = async (group: UserChurchGroup) => {
+    const id = group.id;
+    if (!id) return;
+    setBusyId(id);
+    setActionError(null);
+    try {
+      if (isActiveGroupMembership(group.membership_status)) await leaveUserGroup(id);
+      else await joinUserGroup(id);
+      await reload();
+    } catch (err) {
+      setActionError(formatUserApiError(err, t('member.unableToUpdateGroup', { defaultMessage: 'Unable to update group membership.' })));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <>
+      <MemberHero
+        body={t('member.groupsBody', {
+          defaultMessage: 'Join or leave published groups in churches where you hold an active membership.',
+        })}
+        eyebrow={t('member.groupsEyebrow', { defaultMessage: 'GROUPS' })}
+        title={route.title}
+      />
+      {loading ? <p className="panel">{t('member.loadingGroups', { defaultMessage: 'Loading groups…' })}</p> : null}
+      {error ? <p className="panel">{error}</p> : null}
+      {actionError ? <p className="panel">{actionError}</p> : null}
+      {!loading && !error && groups.length === 0 ? (
+        <MemberEmpty
+          action={t('member.findChurch', { defaultMessage: 'Find a church' })}
+          body={t('member.noGroupsBody', {
+            defaultMessage: 'No published groups are available yet. Join a church first, then groups for that church will appear here.',
+          })}
+          href="/find-church"
+          title={t('member.noGroupsYet', { defaultMessage: 'No groups yet' })}
+        />
+      ) : null}
+      {groups.length > 0 ? (
+        <section className="panel table-panel">
+          {groups.map((group) => {
+            const id = group.id ?? '';
+            const joined = isActiveGroupMembership(group.membership_status);
+            return (
+              <div className="list-row rich-row" key={id || group.name}>
+                <span className="thumb">◎</span>
+                <div>
+                  <b>{group.name ?? t('member.group', { defaultMessage: 'Group' })}</b>
+                  <small>
+                    {group.church_name ?? ''}
+                    {group.member_count != null
+                      ? ` · ${t('member.memberCount', { defaultMessage: '{count} members', vars: { count: group.member_count } })}`
+                      : ''}
+                    {group.description ? ` · ${group.description}` : ''}
+                  </small>
+                </div>
+                <MemberStatus toneFrom={group.membership_status ?? 'available'}>
+                  {group.membership_status ?? t('member.available', { defaultMessage: 'available' })}
+                </MemberStatus>
+                <button className="ghost-link" disabled={!id || busyId === id} type="button" onClick={() => void toggleMembership(group)}>
+                  {busyId === id
+                    ? t('member.saving', { defaultMessage: 'Saving…' })
+                    : joined
+                      ? t('member.leaveGroup', { defaultMessage: 'Leave' })
+                      : t('member.joinGroup', { defaultMessage: 'Join' })}
+                </button>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+export function LiveAnnouncementsPage({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<UserChurchAnnouncement[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void fetchUserAnnouncements()
+      .then((next) => {
+        if (!cancelled) {
+          setItems(next);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setItems([]);
+          setError(formatUserApiError(err, t('member.unableToLoadAnnouncements', { defaultMessage: 'Unable to load announcements.' })));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  return (
+    <>
+      <MemberHero
+        body={t('member.announcementsBody', { defaultMessage: 'Published updates from churches where you are an active member.' })}
+        eyebrow={t('member.announcementsEyebrow', { defaultMessage: 'ANNOUNCEMENTS' })}
+        title={route.title}
+      />
+      {loading ? <p className="panel">{t('member.loadingAnnouncements', { defaultMessage: 'Loading announcements…' })}</p> : null}
+      {error ? <p className="panel">{error}</p> : null}
+      {!loading && !error && items.length === 0 ? (
+        <MemberEmpty
+          action={t('member.openChurch', { defaultMessage: 'Open my church' })}
+          body={t('member.noAnnouncementsBody', { defaultMessage: 'There are no published announcements for your churches yet.' })}
+          href="/account/church"
+          title={t('member.noAnnouncementsYet', { defaultMessage: 'No announcements yet' })}
+        />
+      ) : null}
+      {items.map((item) => (
+        <article className="panel" key={item.id ?? item.title}>
+          <span className="eyebrow">{item.church_name ?? formatWhen(item.published_at)}</span>
+          <h3>{item.title ?? t('member.announcement', { defaultMessage: 'Announcement' })}</h3>
+          <p>{item.body ?? ''}</p>
+          <small>{formatWhen(item.published_at)}</small>
+        </article>
+      ))}
+    </>
+  );
+}
+
+export function LiveDocumentsPage({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<UserChurchDocument[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void fetchUserDocuments()
+      .then((next) => {
+        if (!cancelled) {
+          setItems(next);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setItems([]);
+          setError(formatUserApiError(err, t('member.unableToLoadDocuments', { defaultMessage: 'Unable to load documents.' })));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const openDocument = async (document: UserChurchDocument) => {
+    const fileId = document.file_asset_id;
+    if (!fileId) return;
+    setBusyId(fileId);
+    setActionError(null);
+    try {
+      const response = await downloadUserFile(fileId, true);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (err) {
+      setActionError(formatUserApiError(err, t('member.unableToOpenDocument', { defaultMessage: 'Unable to open this document.' })));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <>
+      <MemberHero
+        body={t('member.documentsBody', { defaultMessage: 'Published church documents available to your memberships.' })}
+        eyebrow={t('member.documentsEyebrow', { defaultMessage: 'DOCUMENTS' })}
+        secondary={{ href: '/account/downloads', label: t('member.accountFiles', { defaultMessage: 'Account files' }) }}
+        title={route.title}
+      />
+      {loading ? <p className="panel">{t('member.loadingDocuments', { defaultMessage: 'Loading documents…' })}</p> : null}
+      {error ? <p className="panel">{error}</p> : null}
+      {actionError ? <p className="panel">{actionError}</p> : null}
+      {!loading && !error && items.length === 0 ? (
+        <MemberEmpty
+          action={t('member.accountFiles', { defaultMessage: 'Account files' })}
+          body={t('member.noDocumentsBody', { defaultMessage: 'No published church documents are available yet.' })}
+          href="/account/downloads"
+          title={t('member.noDocumentsYet', { defaultMessage: 'No documents yet' })}
+        />
+      ) : null}
+      {items.length > 0 ? (
+        <section className="panel table-panel">
+          {items.map((item) => {
+            const fileId = item.file_asset_id ?? '';
+            return (
+              <div className="list-row rich-row" key={item.id ?? item.title}>
+                <span className="thumb">▤</span>
+                <div>
+                  <b>{item.title ?? t('member.document', { defaultMessage: 'Document' })}</b>
+                  <small>
+                    {item.church_name ?? ''}
+                    {item.description ? ` · ${item.description}` : ''}
+                    {item.published_at ? ` · ${formatWhen(item.published_at)}` : ''}
+                  </small>
+                </div>
+                <span />
+                {fileId ? (
+                  <button className="ghost-link" disabled={busyId === fileId} type="button" onClick={() => void openDocument(item)}>
+                    {busyId === fileId
+                      ? t('member.opening', { defaultMessage: 'Opening…' })
+                      : t('member.download', { defaultMessage: 'Download' })}
+                  </button>
+                ) : (
+                  <span className="status">{t('member.noFile', { defaultMessage: 'No file' })}</span>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+export function LiveMissionMemberPage({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [invitations, setInvitations] = useState<Array<{ id: string; status: string }>>([]);
+  const [supportRequests, setSupportRequests] = useState<UserMissionSupportRequest[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void Promise.allSettled([fetchMissionInvitations(), fetchMissionSupportRequests()])
+      .then(([inviteResult, supportResult]) => {
+        if (cancelled) return;
+        if (inviteResult.status === 'fulfilled') setInvitations(inviteResult.value);
+        if (supportResult.status === 'fulfilled') setSupportRequests(supportResult.value);
+        if (inviteResult.status === 'rejected' && supportResult.status === 'rejected') {
+          setError(t('member.unableToLoadMission', { defaultMessage: 'Unable to load your mission requests.' }));
+        } else {
+          setError(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const showInvites = route.path !== '/account/mission/support-requests';
+  const showSupport = route.path !== '/account/mission/invitations';
+
+  return (
+    <>
+      <MemberHero
+        action={{ href: '/mission/crusades/invite', label: t('member.inviteCrusade', { defaultMessage: 'Invite a crusade' }) }}
+        body={t('member.missionMemberBody', {
+          defaultMessage: 'Track crusade invitations and support requests you submitted. Soul follow-up and team assignment stay on the admin and worker surfaces.',
+        })}
+        eyebrow={t('member.missionEyebrow', { defaultMessage: 'MISSION' })}
+        secondary={{ href: '/mission/support', label: t('member.supportMission', { defaultMessage: 'Support a mission' }) }}
+        title={route.title}
+      />
+      {loading ? <p className="panel">{t('member.loadingMission', { defaultMessage: 'Loading mission requests…' })}</p> : null}
+      {error ? <p className="panel">{error}</p> : null}
+      {showInvites ? (
+        <section className="panel table-panel">
+          <h3>{t('member.crusadeInvitations', { defaultMessage: 'Crusade invitations' })}</h3>
+          {invitations.length === 0 && !loading ? (
+            <p>{t('member.noInvitations', { defaultMessage: 'You have not submitted a crusade invitation yet.' })}</p>
+          ) : null}
+          {invitations.map((item) => (
+            <div className="list-row rich-row" key={item.id}>
+              <span className="thumb">🌍</span>
+              <div>
+                <b>{item.id}</b>
+                <small>{t('member.invitationReference', { defaultMessage: 'Invitation reference' })}</small>
+              </div>
+              <MemberStatus toneFrom={item.status}>{item.status}</MemberStatus>
+              <Link className="ghost-link" href="/mission/crusades/request/status">
+                {t('member.viewStatus', { defaultMessage: 'Status' })}
+              </Link>
+            </div>
+          ))}
+        </section>
+      ) : null}
+      {showSupport ? (
+        <section className="panel table-panel">
+          <h3>{t('member.supportRequests', { defaultMessage: 'Support requests' })}</h3>
+          {supportRequests.length === 0 && !loading ? (
+            <p>{t('member.noSupportRequests', { defaultMessage: 'You have not submitted a mission support request yet.' })}</p>
+          ) : null}
+          {supportRequests.map((item) => (
+            <div className="list-row rich-row" key={item.id ?? item.title}>
+              <span className="thumb">♡</span>
+              <div>
+                <b>{item.title ?? item.id ?? t('member.supportRequest', { defaultMessage: 'Support request' })}</b>
+                <small>{item.details ?? item.category ?? ''}</small>
+              </div>
+              <MemberStatus toneFrom={item.status ?? 'submitted'}>{item.status ?? t('member.submitted', { defaultMessage: 'submitted' })}</MemberStatus>
+              <span />
+            </div>
+          ))}
+        </section>
+      ) : null}
+    </>
   );
 }

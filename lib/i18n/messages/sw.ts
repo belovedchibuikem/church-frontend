@@ -134,6 +134,16 @@ export const sw: MessageTree = {
     recoveryCode: 'Msimbo wa kurejesha',
     enterOtp: 'Weka msimbo wa tarakimu 6 wa kithibitishaji.',
     enterRecoveryCode: 'Weka msimbo wa MFA wa mara moja kutoka usanidi wa kithibitishaji.',
+    useFingerprint: 'Ingia kwa alama ya kidole',
+    fingerprintReason: 'Thibitisha ni wewe ili ufungue Family House Connect.',
+    enableFingerprint: 'Tumia alama ya kidole wakati ujao?',
+    enableFingerprintCopy:
+      'Fungua kifaa hiki kwa alama ya kidole kwa siku 30. Unaweza kubadilisha katika Mipangilio.',
+    enableFingerprintAction: 'Washa',
+    notNow: 'Sio sasa',
+    fingerprintUnavailable: 'Alama ya kidole haipatikani kwenye kifaa hiki.',
+    fingerprintFailed: 'Alama ya kidole haikutambuliwa. Jaribu tena au tumia nenosiri.',
+    unlocking: 'Inafungua…',
   },
   onboarding: {
     languageLocation: 'Lugha na eneo',
@@ -185,6 +195,10 @@ export const sw: MessageTree = {
     helpCopy: 'Miongozo na njia za mawasiliano',
     logOut: 'Toka',
     couldNotLoad: 'Imeshindwa kupakia mipangilio',
+    fingerprintUnlock: 'Fungua kwa alama ya kidole',
+    fingerprintUnlockOn: 'Imewashwa — tumia alama ya kidole ya kifaa hiki badala ya nenosiri',
+    fingerprintUnlockOff: 'Imezimwa — ingia kwa barua pepe na nenosiri',
+    fingerprintNotAvailable: 'Kifaa hiki hakitumii alama ya kidole au Face ID',
   },
   errors: {
     tryAgain: 'Jaribu tena',

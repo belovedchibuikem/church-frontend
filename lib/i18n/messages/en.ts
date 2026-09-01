@@ -134,6 +134,16 @@ export const en: MessageTree = {
     recoveryCode: 'Recovery code',
     enterOtp: 'Enter the 6-digit authenticator code.',
     enterRecoveryCode: 'Enter a one-time MFA recovery code from authenticator setup.',
+    useFingerprint: 'Sign in with fingerprint',
+    fingerprintReason: 'Confirm it is you to open Family House Connect.',
+    enableFingerprint: 'Use fingerprint next time?',
+    enableFingerprintCopy:
+      'Unlock this device with your fingerprint for 30 days. You can change this in Settings.',
+    enableFingerprintAction: 'Enable',
+    notNow: 'Not now',
+    fingerprintUnavailable: 'Fingerprint is not available on this device.',
+    fingerprintFailed: 'Fingerprint was not recognized. Try again or use your password.',
+    unlocking: 'Unlocking…',
   },
   onboarding: {
     languageLocation: 'Language & Location',
@@ -185,6 +195,10 @@ export const en: MessageTree = {
     helpCopy: 'Guides and contact options',
     logOut: 'Log Out',
     couldNotLoad: 'Could not load settings',
+    fingerprintUnlock: 'Fingerprint unlock',
+    fingerprintUnlockOn: 'On — use this device’s fingerprint instead of your password',
+    fingerprintUnlockOff: 'Off — sign in with email and password',
+    fingerprintNotAvailable: 'This device does not support fingerprint or Face ID',
   },
   errors: {
     tryAgain: 'Try Again',

@@ -97,8 +97,22 @@ export const siteRoutes: SiteRoute[] = [
   ...make('Account', 'member', 'dashboard', [
     ['/account', 'Welcome back, John!'],
     ['/account/journey', 'My Kingdom Journey'],
+    ['/account/journey/discover', 'Discover Family House'],
+    ['/account/journey/join-church', 'Join Church'],
+    ['/account/journey/member', 'Become a Member'],
+    ['/account/journey/grow', 'Grow Spiritually'],
+    ['/account/journey/serve', 'Serve'],
+    ['/account/journey/win-souls', 'Win Souls and Disciple'],
+    ['/account/journey/become-kca', 'Become KCA / Mentor'],
+    ['/account/journey/home-church', 'Start or Develop a Home Church'],
+    ['/account/journey/multiply', 'Plant Church and Multiply'],
     ['/account/church', 'My Church'],
     ['/account/home-church', 'My Home Church'],
+    ['/account/groups', 'My Groups'],
+    ['/account/announcements', 'Church Announcements'],
+    ['/account/documents', 'Church Documents'],
+    ['/account/mission/invitations', 'My Crusade Invitations'],
+    ['/account/mission/support-requests', 'My Mission Support Requests'],
     ['/account/ministry-history', 'My Ministry Journey'],
     ['/account/spiritual-growth', 'Spiritual Growth'],
     ['/account/ministries', 'My Ministries & Departments'],
@@ -198,6 +212,8 @@ export const siteRoutes: SiteRoute[] = [
     ['/account/kca/mentor', 'My Mentor'],
     ['/account/kca/attendance', 'KCA Attendance'],
     ['/account/kca/orientation', 'KCA Orientation'],
+    ['/account/kca/practical-service', 'KCA Practical Service'],
+    ['/account/kca/directory', 'KCA Directory'],
   ]),
   ...make('KCA', 'member', 'document', [
     ['/kca/admission-letter', 'Admission Letter', 'Download PDF'],
@@ -328,6 +344,19 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
     };
   }
 
+  const groupMatch = path.match(/^\/account\/groups\/([0-9A-HJKMNP-TV-Z]{26})$/i);
+  if (groupMatch) {
+    return {
+      path,
+      title: 'Group',
+      action: 'Join group',
+      subtitle: subtitles.Account,
+      surface: 'member',
+      kind: 'detail',
+      section: 'Account',
+    };
+  }
+
   const kcaAssignmentMatch = path.match(/^\/account\/kca\/assignments\/([0-9A-HJKMNP-TV-Z]{26})$/i);
   if (kcaAssignmentMatch) {
     return {
@@ -362,6 +391,9 @@ export const memberNavGroups = [
     items: [
       { href: '/account/church', label: 'My Church', icon: '⛪' },
       { href: '/account/home-church', label: 'Home Church', icon: '⌂' },
+      { href: '/account/groups', label: 'Groups', icon: '◎' },
+      { href: '/account/announcements', label: 'Announcements', icon: '◇' },
+      { href: '/account/documents', label: 'Documents', icon: '▤' },
       { href: '/account/kca', label: 'KCA', icon: '🎓' },
     ],
   },
@@ -383,6 +415,7 @@ export const memberNavGroups = [
     label: 'Steward',
     items: [
       { href: '/account/giving', label: 'Giving', icon: '💝' },
+      { href: '/account/mission/invitations', label: 'Mission', icon: '🌍' },
       { href: '/account/messages', label: 'Messages', icon: '💬' },
       { href: '/account/notifications', label: 'Notifications', icon: '🔔' },
       { href: '/account/downloads', label: 'Downloads', icon: '⬇' },

@@ -4,6 +4,7 @@ import { ApiError } from '../lib/api-client.ts';
 import {
   downloadPressPublication,
   fetchEventTicket,
+  fetchUserGroups,
   formatByteSize,
   formatUserApiError,
   isNotFoundError,
@@ -225,4 +226,28 @@ test('downloadPressPublication returns 200 bytes and throws on 404 JSON', async 
       return true;
     },
   );
+});
+
+test('fetchUserGroups reads GET /user/groups', async () => {
+  installFetch((call) => {
+    if (call.url.includes('/auth/csrf-cookie')) {
+      return new Response(JSON.stringify({ data: { csrf_cookie: true, csrf_token: 'test-csrf' }, meta: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    assert.match(call.url, /\/user\/groups$/);
+    assert.equal(call.method, 'GET');
+    return new Response(
+      JSON.stringify({
+        data: [{ id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', name: 'Youth', membership_status: 'active' }],
+        meta: {},
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  });
+
+  const groups = await fetchUserGroups();
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]?.name, 'Youth');
 });

@@ -134,6 +134,16 @@ export const ar: MessageTree = {
     recoveryCode: 'رمز الاسترداد',
     enterOtp: 'أدخل رمز المصادقة المكوّن من ستة أرقام.',
     enterRecoveryCode: 'أدخل رمز MFA لمرة واحدة من إعداد المصادقة.',
+    useFingerprint: 'تسجيل الدخول بالبصمة',
+    fingerprintReason: 'أكّد هويتك لفتح Family House Connect.',
+    enableFingerprint: 'استخدام البصمة في المرة القادمة؟',
+    enableFingerprintCopy:
+      'افتح هذا الجهاز ببصمتك لمدة 30 يومًا. يمكنك تغيير ذلك من الإعدادات.',
+    enableFingerprintAction: 'تفعيل',
+    notNow: 'ليس الآن',
+    fingerprintUnavailable: 'البصمة غير متاحة على هذا الجهاز.',
+    fingerprintFailed: 'لم يتم التعرف على البصمة. حاول مرة أخرى أو استخدم كلمة المرور.',
+    unlocking: 'جارٍ الفتح…',
   },
   onboarding: {
     languageLocation: 'اللغة والموقع',
@@ -185,6 +195,10 @@ export const ar: MessageTree = {
     helpCopy: 'أدلة ووسائل التواصل',
     logOut: 'تسجيل الخروج',
     couldNotLoad: 'تعذّر تحميل الإعدادات',
+    fingerprintUnlock: 'فتح بالبصمة',
+    fingerprintUnlockOn: 'مفعّل — استخدم بصمة هذا الجهاز بدل كلمة المرور',
+    fingerprintUnlockOff: 'متوقف — سجّل الدخول بالبريد وكلمة المرور',
+    fingerprintNotAvailable: 'هذا الجهاز لا يدعم البصمة أو Face ID',
   },
   errors: {
     tryAgain: 'حاول مرة أخرى',

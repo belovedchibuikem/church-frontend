@@ -134,6 +134,16 @@ export const ig: MessageTree = {
     recoveryCode: 'Koodu nnapụta',
     enterOtp: 'Tinye koodu nkwenye ọnụọgụ isii.',
     enterRecoveryCode: 'Tinye koodu MFA otu oge sitere na nhazi nkwenye.',
+    useFingerprint: 'Banye jiri mkpịsị aka',
+    fingerprintReason: 'Kwenye na ọ bụ gị ka ịmepee Family House Connect.',
+    enableFingerprint: 'Jiri mkpịsị aka oge ọzọ?',
+    enableFingerprintCopy:
+      'Mepee ngwaọrụ a jiri mkpịsị aka gị ruo ụbọchị 30. Ị nwere ike ịgbanwe ya na Mwube.',
+    enableFingerprintAction: 'Gbanye',
+    notNow: 'Ọ bụghị ugbu a',
+    fingerprintUnavailable: 'Mkpịsị aka adịghị na ngwaọrụ a.',
+    fingerprintFailed: 'A naghị ama mkpịsị aka. Nwaa ọzọ ma ọ bụ jiri okwuntughe.',
+    unlocking: 'Na-emepe…',
   },
   onboarding: {
     languageLocation: 'Asụsụ na ebe',
@@ -185,6 +195,10 @@ export const ig: MessageTree = {
     helpCopy: 'Ntụziaka na ụzọ kọntaktị',
     logOut: 'Pụọ',
     couldNotLoad: 'Enweghị ike ibudata mwube',
+    fingerprintUnlock: 'Mepee jiri mkpịsị aka',
+    fingerprintUnlockOn: 'Gbanyere — jiri mkpịsị aka ngwaọrụ a kama okwuntughe',
+    fingerprintUnlockOff: 'Gbanyụọ — banye jiri ozi-e na okwuntughe',
+    fingerprintNotAvailable: 'Ngwaọrụ a anaghị akwado mkpịsị aka ma ọ bụ Face ID',
   },
   errors: {
     tryAgain: 'Nwaa ọzọ',

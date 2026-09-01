@@ -12,11 +12,15 @@ import { GiveReceiptScreen, GiveRecurringScreen, GiveScreen } from '@/components
 import { givingFundToPurpose } from '@/lib/giving-flow';
 import {
   LiveAccountCalendar,
+  LiveAnnouncementsPage,
   LiveAttendancePage,
+  LiveDocumentsPage,
   LiveGivingHistoryPage,
+  LiveGroupsPage,
   LiveHomeChurchApplicationPage,
   LiveJourneyPage,
   LiveMinistriesPage,
+  LiveMissionMemberPage,
   LiveMyChurchPage,
   LiveMyEventsPage,
   LiveMyHomeChurchPage,
@@ -103,6 +107,9 @@ import {
   fetchKcaModules,
   fetchKcaLesson,
   fetchKcaAssignment,
+  fetchKcaOrientation,
+  fetchKcaPracticalService,
+  fetchKcaDirectory,
   submitKcaEvidence,
   downloadKcaCertificatePdf,
   completeKcaLesson,
@@ -319,12 +326,16 @@ const memberItemKeys: Record<string, string> = {
   '/account/journey': 'member.myJourney',
   '/account/church': 'member.myChurch',
   '/account/home-church': 'member.homeChurch',
+  '/account/groups': 'member.groups',
+  '/account/announcements': 'member.announcements',
+  '/account/documents': 'member.documents',
   '/account/kca': 'member.kca',
   '/account/events': 'member.events',
   '/account/calendar': 'member.calendar',
   '/account/prayer-requests': 'member.prayer',
   '/account/need-requests': 'member.needs',
   '/account/giving': 'member.giving',
+  '/account/mission/invitations': 'member.mission',
   '/account/messages': 'member.messages',
   '/account/notifications': 'member.notifications',
   '/account/downloads': 'member.downloads',
@@ -2779,14 +2790,14 @@ function KcaUnavailable({ title = 'KCA learning', message }: { title?: string; m
 function KcaOrientationMember() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [access, setAccess] = useState<KcaAccess | null>(null);
+  const [orientation, setOrientation] = useState<import('@/lib/user-api').KcaOrientation | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchKcaMe()
+    void fetchKcaOrientation()
       .then((data) => {
         if (cancelled) return;
-        setAccess(data);
+        setOrientation(data);
         setState('ready');
       })
       .catch((err) => {
@@ -2802,25 +2813,144 @@ function KcaOrientationMember() {
   if (state === 'loading') return <p className="panel">Loading orientation…</p>;
   if (state === 'error') return <KcaUnavailable title="KCA Orientation" message={error ?? undefined} />;
 
-  if (access?.destination !== 'orientation' && access?.destination !== 'student_dashboard') {
-    return (
-      <section className="panel">
-        <h3>KCA Orientation</h3>
-        <p>{access?.next_step ?? 'Orientation is scheduled after interview or orientation is assigned.'}</p>
-        <Link className="site-button" href={kcaHrefForDestination(access?.destination)}>
-          View current status
-        </Link>
-      </section>
-    );
-  }
-
   return (
     <section className="panel">
       <h3>KCA Orientation</h3>
-      <p>{access?.next_step ?? 'Complete orientation requirements before admission continues.'}</p>
+      <p>{orientation?.welcome ?? 'Walk through each stage of orientation.'}</p>
       <ul className="check-list">
-        {(access?.timeline ?? []).map((event, index) => (
-          <li key={`${String(event.at ?? index)}`}>{String(event.action ?? 'update')}</li>
+        {(orientation?.stages ?? []).map((stage) => {
+          const href = stage.lesson_id
+            ? `/account/kca/lessons/${stage.lesson_id}`
+            : stage.module_id
+              ? `/account/kca/modules/${stage.module_id}`
+              : stage.key === 'mentors'
+                ? '/account/kca/mentor'
+                : stage.key === 'path'
+                  ? '/account/kca/modules'
+                  : '/account/kca/orientation';
+          return (
+            <li key={stage.key ?? stage.title}>
+              <Link href={href}>
+                <strong>{stage.title}</strong>
+                {stage.subtitle ? ` — ${stage.subtitle}` : ''}
+              </Link>
+              {stage.body ? <p>{stage.body}</p> : null}
+            </li>
+          );
+        })}
+      </ul>
+      <Link className="site-button" href="/account/kca/practical-service">
+        Continue to practical service
+      </Link>
+    </section>
+  );
+}
+
+function KcaPracticalServiceMember() {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [payload, setPayload] = useState<import('@/lib/user-api').KcaPracticalService | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaPracticalService()
+      .then((data) => {
+        if (cancelled) return;
+        setPayload(data);
+        setState('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatUserApiError(err));
+        setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state === 'loading') return <p className="panel">Loading practical service…</p>;
+  if (state === 'error') return <KcaUnavailable title="KCA Practical Service" message={error ?? undefined} />;
+
+  return (
+    <section className="panel">
+      <h3>KCA Practical Service</h3>
+      <p>Serve in at least two departments. Counts and hours come from your KCA assignments and attendance.</p>
+      <p>
+        {payload?.departments_count ?? 0} departments · {payload?.hours_served ?? 0} hours ·{' '}
+        {payload?.on_track ? 'On track' : 'Keep serving'}
+      </p>
+      <ul className="check-list">
+        {(payload?.departments ?? []).map((row) => (
+          <li key={String(row.id)}>
+            <Link href={row.id ? `/account/kca/assignments/${String(row.id)}` : '/account/kca/assignments'}>
+              {String(row.title ?? 'Department')} — {String(row.state ?? '')}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link className="site-button" href="/account/kca/assignments">
+        Add another department
+      </Link>
+    </section>
+  );
+}
+
+function KcaDirectoryMember() {
+  const [scope, setScope] = useState('all');
+  const [people, setPeople] = useState<Array<Record<string, unknown>>>([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setState('loading');
+    void fetchKcaDirectory({ scope })
+      .then((rows) => {
+        if (cancelled) return;
+        setPeople(rows as Array<Record<string, unknown>>);
+        setState('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatUserApiError(err));
+        setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
+  if (state === 'error') return <KcaUnavailable title="KCA Directory" message={error ?? undefined} />;
+
+  return (
+    <section className="panel">
+      <h3>KCA Directory</h3>
+      <p>View Kingdom Change Agents in your country, state, and LGA — and in other places.</p>
+      <div className="chip-row">
+        {[
+          ['all', 'All'],
+          ['own_country', 'My country'],
+          ['own_state', 'My state'],
+          ['own_lga', 'My LGA'],
+          ['other_country', 'Other countries'],
+          ['other_state', 'Other states'],
+          ['other_lga', 'Other LGAs'],
+        ].map(([value, label]) => (
+          <button key={value} type="button" className={scope === value ? 'site-button' : 'ghost-link'} onClick={() => setScope(value)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {state === 'loading' ? <p>Loading directory…</p> : null}
+      <ul className="check-list">
+        {people.map((person) => (
+          <li key={String(person.id)}>
+            {String(person.display_name ?? 'Member')}
+            {[person.locality, person.region, person.country].filter(Boolean).length
+              ? ` — ${[person.locality, person.region, person.country].filter(Boolean).join(', ')}`
+              : ''}
+          </li>
         ))}
       </ul>
     </section>
@@ -3811,6 +3941,8 @@ function Dashboard({ route }: { route: SiteRoute }) {
   if (route.path.startsWith('/account/kca/lessons/')) return <KcaLessonPlayer route={route} />;
   if (route.path === '/account/kca/certificate') return <LiveCertificateDocument route={route} />;
   if (route.path === '/account/kca/orientation') return <KcaOrientationMember />;
+  if (route.path === '/account/kca/practical-service') return <KcaPracticalServiceMember />;
+  if (route.path === '/account/kca/directory') return <KcaDirectoryMember />;
   if (route.path.startsWith('/account/kca')) {
     if (!designFixturesEnabled()) {
       const message = route.path.includes('/certificate')
@@ -3839,8 +3971,12 @@ function Dashboard({ route }: { route: SiteRoute }) {
 
   if (route.path === '/account/church') return <LiveMyChurchPage route={route} />;
   if (route.path === '/account/home-church') return <LiveMyHomeChurchPage route={route} />;
+  if (route.path === '/account/groups' || route.path.startsWith('/account/groups/')) return <LiveGroupsPage route={route} />;
+  if (route.path === '/account/announcements') return <LiveAnnouncementsPage route={route} />;
+  if (route.path === '/account/documents') return <LiveDocumentsPage route={route} />;
+  if (route.path.startsWith('/account/mission')) return <LiveMissionMemberPage route={route} />;
   if (route.path === '/account/events') return <LiveMyEventsPage route={route} />;
-  if (route.path === '/account/journey') return <LiveJourneyPage route={route} />;
+  if (route.path === '/account/journey' || route.path.startsWith('/account/journey/')) return <LiveJourneyPage route={route} />;
   if (route.path === '/account/ministries' || route.path === '/account/ministry-history') {
     return <LiveMinistriesPage route={route} />;
   }

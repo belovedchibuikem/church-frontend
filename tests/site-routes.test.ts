@@ -72,6 +72,33 @@ test('live KCA module and assignment links resolve as protected member pages', (
   assert.equal(assignment?.kind, 'detail');
 });
 
+test('member community, mission, and journey stage routes match mobile member surfaces', () => {
+  for (const path of [
+    '/account/groups',
+    '/account/announcements',
+    '/account/documents',
+    '/account/mission/invitations',
+    '/account/mission/support-requests',
+    '/account/journey/discover',
+    '/account/journey/join-church',
+    '/account/journey/member',
+    '/account/journey/grow',
+    '/account/journey/serve',
+    '/account/journey/win-souls',
+    '/account/journey/become-kca',
+    '/account/journey/home-church',
+    '/account/journey/multiply',
+  ]) {
+    const route = findSiteRoute(path);
+    assert.ok(route, `Missing ${path}`);
+    assert.equal(route?.surface, 'member');
+  }
+
+  const group = findSiteRoute('/account/groups/01J8GRP1234567890ABCDEFGHJ');
+  assert.equal(group?.surface, 'member');
+  assert.equal(group?.kind, 'detail');
+});
+
 test('member auth registration and verification routes are available', () => {
   for (const path of [
     '/login',
