@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { useLocale } from '@/components/locale-provider';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
@@ -20,6 +20,12 @@ import { executeAdminAction, extractUlid, formatAdminMutationError } from '../li
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
 import { flattenKcaRegistrationPayload, kcaRegistrationSteps } from '../lib/kca-registration-steps';
+import {
+  captureKcaModuleFormValues,
+  kcaModuleMutationPayload,
+  validateKcaModuleFormValues,
+  type KcaModuleFormValues,
+} from '../lib/kca-module-builder';
 import { EntitySearchSelect } from './entity-search-select';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
@@ -484,7 +490,8 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
   const fields = fieldsForEntity('kca_module');
   const live = !shouldUseDesignFixtures();
   const fixtureValues = normalizeDetailValues(screen.details ?? {});
-  const [values, setValues] = useState<Record<string, string>>(() => (live ? {} : fixtureValues));
+  const moduleDraftRef = useRef<KcaModuleFormValues>(live ? {} : fixtureValues);
+  const [values, setValues] = useState<KcaModuleFormValues>(() => moduleDraftRef.current);
   const steps = screen.tabs ?? [];
   const wizard = useAdminWizardStep(steps);
   const [busy, setBusy] = useState(false);
@@ -492,31 +499,20 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
   const [error, setError] = useState<string | null>(null);
   const [moduleId, setModuleId] = useState<string | null>(null);
 
-  function captureModuleFields(): Record<string, string> {
-    const card = document.querySelector('.kca-form-card');
-    const nextValues = { ...values };
-    card?.querySelectorAll('input[name], select[name], textarea[name]').forEach((node) => {
-      const el = node as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-      if (!el.name) return;
-      if (el.type === 'checkbox') {
-        nextValues[el.name] = (el as HTMLInputElement).checked ? 'true' : '';
-      } else {
-        nextValues[el.name] = el.value;
-      }
-    });
+  function captureModuleFields(): KcaModuleFormValues {
+    const card = document.querySelector('[data-kca-module-builder="true"]');
+    const nextValues = captureKcaModuleFormValues(card, moduleDraftRef.current);
+    moduleDraftRef.current = nextValues;
     setValues(nextValues);
     return nextValues;
   }
 
   async function onFinishModule() {
     if (!live) return;
-    const payload = captureModuleFields();
-    const code = payload.code?.trim();
-    const title = payload.title?.trim();
-    const sequence = payload.sequence?.trim();
-    const durationDays = payload.duration_days?.trim();
-    if (!code || !title || !sequence || !durationDays) {
-      setError('Module code, title, sequence, and learning days are required. Return to Basic Info and complete those fields.');
+    const draft = captureModuleFields();
+    const validationError = validateKcaModuleFormValues(draft);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setBusy(true);
@@ -525,8 +521,8 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
     try {
       const created = await executeAdminAction({
         route: screen.route,
-        label: t('member.kca.createModule', { defaultMessage: 'Create module' }),
-        payload,
+        label: 'Create module',
+        payload: kcaModuleMutationPayload(draft),
         scope: CATALOG_GLOBAL_SCOPE,
       });
       if (created.id) setModuleId(created.id);
@@ -543,7 +539,7 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
   return (
     <div className="kca-builder" data-admin-wizard="true">
       <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} className="kca-builder-steps" itemClassName="" activeClassName="current" />
-      <article className="card kca-form-card">
+      <article className="card kca-form-card" data-kca-module-builder="true">
         <header>
           <div>
             <span className="kca-overline">{wizard.isFirst ? t('member.kca.newModule', { defaultMessage: 'New module' }) : t('member.kca.stepOf', { defaultMessage: 'Step {current} of {total}', vars: { current: wizard.currentStep + 1, total: steps.length } })}</span>
@@ -586,11 +582,14 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
 
         {wizard.currentStep >= 4 && (
           <dl className="kca-review-summary">
-            {Object.entries(values).filter(([, value]) => value.trim() !== '').map(([key, value]) => (
+            {Object.entries(values).filter(([, value]) => String(value).trim() !== '').map(([key, value]) => (
               <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{value}</dd></div>
             ))}
             <div><dt>{t('member.kca.lessons', { defaultMessage: 'Lessons' })}</dt><dd>{t('member.kca.addAfterCreate', { defaultMessage: 'Add via Lessons after module is created' })}</dd></div>
             <div><dt>{t('member.kca.prerequisites', { defaultMessage: 'Prerequisites' })}</dt><dd>{t('member.kca.noPrerequisiteApi', { defaultMessage: 'No prerequisite admin API yet' })}</dd></div>
+            {(['code', 'title', 'sequence', 'duration_days'] as const).map((name) => (
+              <input key={name} type="hidden" name={name} value={values[name] ?? ''} readOnly />
+            ))}
           </dl>
         )}
 

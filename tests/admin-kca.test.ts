@@ -85,10 +85,40 @@ test('create cohort is not treated as a preview overlay', async () => {
 });
 
 test('KCA module builder preserves basic info across wizard steps', async () => {
+  const {
+    captureKcaModuleFormValues,
+    kcaModuleMutationPayload,
+    validateKcaModuleFormValues,
+  } = await import('../lib/kca-module-builder.ts');
+
+  const container = {
+    querySelectorAll(selector: string) {
+      if (!selector.includes('input')) return [];
+      return [
+        { name: 'title', type: 'text', value: 'Identity in Christ' },
+        { name: 'code', type: 'text', value: 'Y1-M01' },
+        { name: 'sequence', type: 'number', value: '1' },
+        { name: 'duration_days', type: 'number', value: '7' },
+      ];
+    },
+  } as unknown as ParentNode;
+
+  const captured = captureKcaModuleFormValues(container, {});
+  assert.equal(validateKcaModuleFormValues(captured), null);
+  assert.deepEqual(kcaModuleMutationPayload(captured), {
+    code: 'Y1-M01',
+    title: 'Identity in Christ',
+    sequence: '1',
+    duration_days: '7',
+  });
+
+  const merged = captureKcaModuleFormValues({ querySelectorAll: () => [] } as unknown as ParentNode, captured);
+  assert.equal(validateKcaModuleFormValues(merged), null);
+
   const source = await readFile(new URL('../components/kca-ui.tsx', import.meta.url), 'utf8');
-  assert.match(source, /captureModuleFields/);
-  assert.match(source, /onBeforeAdvance=\{captureModuleFields\}/);
-  assert.match(source, /Module code, title, sequence, and learning days are required/);
+  assert.match(source, /moduleDraftRef/);
+  assert.match(source, /data-kca-module-builder="true"/);
+  assert.match(source, /label: 'Create module'/);
 });
 
 test('KCA student registration includes login account fields', async () => {
