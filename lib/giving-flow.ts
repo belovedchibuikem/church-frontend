@@ -1,4 +1,4 @@
-/** Client-side giving draft + receipt snapshot. Amount is captured here because GET receipt has no amount. */
+/** Client-side giving draft + receipt snapshot. Live GET receipt now includes amount and settlement. */
 
 export const GIVING_DRAFT_KEY = 'fhc.giving-draft';
 export const GIVING_RECEIPT_KEY = 'fhc.giving-receipt';

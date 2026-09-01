@@ -724,9 +724,42 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
 
   const pendingLabel = t('account.pending', { defaultMessage: 'Pending' });
   const number = receipt?.receipt_number ?? snapshot?.receiptNumber ?? receiptId ?? pendingLabel;
-  const issued = receipt?.issued_at ?? receipt?.created_at ?? snapshot?.issuedAt ?? null;
-  const amount = snapshot ? formatMoneyMinor(snapshot.amountMinor, snapshot.currency) : null;
-  const fundLabel = snapshot?.fund ? givingFundLabel(t, snapshot.fund) : '';
+  const issued = receipt?.occurred_at ?? receipt?.issued_at ?? receipt?.created_at ?? snapshot?.issuedAt ?? null;
+  const amountMinor = receipt?.amount_minor ?? snapshot?.amountMinor ?? null;
+  const currency = receipt?.currency ?? snapshot?.currency ?? 'NGN';
+  const amount = amountMinor != null ? formatMoneyMinor(amountMinor, currency) : null;
+  const fundLabel =
+    receipt?.purpose_label ||
+    (snapshot?.fund ? givingFundLabel(t, snapshot.fund) : '');
+  const settlement = receipt?.settlement;
+  const settlementLabel =
+    settlement === 'manual'
+      ? t('account.manualPayment', { defaultMessage: 'Manual payment (bank transfer / proof)' })
+      : settlement === 'automatic'
+        ? t('account.automaticPayment', { defaultMessage: 'Automatic checkout' })
+        : snapshot?.method
+          ? givingMethodLabel(t, snapshot.method)
+          : '';
+  const status = receipt?.status ?? snapshot?.status ?? 'recorded';
+  const shareText = [
+    'Family House Connect — Official Receipt',
+    amount ? `Amount: ${amount}` : null,
+    fundLabel ? `Purpose: ${fundLabel}` : null,
+    `Reference: ${number}`,
+    issued ? `Date: ${formatWhen(issued, locale)}` : null,
+    settlementLabel ? `Method: ${settlementLabel}` : null,
+    `Status: ${givingStatusLabel(t, status)}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const shareEncoded = encodeURIComponent(shareText);
+  const copyReceipt = async () => {
+    try {
+      await navigator.clipboard.writeText(shareText);
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <div className="give-shell">
@@ -737,7 +770,7 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
           {amount
             ? t('account.yourGiftOfAmount', { defaultMessage: 'Your gift of {amount}', vars: { amount } })
             : t('account.yourGiftPlain', { defaultMessage: 'Your gift' })}
-          {snapshot?.fund
+          {fundLabel
             ? t('account.toFundPart', { defaultMessage: ' to {fund}', vars: { fund: fundLabel } })
             : ''}{' '}
           {t('account.hasBeenRecorded', { defaultMessage: 'has been recorded' })}
@@ -762,22 +795,36 @@ export function GiveReceiptScreen({ route }: { route: SiteRoute }) {
               <dd>{amount}</dd>
             </div>
           ) : null}
-          {snapshot?.fund ? (
+          {fundLabel ? (
             <div>
               <dt>{t('account.fund', { defaultMessage: 'Fund' })}</dt>
               <dd>{fundLabel}</dd>
             </div>
           ) : null}
+          {settlementLabel ? (
+            <div>
+              <dt>{t('account.paymentMethod', { defaultMessage: 'Payment method' })}</dt>
+              <dd>{settlementLabel}</dd>
+            </div>
+          ) : null}
           <div>
             <dt>{t('account.status', { defaultMessage: 'Status' })}</dt>
-            <dd>
-              {snapshot?.status
-                ? givingStatusLabel(t, snapshot.status)
-                : t('account.recorded', { defaultMessage: 'Recorded' })}
-            </dd>
+            <dd>{givingStatusLabel(t, status)}</dd>
           </div>
         </dl>
         {snapshot?.note ? <p className="give-note">“{snapshot.note}”</p> : null}
+        <div className="give-share">
+          <a href={`https://wa.me/?text=${shareEncoded}`} target="_blank" rel="noreferrer">
+            {t('account.whatsapp', { defaultMessage: 'WhatsApp' })}
+          </a>
+          <a href={`mailto:?subject=${encodeURIComponent('Family House Connect receipt')}&body=${shareEncoded}`}>
+            {t('account.email', { defaultMessage: 'Email' })}
+          </a>
+          <a href={`sms:?body=${shareEncoded}`}>{t('common.messages', { defaultMessage: 'Messages' })}</a>
+          <button type="button" onClick={() => void copyReceipt()}>
+            {t('account.copyReceipt', { defaultMessage: 'Copy receipt' })}
+          </button>
+        </div>
         <div className="hero-actions" style={{ justifyContent: 'center' }}>
           <Link className="site-button" href="/account/giving">
             {t('account.viewGivingHistory', { defaultMessage: route.action ?? 'View giving history' })}

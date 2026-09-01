@@ -225,6 +225,7 @@ export const yo: MessageTree = {
   bible: {
     title: 'Bíbélì',
     kjv: 'King James Version',
+    libraryTitle: 'Ìwé Mímọ́',
     subtitle: 'Ka Ìwé Mímọ́, tẹ̀lé ètò, kí o sì rí ohun tí ó yẹ kí o ka lónìí.',
     searchPlaceholder: 'Gbiyanju Johanu 3:16 tàbí ọ̀rọ̀ bí ìgbàgbọ́',
     today: 'Ìkàwé òní',
@@ -243,6 +244,10 @@ export const yo: MessageTree = {
     markDone: 'Fi òní sílẹ̀ pé o ti ka',
     planDays: 'ọjọ́ {days}',
     startPlan: 'Bẹ̀rẹ̀ ètò yìí',
+    customPlan: 'Ṣẹ̀dá ìṣísẹ̀ tìrẹ',
+    customPlanCopy: 'Yan iye ọjọ́ (30–1,095) láti parí Bíbélì.',
+    startCustomPlan: 'Bẹ̀rẹ̀ ètò àkànṣe',
+    versionUnavailable: '{name} kò sí lórí ẹ̀rọ ìjọ yìí. KJV ṣì wà.',
     chooseBook: 'Yan ìwé',
     chooseChapter: 'Yan orí',
     unavailable: 'Bíbélì kò sí nísinsìnyí. Gbìyànjú lẹ́ẹ̀kan sí i.',

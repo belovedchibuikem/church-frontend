@@ -225,6 +225,7 @@ export const sw: MessageTree = {
   bible: {
     title: 'Biblia',
     kjv: 'King James Version',
+    libraryTitle: 'Maandiko Matakatifu',
     subtitle: 'Soma Maandiko, fuata mpango, na uone somo la leo.',
     searchPlaceholder: 'Jaribu Yohana 3:16 au neno kama imani',
     today: 'Somo la leo',
@@ -243,6 +244,10 @@ export const sw: MessageTree = {
     markDone: 'Weka alama leo kuwa imekamilika',
     planDays: 'siku {days}',
     startPlan: 'Anza mpango huu',
+    customPlan: 'Tengeneza kasi yako',
+    customPlanCopy: 'Chagua siku (30–1,095) kumaliza Biblia.',
+    startCustomPlan: 'Anza mpango maalum',
+    versionUnavailable: '{name} haijasakinishwa kwenye seva ya kanisa hili. KJV bado inapatikana.',
     chooseBook: 'Chagua kitabu',
     chooseChapter: 'Chagua sura',
     unavailable: 'Biblia haipatikani sasa. Jaribu tena hivi karibuni.',

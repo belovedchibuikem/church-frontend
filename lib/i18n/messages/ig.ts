@@ -225,6 +225,7 @@ export const ig: MessageTree = {
   bible: {
     title: 'Bible',
     kjv: 'King James Version',
+    libraryTitle: 'Akwụkwọ Nsọ',
     subtitle: 'Gụọ Akwụkwọ Nsọ, soro atụmatụ, hụkwa ihe ị ga-agụ taa.',
     searchPlaceholder: 'Nwaa Jọn 3:16 ma ọ bụ okwu dị ka okwukwe',
     today: 'Ọgụgụ taa',
@@ -243,6 +244,10 @@ export const ig: MessageTree = {
     markDone: 'Kaa taa dị ka emechara',
     planDays: 'ụbọchị {days}',
     startPlan: 'Malite atụmatụ a',
+    customPlan: 'Mepụta ọsọ nke gị',
+    customPlanCopy: 'Họrọ ụbọchị (30–1,095) iji mechaa Bible.',
+    startCustomPlan: 'Malite atụmatụ nkeonwe',
+    versionUnavailable: '{name} adịghị n’ọfịs ụka a. KJV ka dị.',
     chooseBook: 'Họrọ akwụkwọ',
     chooseChapter: 'Họrọ isi',
     unavailable: 'Bible adịghị ugbu a. Nwaa ọzọ n’oge na-adịghị anya.',

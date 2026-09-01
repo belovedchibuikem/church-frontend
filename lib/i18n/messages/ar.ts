@@ -225,6 +225,7 @@ export const ar: MessageTree = {
   bible: {
     title: 'الكتاب المقدس',
     kjv: 'King James Version',
+    libraryTitle: 'الكتاب المقدس',
     subtitle: 'اقرأ الكتاب المقدس، اتبع خطة، وشاهد هدف اليوم.',
     searchPlaceholder: 'جرّب يوحنا 3:16 أو كلمة مثل إيمان',
     today: 'قراءة اليوم',
@@ -243,6 +244,10 @@ export const ar: MessageTree = {
     markDone: 'تعليم اليوم مكتملاً',
     planDays: '{days} يوماً',
     startPlan: 'ابدأ هذه الخطة',
+    customPlan: 'أنشئ وتيرتك',
+    customPlanCopy: 'اختر عدد الأيام (30–1095) لإكمال الكتاب المقدس.',
+    startCustomPlan: 'ابدأ خطة مخصصة',
+    versionUnavailable: '{name} غير مثبت على خادم هذه الكنيسة. نسخة الملك جيمس ما زالت متاحة.',
     chooseBook: 'اختر السفر',
     chooseChapter: 'اختر الإصحاح',
     unavailable: 'الكتاب المقدس غير متاح الآن. حاول مرة أخرى قريباً.',

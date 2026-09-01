@@ -225,6 +225,7 @@ export const ha: MessageTree = {
   bible: {
     title: 'Littafi Mai Tsarki',
     kjv: 'King James Version',
+    libraryTitle: 'Littafi Mai Tsarki',
     subtitle: 'Karanta Nassi, bi tsari, kuma ga abin da ya kamata ka karanta yau.',
     searchPlaceholder: 'Gwada Yohanna 3:16 ko kalma kamar bangaskiya',
     today: 'Karatu na yau',
@@ -243,6 +244,10 @@ export const ha: MessageTree = {
     markDone: 'Alama yau a matsayin an kammala',
     planDays: 'kwana {days}',
     startPlan: 'Fara wannan tsari',
+    customPlan: 'Ƙirƙiri naku',
+    customPlanCopy: 'Zaɓi kwanaki (30–1,095) don kammala Littafi Mai Tsarki.',
+    startCustomPlan: 'Fara tsari na musamman',
+    versionUnavailable: '{name} ba ya kan uwar garken wannan coci. KJV na nan.',
     chooseBook: 'Zaɓi littafi',
     chooseChapter: 'Zaɓi babi',
     unavailable: 'Littafi Mai Tsarki ba ya samuwa yanzu. Sake gwadawa.',

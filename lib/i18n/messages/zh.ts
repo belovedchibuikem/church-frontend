@@ -224,6 +224,7 @@ export const zh: MessageTree = {
   bible: {
     title: '圣经',
     kjv: 'King James Version',
+    libraryTitle: '圣经',
     subtitle: '阅读圣经、跟随计划，并看到今天的进度。',
     searchPlaceholder: '试试约翰福音 3:16，或“信心”这样的词',
     today: '今日阅读',
@@ -242,6 +243,10 @@ export const zh: MessageTree = {
     markDone: '标记今日已完成',
     planDays: '{days} 天',
     startPlan: '开始此计划',
+    customPlan: '自定义进度',
+    customPlanCopy: '选择天数（30–1095）读完整本圣经。',
+    startCustomPlan: '开始自定义计划',
+    versionUnavailable: '{name}尚未安装在本教会服务器。KJV 仍可使用。',
     chooseBook: '选择书卷',
     chooseChapter: '选择章',
     unavailable: '圣经暂时无法使用。请稍后再试。',

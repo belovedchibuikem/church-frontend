@@ -225,6 +225,7 @@ export const fr: MessageTree = {
   bible: {
     title: 'Bible',
     kjv: 'King James Version',
+    libraryTitle: 'Sainte Écriture',
     subtitle: 'Lisez l’Écriture, suivez un plan, et voyez la lecture du jour.',
     searchPlaceholder: 'Essayez Jean 3.16 ou un mot comme foi',
     today: 'Lecture du jour',
@@ -243,6 +244,10 @@ export const fr: MessageTree = {
     markDone: 'Marquer le jour comme lu',
     planDays: '{days} jours',
     startPlan: 'Commencer ce plan',
+    customPlan: 'Créez votre rythme',
+    customPlanCopy: 'Choisissez le nombre de jours (30–1 095) pour finir la Bible.',
+    startCustomPlan: 'Commencer un plan personnalisé',
+    versionUnavailable: '{name} n’est pas installé sur ce serveur. La KJV reste disponible.',
     chooseBook: 'Choisir le livre',
     chooseChapter: 'Choisir le chapitre',
     unavailable: 'La Bible est indisponible pour le moment. Réessayez bientôt.',

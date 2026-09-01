@@ -234,7 +234,16 @@ export type UserPaymentReceipt = {
   public_id?: string;
   receipt_number?: string | null;
   payment_transaction_id?: string | null;
+  payment_intent_id?: string | null;
+  amount_minor?: number | null;
+  currency?: string | null;
+  purpose_code?: string | null;
+  purpose_label?: string | null;
+  provider_code?: string | null;
+  settlement?: 'manual' | 'automatic' | string | null;
+  status?: string | null;
   issued_at?: string | null;
+  occurred_at?: string | null;
   created_at?: string | null;
 };
 
