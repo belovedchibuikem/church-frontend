@@ -57,9 +57,17 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
   if (asText(item.name)) details.Name = String(item.name);
   if (asText(item.location_name)) details.Location = String(item.location_name);
   if (asText(item.administrative_unit_name)) details.Region = String(item.administrative_unit_name);
-  if (asText(item.status)) details.Status = String(item.status);
-  else if ('published_at' in item) {
-    details.Status = item.published_at ? 'Active' : 'Unpublished';
+  if (typeof item.is_active === 'boolean') {
+    details.is_active = item.is_active ? 'Active' : 'Inactive';
+  }
+  if (item.published_at) {
+    details.Status = 'Published';
+  } else if (asText(item.status)) {
+    details.Status = String(item.status);
+  } else if ('published_at' in item) {
+    details.Status = 'Draft';
+  } else if ('is_active' in item) {
+    details.Status = item.is_active === false ? 'Inactive' : 'Active';
   }
   if (asText(item.published_at)) details['Published at'] = String(item.published_at);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { useLocale } from '@/components/locale-provider';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
@@ -110,7 +110,7 @@ function KcaFilters({ search, compact = false, labels }: { search?: string; comp
   </div>;
 }
 
-function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [], showAction = true, filterLabels, toolbarAction, reviewLabel, total }: { screen: AdminScreen; rows?: Row[]; columns?: string[]; showAction?: boolean; filterLabels?: string[]; toolbarAction?: string; reviewLabel?: string; total?: number }) {
+function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [], showAction = true, filterLabels, toolbarAction, reviewLabel, total, renderActions }: { screen: AdminScreen; rows?: Row[]; columns?: string[]; showAction?: boolean; filterLabels?: string[]; toolbarAction?: string; reviewLabel?: string; total?: number; renderActions?: (row: Row) => ReactNode }) {
   const { t } = useLocale();
   const entityKey = resolveEntityKey(screen.route, screen.id);
   return <article className={`card kca-table-card ${toolbarAction ? 'kca-prerequisites' : ''}`}>
@@ -125,7 +125,7 @@ function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?
             const isStatus = /status|priority|progress|issued/i.test(column);
             return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
           })}
-          {showAction && <td><TableRowActions record={formatRowActionRecord(row[columns[0]], row.__id)} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} {...rowActionCapabilities(screen.route)} /></td>}
+          {showAction && <td>{renderActions ? renderActions(row) : <TableRowActions record={formatRowActionRecord(row[columns[0]], row.__id)} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} {...rowActionCapabilities(screen.route)} />}</td>}
         </tr>)}</tbody>
       </table>
     </div>
@@ -592,6 +592,14 @@ function KcaModuleBuilder({ screen }: { screen: AdminScreen }) {
             ))}
           </dl>
         )}
+
+        {moduleId ? (
+          <KcaAddLessonForm
+            moduleId={moduleId}
+            moduleTitle={values.title ?? 'Module'}
+            onCreated={() => setMessage('Lesson saved. Add more lessons, then map learning days and publish.')}
+          />
+        ) : null}
 
         {moduleId ? (
           <div className="kca-form-grid">
@@ -1405,6 +1413,218 @@ function KcaCertificate({ screen }: { screen: AdminScreen }) {
   return <div className="kca-document-layout"><article className="card kca-certificate"><div className="kca-certificate-border"><div className="kca-seal large">{t('member.kca', { defaultMessage: 'KCA' })}</div><span>{t('member.kca.academyName', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</span><h1 aria-level={2}>{t('member.kca.certificateOfCompletion', { defaultMessage: 'Certificate of Completion' })}</h1><p>{t('member.kca.certifyThat', { defaultMessage: 'This is to certify that' })}</p><h2>{details.Student}</h2><p>{t('member.kca.completedRequirementsFor', { defaultMessage: 'has successfully completed all the requirements for' })}</p><h3>{details.Year}</h3><small>{t('member.kca.issuedOn', { defaultMessage: 'Issued on {date}', vars: { date: details['Issue Date'] ?? '' } })}</small><div className="kca-certificate-signatures"><span><b>Pastor Daniel David</b>{t('member.kca.academyDirector', { defaultMessage: 'Academy Director' })}</span><span className="kca-qr" aria-label={t('member.kca.certificateQrAria', { defaultMessage: 'Certificate verification QR code' })}>▦</span><span><b>Mary Okoro</b>{t('member.kca.registrar', { defaultMessage: 'Registrar' })}</span></div></div></article><aside className="card kca-document-meta"><h2>{t('member.kca.certificateDetails', { defaultMessage: 'Certificate Details' })}</h2><dl>{Object.entries(details).map(([key,value]) => <div key={key}><dt>{key}</dt><dd>{key === 'Status' ? <KcaBadge value={value}/> : value}</dd></div>)}</dl><button className="primary-button" type="button">{translateAction(t, screen.action)}</button></aside></div>;
 }
 
+function KcaAddLessonForm({
+  moduleId,
+  moduleTitle,
+  onCancel,
+  onCreated,
+}: {
+  moduleId: string;
+  moduleTitle: string;
+  onCancel?: () => void;
+  onCreated?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const lessonFields = fieldsForEntity('kca_lesson').filter((field) => field.name !== 'kca_module_id');
+
+  return (
+    <form
+      className="card form-card kca-add-lesson-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        setBusy(true);
+        setError(null);
+        void executeAdminAction({
+          route: `/admin/kca/modules/${moduleId}`,
+          label: 'Add lesson',
+          recordId: moduleId,
+          payload: {
+            kca_module_id: moduleId,
+            code: String(form.get('code') ?? ''),
+            title: String(form.get('title') ?? ''),
+            sequence: String(form.get('sequence') ?? '1'),
+            day_index: String(form.get('day_index') ?? ''),
+            lesson_type: String(form.get('lesson_type') ?? 'text'),
+            summary: String(form.get('summary') ?? ''),
+            body: String(form.get('body') ?? ''),
+            content_url: String(form.get('content_url') ?? ''),
+          },
+          scope: CATALOG_GLOBAL_SCOPE,
+        })
+          .then(() => {
+            onCreated?.();
+          })
+          .catch((err) => setError(formatAdminMutationError(err)))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <header className="kca-add-lesson-header">
+        <div>
+          <h2 className="section-title">Add lesson</h2>
+          <p className="field-help">Module: <strong>{moduleTitle}</strong></p>
+        </div>
+        {onCancel ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={onCancel}>Close</button> : null}
+      </header>
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      <AdminFormFields fields={lessonFields} values={{}} className="form-grid" />
+      <footer className="form-footer">
+        {onCancel ? <button type="button" className="ghost-button" data-interaction-native="true" onClick={onCancel}>Cancel</button> : null}
+        <button className="primary-button" type="submit" disabled={busy} data-interaction-native="true">{busy ? 'Saving…' : 'Save lesson'}</button>
+      </footer>
+    </form>
+  );
+}
+
+async function runKcaModuleAction(moduleId: string, label: string): Promise<void> {
+  await executeAdminAction({
+    route: `/admin/kca/modules/${moduleId}`,
+    label,
+    recordId: moduleId,
+    payload: { kca_module_id: moduleId, module_id: moduleId },
+    scope: CATALOG_GLOBAL_SCOPE,
+  });
+}
+
+function KcaModuleRowActions({
+  row,
+  titleColumn,
+  entityKey,
+  onAddLesson,
+  onActionComplete,
+}: {
+  row: Row;
+  titleColumn: string;
+  entityKey?: string;
+  onAddLesson: (row: Row) => void;
+  onActionComplete: () => void;
+}) {
+  const { t } = useLocale();
+  const record = formatRowActionRecord(row[titleColumn], row.__id);
+  const moduleId = String(row.__id ?? extractUlid(record) ?? '');
+  const status = String(row.Status ?? '').toLowerCase();
+  const isPublished = status.includes('publish');
+  const shared = { 'data-record': record, ...(entityKey ? { 'data-entity': entityKey } : {}) };
+
+  return (
+    <div className="row-actions kca-row-actions kca-module-row-actions">
+      <button type="button" className="table-action" data-interaction-native="true" onClick={() => onAddLesson(row)} disabled={isPublished}>
+        {t('member.kca.addLesson', { defaultMessage: 'Add lesson' })}
+      </button>
+      <button
+        type="button"
+        className="table-action"
+        data-interaction-native="true"
+        disabled={isPublished}
+        onClick={() => {
+          void runKcaModuleAction(moduleId, 'Map learning days')
+            .then(() => onActionComplete())
+            .catch((err) => window.alert(formatAdminMutationError(err)));
+        }}
+      >
+        {t('member.kca.mapDays', { defaultMessage: 'Map days' })}
+      </button>
+      {!isPublished ? (
+        <button
+          type="button"
+          className="table-action"
+          data-interaction-native="true"
+          onClick={() => {
+            if (!window.confirm('Publish this module? Lessons must be mapped to learning days first.')) return;
+            void runKcaModuleAction(moduleId, 'Publish module')
+              .then(() => onActionComplete())
+              .catch((err) => window.alert(formatAdminMutationError(err)));
+          }}
+        >
+          {t('member.kca.publish', { defaultMessage: 'Publish' })}
+        </button>
+      ) : null}
+      <button type="button" className="table-action" data-admin-action="edit" {...shared}>
+        {t('common.edit', { defaultMessage: 'Edit' })}
+      </button>
+    </div>
+  );
+}
+
+function KcaModulesPanel({ screen }: { screen: AdminScreen }) {
+  const { t } = useLocale();
+  const columns = screen.columns ?? [];
+  const columnKey = columns.join('\0');
+  const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [message, setMessage] = useState(t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
+  const [error, setError] = useState<string | null>(null);
+  const [lessonTarget, setLessonTarget] = useState<{ id: string; title: string } | null>(null);
+  const entityKey = resolveEntityKey(screen.route, screen.id);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    setMessage(t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
+    try {
+      const mappedColumns = columnKey ? columnKey.split('\0') : [];
+      const result = await listCatalogDomain('kca.modules', { perPage: 50, scope: CATALOG_GLOBAL_SCOPE });
+      stashAdminRecords(result.items as Array<Record<string, unknown>>);
+      setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[]);
+      setTotal(result.pagination.total);
+      setMessage(
+        result.pagination.total === 0
+          ? t('errors.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
+          : t('common.showingOfRecords', { defaultMessage: 'Showing {visible} of {total} records', vars: { visible: result.items.length, total: result.pagination.total } }),
+      );
+    } catch (err) {
+      setRows([]);
+      setError(catalogErrorMessage(err, t('errors.unableToLoadDomainCatalog', { defaultMessage: 'Unable to load domain catalog.' })));
+      setMessage(t('errors.liveCatalogUnavailable', { defaultMessage: 'Live catalog unavailable' }));
+    }
+  }, [columnKey, t]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const titleColumn = columns[0] ?? 'Title';
+
+  return (
+    <div className="kca-managed-table kca-modules-panel">
+      <div className="kca-modules-toolbar">
+        <p className="maps-settings-lead" role="status">{error ?? message}</p>
+        <Link className="primary-button link-button" href="/admin/kca/modules/new">+ Create Module</Link>
+      </div>
+      {lessonTarget ? (
+        <KcaAddLessonForm
+          moduleId={lessonTarget.id}
+          moduleTitle={lessonTarget.title}
+          onCancel={() => setLessonTarget(null)}
+          onCreated={() => {
+            setLessonTarget(null);
+            void refresh();
+          }}
+        />
+      ) : null}
+      <KcaTable
+        screen={screen}
+        rows={rows}
+        columns={columns}
+        total={total || rows.length}
+        renderActions={(row) => (
+          <KcaModuleRowActions
+            row={row}
+            titleColumn={titleColumn}
+            entityKey={entityKey}
+            onAddLesson={(target) => {
+              const id = String(target.__id ?? '');
+              if (!id) return;
+              setLessonTarget({ id, title: String(target[titleColumn] ?? 'Module') });
+            }}
+            onActionComplete={() => void refresh()}
+          />
+        )}
+      />
+    </div>
+  );
+}
+
 function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const columns = screen.columns ?? [];
@@ -1497,6 +1717,7 @@ export function KcaScreenContent({ screen, requestedScope }: { screen: AdminScre
     case 'H-03':
     case 'H-04':
       return <KcaManagedTable screen={screen} />;
+    case 'H-09': return <KcaModulesPanel screen={screen} />;
     case 'H-10': return <KcaModuleBuilder screen={screen}/>;
     case 'H-11': return <KcaPrerequisites screen={screen}/>;
     case 'H-13': return <KcaAttendance screen={screen}/>;

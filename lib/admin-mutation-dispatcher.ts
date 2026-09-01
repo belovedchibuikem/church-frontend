@@ -1210,6 +1210,38 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
+  if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /edit|update/) && !labelIs(label, /lesson|delete|remove|create|add|map|publish/)) {
+    const moduleId = requireId(pickRecord(ctx, 'id', 'kca_module_id', 'module_id'), 'module');
+    const activeRaw = field(payload, 'is_active', 'status') ?? 'Active';
+    return mutate(
+      `admin/kca/modules/${encodeURIComponent(moduleId)}`,
+      {
+        code: field(payload, 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        sequence: asInt(field(payload, 'sequence')) ?? 1,
+        duration_days: asInt(field(payload, 'duration_days')) ?? 1,
+        is_active: !/inactive|false|0/i.test(activeRaw),
+      },
+      { ...opts, method: 'PATCH' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/lessons') && labelIs(label, /edit|update/) && !labelIs(label, /delete|remove|create|add|chapter/)) {
+    const lessonId = requireId(pickRecord(ctx, 'id', 'kca_lesson_id', 'lesson_id'), 'lesson');
+    return mutate(
+      `admin/kca/lessons/${encodeURIComponent(lessonId)}`,
+      {
+        code: field(payload, 'code') ?? '',
+        title: field(payload, 'title', 'name') ?? '',
+        sequence: asInt(field(payload, 'sequence')) ?? 1,
+        day_index: asInt(field(payload, 'day_index')) ?? null,
+        lesson_type: field(payload, 'lesson_type') || 'text',
+        summary: field(payload, 'summary') || '',
+        body: field(payload, 'body') || '',
+        content_url: field(payload, 'content_url') || '',
+      },
+      { ...opts, method: 'PATCH' },
+    );
+  }
   if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /map learning days|map days|day map/)) {
     const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
     return mutate(`admin/kca/modules/${encodeURIComponent(moduleId)}/day-map`, {}, opts);
@@ -1218,7 +1250,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
     return mutate(`admin/kca/modules/${encodeURIComponent(moduleId)}/publish`, {}, opts);
   }
-  if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /create module|add module|save|submit/) && !labelIs(label, /lesson/)) {
+  if (routeStarts(route, '/admin/kca/modules') && labelIs(label, /create module|add module|save|submit/) && !labelIs(label, /lesson|edit|update|delete|remove|map|publish/)) {
     return mutate(
       'admin/kca/modules',
       {
@@ -1230,7 +1262,10 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/kca/lessons', '/admin/kca/modules') && labelIs(label, /create lesson|add lesson|save lesson/)) {
+  if (
+    (routeStarts(route, '/admin/kca/lessons') && labelIs(label, /create|add|save|submit/) && !labelIs(label, /edit|update|delete|remove|chapter/))
+    || (routeStarts(route, '/admin/kca/modules') && labelIs(label, /add lesson|create lesson|save lesson/))
+  ) {
     const moduleId = requireId(firstUlid(payload.kca_module_id, payload.module_id, ctx.recordId), 'module');
     return mutate(
       `admin/kca/modules/${encodeURIComponent(moduleId)}/lessons`,
@@ -1238,11 +1273,11 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         code: field(payload, 'code') ?? '',
         title: field(payload, 'title', 'name') ?? '',
         sequence: asInt(field(payload, 'sequence')) ?? 1,
-        day_index: asInt(field(payload, 'day_index')) ?? 1,
         lesson_type: field(payload, 'lesson_type') || 'text',
         summary: field(payload, 'summary') || '',
         body: field(payload, 'body') || '',
         content_url: field(payload, 'content_url') || '',
+        ...(asInt(field(payload, 'day_index')) !== undefined ? { day_index: asInt(field(payload, 'day_index')) } : {}),
       },
       opts,
     );

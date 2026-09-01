@@ -495,7 +495,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('translator')) {
         mapped[column] = get('translator_name', 'person_name');
       } else if (key.includes('lesson')) {
-        mapped[column] = get('lesson_title', 'title', 'lesson_id');
+        mapped[column] = get('lessons_count', 'lesson_title', 'title', 'lesson_id');
       } else if (key.includes('session')) {
         mapped[column] = formatTimestamp(get('session_on') === '—' ? null : get('session_on'));
       } else if (key.includes('cohort')) {
