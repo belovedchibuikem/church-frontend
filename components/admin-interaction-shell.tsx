@@ -68,6 +68,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFocused = useRef<HTMLElement | null>(null);
   const overlayWasOpen = useRef(false);
+  const churchCreateDrawerOpened = useRef(false);
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [toast, setToast] = useState('');
   const [query, setQuery] = useState(() => typeof window === 'undefined' ? '' : new URL(window.location.href).searchParams.get('q') ?? '');
@@ -96,6 +97,27 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, [tabItems]);
+
+  useEffect(() => {
+    if (route !== '/admin/churches/new') {
+      churchCreateDrawerOpened.current = false;
+      return;
+    }
+    if (churchCreateDrawerOpened.current) return;
+    churchCreateDrawerOpened.current = true;
+    setOverlay({
+      type: 'drawer',
+      mode: 'action',
+      actionMode: 'create',
+      label: '+ Add Church',
+      entityKey: 'church',
+      title: 'Add Church',
+      description: t('admin.workflowDescription', {
+        defaultMessage: 'Complete the {entity} workflow for {title}.',
+        vars: { entity: 'add church', title },
+      }),
+    });
+  }, [route, t, title]);
 
   useEffect(() => {
     if (!isRestorableAdminRoute(route)) return;
@@ -336,10 +358,11 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     if (button.closest('.search-select, .search-select-menu, [role="listbox"]')) return;
     if (button.closest('.table-card, .home-church-workspace, .person-summary')) return;
     if (button.closest('form') && !button.closest('.interaction-overlay')) return;
-    if (button.closest('.table-toolbar') && !button.closest('.interaction-overlay')) return;
-    if (button.closest('.branding-settings, .maps-settings') && !button.closest('.interaction-overlay')) return;
     const label = (button.getAttribute('aria-label') || button.textContent || '').trim();
     const clean = normalize(label);
+    // Toolbar controls stay on-page except church registration, which uses the create drawer.
+    if (button.closest('.table-toolbar') && !button.closest('.interaction-overlay') && !/^(add|create) church$/.test(clean)) return;
+    if (button.closest('.branding-settings, .maps-settings') && !button.closest('.interaction-overlay')) return;
 
     if (button.dataset.adminAction) {
       event.preventDefault();

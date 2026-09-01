@@ -6,7 +6,6 @@ import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } 
 
 import type { AdminScreen } from '../lib/admin-routes';
 import {
-  createChurch,
   createConvert,
   defaultOpsScope,
   deleteChurch,
@@ -180,8 +179,6 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
   const [items, setItems] = useState<ChurchRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(search), 300);
@@ -202,44 +199,13 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function onCreate(event: FormEvent<HTMLFormElement>) {
-    const formEl = readSubmitForm(event);
-    const form = new FormData(formEl);
-    setBusy(true);
-    setError(null);
-    try {
-      await createChurch({
-        name: String(form.get('name')),
-        location_id: String(form.get('location_id')),
-        administrative_unit_id: String(form.get('administrative_unit_id')),
-      }, scope);
-      setOpen(false);
-      formEl.reset();
-      await load();
-    } catch (err) {
-      setError(operationsErrorMessage(err, 'Unable to create church.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <>
       <div className="table-toolbar">
         <label className="search-box"><span>⌕</span><input aria-label="Search churches" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
-        <button type="button" className="primary-button" onClick={() => setOpen((value) => !value)}>+ Add Church</button>
+        <button type="button" className="primary-button">+ Add Church</button>
       </div>
       <StatusLine error={error} onRetry={() => void load()} />
-      {open ? (
-        <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
-          <div className="form-grid">
-            <label><span>Canonical name *</span><input name="name" required /></label>
-            <label><span>Location *</span><EntitySearchSelect name="location_id" required /></label>
-            <label><span>Region / local area *</span><EntitySearchSelect name="administrative_unit_id" required /></label>
-          </div>
-          <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Create'}</button></div>
-        </form>
-      ) : null}
       <div className="card table-card">
         <table>
           <thead><tr><th>Church</th><th>Location</th><th>Coverage</th><th>Members</th><th>Status</th><th></th></tr></thead>
