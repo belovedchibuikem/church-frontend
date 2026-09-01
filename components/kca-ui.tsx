@@ -1040,10 +1040,61 @@ function KcaAlumni({ screen }: { screen: AdminScreen }) {
   );
 }
 
+function RegistrationStepRail({ currentIndex }: { currentIndex: number }) {
+  return (
+    <nav className="kca-step-rail" aria-label="Registration progress">
+      <h3 aria-level={2}>Registration</h3>
+      {kcaRegistrationSteps.map((registrationStep, index) => (
+        <div
+          aria-current={index === currentIndex ? 'step' : undefined}
+          className={index < currentIndex ? 'complete' : index === currentIndex ? 'current' : ''}
+          key={registrationStep.id}
+        >
+          <span aria-hidden="true">{index < currentIndex ? '✓' : index + 1}</span>
+          <b>{registrationStep.title}</b>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+async function admitAndEnrollKcaStudent(
+  applicationId: string,
+  enrollment: { cohort_id: string; registration_number: string; starts_on: string },
+) {
+  await executeAdminAction({
+    route: `/admin/kca/applications/${applicationId}/decision`,
+    label: 'Review application',
+    payload: { status: 'reviewed' },
+    recordId: applicationId,
+    scope: CATALOG_GLOBAL_SCOPE,
+  });
+  await executeAdminAction({
+    route: `/admin/kca/applications/${applicationId}/decision`,
+    label: 'Accept application',
+    payload: { status: 'accepted' },
+    recordId: applicationId,
+    scope: CATALOG_GLOBAL_SCOPE,
+  });
+  return executeAdminAction({
+    route: '/admin/kca/students/register',
+    label: 'Enroll KCA student',
+    payload: {
+      application_id: applicationId,
+      cohort_id: enrollment.cohort_id,
+      registration_number: enrollment.registration_number,
+      starts_on: enrollment.starts_on,
+    },
+    recordId: applicationId,
+    scope: CATALOG_GLOBAL_SCOPE,
+  });
+}
+
 function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
   const wizard = useAdminWizardStep(kcaRegistrationSteps.map((step) => step.title));
   const [values, setValues] = useState<Record<string, string>>({});
+  const [applicationId, setApplicationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -1065,38 +1116,63 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
     return nextValues;
   }
 
-  async function submitRegistration(finalize: boolean) {
+  function buildActionPayload(payload: ReturnType<typeof flattenKcaRegistrationPayload>, finalize: boolean) {
+    return {
+      application_id: applicationId ?? payload.application_id ?? '',
+      person_id: payload.person_id ?? '',
+      given_name: payload.given_name ?? '',
+      family_name: payload.family_name ?? '',
+      email: payload.email ?? '',
+      phone: payload.phone ?? '',
+      create_login: finalize && payload.create_login ? 'true' : 'false',
+      password: finalize && payload.create_login ? (payload.password ?? '') : '',
+      password_confirmation: finalize && payload.create_login ? (payload.password_confirmation ?? '') : '',
+      application_data_json: JSON.stringify(payload.application_data),
+      finalize: finalize ? 'true' : 'false',
+    };
+  }
+
+  function validateRegistrationPayload(
+    payload: ReturnType<typeof flattenKcaRegistrationPayload>,
+    finalize: boolean,
+  ): string | null {
+    if (!applicationId && !payload.application_id && !payload.person_id && (!payload.given_name || !payload.family_name)) {
+      return 'Given name and family name are required for a new applicant.';
+    }
+    if (finalize && payload.create_login) {
+      if (!payload.email) return 'Email is required when creating a student login account.';
+      if (!payload.password || payload.password.length < 8) {
+        return 'A password of at least 8 characters is required when creating a login account.';
+      }
+      if (payload.password !== payload.password_confirmation) {
+        return 'Password confirmation does not match.';
+      }
+    }
+    if (finalize && Object.keys(payload.application_data).length === 0) {
+      return 'Complete the application fields before submitting.';
+    }
+    if (finalize && payload.admit_and_enroll) {
+      if (!payload.cohort_id) return 'Cohort is required when admitting and enrolling.';
+      if (!payload.registration_number) return 'Registration number is required when admitting and enrolling.';
+      if (!payload.starts_on) return 'Start date is required when admitting and enrolling.';
+    }
+    return null;
+  }
+
+  async function persistRegistration(finalize: boolean): Promise<boolean> {
     const merged = captureStepValues();
     if (!live) {
       setError('Live API is required to register KCA students.');
-      return;
+      return false;
     }
-    if (!finalize) {
-      setMessage('Draft captured on this device. Continue through all steps before submitting.');
-      return;
-    }
-    const payload = flattenKcaRegistrationPayload(merged);
-    if (!payload.person_id && (!payload.given_name || !payload.family_name)) {
-      setError('Given name and family name are required for a new applicant.');
-      return;
-    }
-    if (payload.create_login) {
-      if (!payload.email) {
-        setError('Email is required when creating a student login account.');
-        return;
-      }
-      if (!payload.password || payload.password.length < 8) {
-        setError('A password of at least 8 characters is required when creating a login account.');
-        return;
-      }
-      if (payload.password !== payload.password_confirmation) {
-        setError('Password confirmation does not match.');
-        return;
-      }
-    }
-    if (Object.keys(payload.application_data).length === 0) {
-      setError('Complete the application fields before submitting.');
-      return;
+    const payload = flattenKcaRegistrationPayload({
+      ...merged,
+      application_id: applicationId ?? merged.application_id ?? '',
+    });
+    const validationError = validateRegistrationPayload(payload, finalize);
+    if (validationError) {
+      setError(validationError);
+      return false;
     }
     setBusy(true);
     setError(null);
@@ -1104,32 +1180,62 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
     try {
       const result = await executeAdminAction({
         route: '/admin/kca/students/register',
-        label: 'Register KCA student',
-        payload: {
-          person_id: payload.person_id ?? '',
-          given_name: payload.given_name ?? '',
-          family_name: payload.family_name ?? '',
-          email: payload.email ?? '',
-          phone: payload.phone ?? '',
-          create_login: payload.create_login ? 'true' : 'false',
-          password: payload.password ?? '',
-          password_confirmation: payload.password_confirmation ?? '',
-          application_data_json: JSON.stringify(payload.application_data),
-          finalize: finalize ? 'true' : 'false',
-        },
+        label: finalize ? 'Register KCA student' : 'Save KCA draft',
+        payload: buildActionPayload(payload, finalize),
         scope: CATALOG_GLOBAL_SCOPE,
       });
+      if (result.id) {
+        setApplicationId(result.id);
+        setValues((current) => ({ ...current, application_id: result.id ?? '' }));
+      }
+      if (!finalize) {
+        setMessage(result.id ? `Draft saved (${result.id}). You can continue later.` : 'Draft saved.');
+        return true;
+      }
+      if (payload.admit_and_enroll && result.id && payload.cohort_id && payload.registration_number && payload.starts_on) {
+        const enrollment = await admitAndEnrollKcaStudent(result.id, {
+          cohort_id: payload.cohort_id,
+          registration_number: payload.registration_number,
+          starts_on: payload.starts_on,
+        });
+        setMessage(
+          enrollment.id
+            ? `Application submitted and student enrolled (${enrollment.id}).`
+            : 'Application submitted and student enrolled.',
+        );
+        return true;
+      }
       setMessage(result.id ? `Application submitted (${result.id}). Review it in Applications.` : 'KCA application submitted.');
+      return true;
     } catch (err) {
       setError(formatAdminMutationError(err));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
+  async function submitRegistration(finalize: boolean) {
+    await persistRegistration(finalize);
+  }
+
+  async function saveDraft() {
+    await persistRegistration(false);
+  }
+
+  async function saveAndContinue() {
+    if (live) {
+      const saved = await persistRegistration(false);
+      if (!saved) return;
+    } else {
+      captureStepValues();
+    }
+    wizard.goToStep(wizard.currentStep + 1);
+  }
+
   return (
     <div className="kca-flow-layout" data-admin-wizard="true">
-      <KcaStepRail current={step.title} />
+      <RegistrationStepRail currentIndex={wizard.currentStep} />
       <article className="card kca-form-card kca-registration-form">
         <header>
           <div>
@@ -1151,7 +1257,7 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
             <Link className="ghost-button" href="/admin/kca/students">Cancel</Link>
           )}
           <div>
-            <button className="ghost-button" type="button" disabled={busy} onClick={() => { captureStepValues(); setMessage('Progress saved on this device.'); }}>
+            <button className="ghost-button" type="button" disabled={busy} onClick={() => void saveDraft()}>
               Save draft
             </button>
             {wizard.isLast ? (
@@ -1164,12 +1270,9 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
                 type="button"
                 data-interaction-native="true"
                 disabled={busy}
-                onClick={() => {
-                  captureStepValues();
-                  wizard.goToStep(wizard.currentStep + 1);
-                }}
+                onClick={() => void saveAndContinue()}
               >
-                Save & continue
+                {busy ? 'Saving…' : 'Save & continue'}
               </button>
             )}
           </div>

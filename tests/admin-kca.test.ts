@@ -96,6 +96,9 @@ test('KCA student registration includes login account fields', async () => {
   const churchStep = kcaRegistrationSteps[0]!;
   assert.ok(churchStep.fields.some((field) => field.name === 'create_login'));
   assert.ok(churchStep.fields.some((field) => field.name === 'password'));
+  const enrollmentStep = kcaRegistrationSteps.at(-1)!;
+  assert.equal(enrollmentStep.id, 'enrollment');
+  assert.ok(enrollmentStep.fields.some((field) => field.name === 'admit_and_enroll'));
   const payload = flattenKcaRegistrationPayload({
     given_name: 'Ada',
     family_name: 'Okafor',
@@ -104,8 +107,14 @@ test('KCA student registration includes login account fields', async () => {
     password: 'StudentPass123',
     password_confirmation: 'StudentPass123',
     why: 'Ministry growth',
+    admit_and_enroll: 'true',
+    cohort_id: '01JABCDEFGHJKMNPQRSTVWXYZ0',
+    registration_number: 'KCA-2026-0001',
+    starts_on: '2026-09-01',
   });
   assert.equal(payload.create_login, true);
+  assert.equal(payload.admit_and_enroll, true);
+  assert.equal(payload.cohort_id, '01JABCDEFGHJKMNPQRSTVWXYZ0');
   assert.equal(payload.password, 'StudentPass123');
   assert.equal(payload.email, 'ada@example.org');
   assert.equal(payload.application_data.why, 'Ministry growth');

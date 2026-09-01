@@ -1312,6 +1312,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     return mutate(
       'admin/kca/applications',
       jsonBody({
+        application_id: firstUlid(payload.application_id) ?? undefined,
         person_id: firstUlid(payload.person_id) ?? undefined,
         given_name: field(payload, 'given_name') || undefined,
         family_name: field(payload, 'family_name') || undefined,

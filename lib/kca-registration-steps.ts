@@ -96,6 +96,7 @@ export const kcaRegistrationSteps: KcaRegistrationStep[] = [
       { label: 'Recommender phone number', name: 'recommender_phone', type: 'text', placeholder: '+234' },
       { label: 'Recommender email address', name: 'recommender_email', type: 'email', required: true },
     ],
+  },
   {
     id: 'enrollment',
     title: 'Enrollment',
@@ -124,6 +125,9 @@ const kcaRegistrationRootFields = new Set([
   'registration_number',
   'starts_on',
 ]);
+
+export function flattenKcaRegistrationPayload(values: Record<string, string>): {
+  application_id?: string;
   person_id?: string;
   given_name?: string;
   family_name?: string;
@@ -132,8 +136,13 @@ const kcaRegistrationRootFields = new Set([
   create_login?: boolean;
   password?: string;
   password_confirmation?: string;
+  admit_and_enroll?: boolean;
+  cohort_id?: string;
+  registration_number?: string;
+  starts_on?: string;
   application_data: Record<string, string>;
 } {
+  const applicationId = values.application_id?.trim() || undefined;
   const personId = values.person_id?.trim() || undefined;
   const givenName = values.given_name?.trim() || undefined;
   const familyName = values.family_name?.trim() || undefined;
