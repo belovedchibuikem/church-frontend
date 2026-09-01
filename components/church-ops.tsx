@@ -35,6 +35,7 @@ import {
 } from '../lib/admin-operations-api';
 import { ChurchSettingsPanel } from './church-settings-panel';
 import { EntitySearchSelect } from './entity-search-select';
+import { createLocation, updateLocation } from '../lib/admin-organization-api';
 
 type ScopeProps = { screen: AdminScreen; requestedScope?: string };
 
@@ -245,7 +246,6 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(screen.route.endsWith('/edit'));
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState('');
   const [reason, setReason] = useState('');
 
   const load = useCallback(async () => {
@@ -254,7 +254,6 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
     try {
       const next = await getChurch(id, scope);
       setRecord(next);
-      setName(next.name);
     } catch (err) {
       setRecord(null);
       setError(operationsErrorMessage(err, 'Unable to load church.'));
@@ -263,16 +262,56 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function onSave(event: FormEvent) {
-    event.preventDefault();
+  async function onSave(event: FormEvent<HTMLFormElement>) {
+    const formEl = readSubmitForm(event);
     if (!record) return;
+    const form = new FormData(formEl);
+    const name = String(form.get('name') ?? '').trim();
+    const unitId = String(form.get('administrative_unit_id') ?? '').trim();
+    const countryId = String(form.get('country_id') ?? '').trim() || record.country_id?.trim() || '';
+    let locationId = String(form.get('location_id') ?? '').trim();
+    const locationName = String(form.get('location_name') ?? '').trim() || record.location_name?.trim() || `${name} location`;
+    const timezone = String(form.get('timezone') ?? '').trim() || record.timezone?.trim() || 'Africa/Lagos';
+    const address = {
+      address_line_one: String(form.get('address_line_one') ?? '').trim() || null,
+      address_line_two: String(form.get('address_line_two') ?? '').trim() || null,
+      locality: String(form.get('locality') ?? '').trim() || null,
+      postal_code: String(form.get('postal_code') ?? '').trim() || null,
+    };
+    if (!name || !unitId) {
+      setError('Name and administrative unit are required.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
+      if (!locationId) {
+        if (!countryId) {
+          setError('Country is required when creating a new location for this church.');
+          setBusy(false);
+          return;
+        }
+        const created = await createLocation({
+          country_id: countryId,
+          name: locationName,
+          timezone,
+          administrative_unit_id: unitId,
+          ...address,
+        }, { scope });
+        locationId = created.id;
+      } else {
+        await updateLocation(locationId, {
+          country_id: countryId || record.country_id || '',
+          name: locationName,
+          timezone,
+          administrative_unit_id: unitId,
+          ...address,
+        }, { scope });
+      }
       const next = await updateChurch(record.id, {
         name,
-        location_id: record.location_id ?? '',
-        administrative_unit_id: record.administrative_unit_id ?? '',
+        location_id: locationId,
+        administrative_unit_id: unitId,
       }, scope);
       setRecord(next);
       setEditing(false);
@@ -320,12 +359,55 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
       {record ? (
         <article className="card entity-overview-card">
           {editing ? (
-            <form onSubmit={(event) => void onSave(event)}>
-              <label><span>Canonical name *</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-              <p className="maps-settings-lead">Location and coverage stay on the linked geography records. Use Geography to change address or coordinates.</p>
+            <form key={record.id} onSubmit={(event) => void onSave(event)}>
+              <div className="form-grid">
+                <label className="full">
+                  <span>Canonical name *</span>
+                  <input name="name" type="text" defaultValue={record.name} autoComplete="organization" required />
+                </label>
+                <label>
+                  <span>Country</span>
+                  <EntitySearchSelect name="country_id" catalog="country" defaultValue={record.country_id ?? undefined} defaultLabel={record.country_name ?? undefined} placeholder="Search country" />
+                </label>
+                <label>
+                  <span>Administrative unit *</span>
+                  <EntitySearchSelect name="administrative_unit_id" catalog="administrativeUnit" required defaultValue={record.administrative_unit_id ?? undefined} defaultLabel={record.administrative_unit_name ?? undefined} placeholder="Search unit" />
+                </label>
+                <label>
+                  <span>Existing location</span>
+                  <EntitySearchSelect name="location_id" catalog="location" defaultValue={record.location_id ?? undefined} defaultLabel={record.location_name ?? undefined} placeholder="Search location, or create below" />
+                </label>
+                <label>
+                  <span>Location name</span>
+                  <input name="location_name" type="text" defaultValue={record.location_name ?? ''} placeholder="Campus or site name" />
+                </label>
+                <label className="full">
+                  <span>Address line 1</span>
+                  <input name="address_line_one" type="text" defaultValue={record.address_line_one ?? ''} autoComplete="street-address" />
+                </label>
+                <label className="full">
+                  <span>Address line 2</span>
+                  <input name="address_line_two" type="text" defaultValue={record.address_line_two ?? ''} />
+                </label>
+                <label>
+                  <span>Locality / city</span>
+                  <input name="locality" type="text" defaultValue={record.locality ?? ''} />
+                </label>
+                <label>
+                  <span>Postal code</span>
+                  <input name="postal_code" type="text" defaultValue={record.postal_code ?? ''} />
+                </label>
+                <label>
+                  <span>Timezone</span>
+                  <input name="timezone" type="text" defaultValue={record.timezone ?? 'Africa/Lagos'} placeholder="Africa/Lagos" />
+                </label>
+              </div>
+              <p className="maps-settings-lead">
+                Saving updates this church and its linked geography location. Clearing the existing location and setting country creates a new location, then points the church at it.
+              </p>
               <div className="overview-actions">
                 <button type="button" className="ghost-button" onClick={() => setEditing(false)}>Cancel</button>
-                <button type="submit" className="primary-button" disabled={busy}>Save name</button>
+                <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save church'}</button>
               </div>
             </form>
           ) : (
@@ -344,7 +426,7 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
                 <div><dt>Published</dt><dd>{record.published_at ? new Date(record.published_at).toLocaleString() : 'Not provided'}</dd></div>
               </dl>
               <div className="overview-actions">
-                <button type="button" className="ghost-button" onClick={() => setEditing(true)}>Edit name</button>
+                <button type="button" className="ghost-button" onClick={() => setEditing(true)}>Edit church</button>
               </div>
               <label className="full">
                 <span>Reason for status change *</span>
