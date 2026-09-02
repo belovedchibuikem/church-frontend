@@ -5,7 +5,7 @@ import {
   apiRequestResponse,
   type ApiSuccessEnvelope,
 } from './api-client.ts';
-import { BROWSER_SESSION_COOKIE } from './api-config.ts';
+import { BROWSER_SESSION_COOKIE, resolveApiV1BaseUrl } from './api-config.ts';
 import { serverSessionHeaders, hasIncomingCookie } from './server-session-headers.ts';
 import type { JsonObject } from './api-types.ts';
 
@@ -1255,6 +1255,42 @@ export async function fetchKcaMe(): Promise<KcaAccess> {
     method: 'GET',
     headers: await serverSessionHeaders(),
   });
+}
+
+export type KcaAdmissionLetter = {
+  id: string;
+  application_id?: string;
+  reference_code: string;
+  applicant_name: string;
+  church_name?: string | null;
+  batch_label?: string | null;
+  letter_body?: string | null;
+  signer_name?: string | null;
+  signer_title?: string | null;
+  letterhead_file_asset_id?: string | null;
+  signature_file_asset_id?: string | null;
+  issued_at?: string | null;
+  status?: string;
+};
+
+/** GET /user/kca/admission-letter */
+export async function fetchKcaAdmissionLetter(): Promise<KcaAdmissionLetter> {
+  return apiRequestData<KcaAdmissionLetter>('user/kca/admission-letter', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+/** Authenticated admission letter asset URL (letterhead or signature). */
+export function kcaAdmissionLetterAssetUrl(fileAssetId: string, download = false): string {
+  const base = resolveApiV1BaseUrl();
+  const suffix = download ? '?download=1' : '';
+  return `${base}/user/kca/admission-letter/assets/${encodeURIComponent(fileAssetId)}${suffix}`;
+}
+
+/** GET /user/kca/admission-letter/download */
+export function kcaAdmissionLetterDownloadUrl(): string {
+  return `${resolveApiV1BaseUrl()}/user/kca/admission-letter/download`;
 }
 
 /** GET /user/kca/dashboard */

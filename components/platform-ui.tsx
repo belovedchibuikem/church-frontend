@@ -50,6 +50,7 @@ import {
   type PlatformConfiguration,
   configureKcaGovernance,
   getKcaGovernance,
+  uploadPlatformGovernanceFile,
   type KcaGovernanceStatus,
 } from '../lib/admin-platform-api.ts';
 import type { JsonValue } from '../lib/api-types.ts';
@@ -867,11 +868,15 @@ export function KcaSettingsPanel() {
   const [status, setStatus] = useState<KcaGovernanceStatus | null>(null);
   const [message, setMessage] = useState(() => t('admin.loadingKcaGovernance', { defaultMessage: 'Loading KCA governance…' }));
   const [busy, setBusy] = useState(false);
+  const [letterheadId, setLetterheadId] = useState<string | null>(null);
+  const [signatureId, setSignatureId] = useState<string | null>(null);
 
   useEffect(() => {
     void getKcaGovernance()
       .then((data) => {
         setStatus(data);
+        setLetterheadId(data.admission_letterhead_file_asset_id ?? null);
+        setSignatureId(data.admission_signature_file_asset_id ?? null);
         setMessage(data.configured
           ? t('admin.kcaLiveFromApi', { defaultMessage: 'Live KCA governance from the admin API.' })
           : t('admin.kcaUsingDefaults', { defaultMessage: 'Using KCA defaults until you save.' }));
@@ -881,11 +886,31 @@ export function KcaSettingsPanel() {
       });
   }, [t]);
 
+  const uploadAsset = async (
+    file: File,
+    purpose: 'kca_admission_letterhead' | 'kca_admission_signature',
+  ) => {
+    const asset = await uploadPlatformGovernanceFile(file, purpose);
+    if (purpose === 'kca_admission_letterhead') setLetterheadId(asset.id);
+    else setSignatureId(asset.id);
+    return asset.id;
+  };
+
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setBusy(true);
     try {
+      const letterheadInput = form.get('admission_letterhead_file') as File | null;
+      const signatureInput = form.get('admission_signature_file') as File | null;
+      let nextLetterheadId = letterheadId;
+      let nextSignatureId = signatureId;
+      if (letterheadInput instanceof File && letterheadInput.size > 0) {
+        nextLetterheadId = await uploadAsset(letterheadInput, 'kca_admission_letterhead');
+      }
+      if (signatureInput instanceof File && signatureInput.size > 0) {
+        nextSignatureId = await uploadAsset(signatureInput, 'kca_admission_signature');
+      }
       const data = await configureKcaGovernance({
         pass_threshold_percent: Number(form.get('pass_threshold_percent') || 70),
         attendance_threshold_percent: Number(form.get('attendance_threshold_percent') || 75),
@@ -893,8 +918,14 @@ export function KcaSettingsPanel() {
         require_signed_pdf: form.get('require_signed_pdf') === 'on',
         certificate_signer_name: String(form.get('certificate_signer_name') || ''),
         certificate_signer_title: String(form.get('certificate_signer_title') || ''),
+        admission_signer_name: String(form.get('admission_signer_name') || ''),
+        admission_signer_title: String(form.get('admission_signer_title') || ''),
+        admission_letterhead_file_asset_id: nextLetterheadId,
+        admission_signature_file_asset_id: nextSignatureId,
       });
       setStatus(data);
+      setLetterheadId(data.admission_letterhead_file_asset_id ?? nextLetterheadId);
+      setSignatureId(data.admission_signature_file_asset_id ?? nextSignatureId);
       setMessage(t('admin.kcaSaved', { defaultMessage: 'KCA governance saved. Superadmins delegate kca.governance.manage and kca.certificates.revoke.' }));
     } catch (error) {
       setMessage(platformErrorMessage(error, t('errors.saveKcaGovernance', { defaultMessage: 'Save failed. Confirm kca.governance.manage and recent MFA.' })));
@@ -944,6 +975,28 @@ export function KcaSettingsPanel() {
               <input defaultChecked={status?.require_signed_pdf ?? false} name="require_signed_pdf" type="checkbox" />
               <i />
             </span>
+          </label>
+        </div>
+        <h3>{t('admin.admissionLetterGovernance', { defaultMessage: 'Admission letter' })}</h3>
+        <p>{t('admin.admissionLetterLead', { defaultMessage: 'Configure the provost signature and letterhead used when admission letters are issued.' })}</p>
+        <div className="platform-form-grid">
+          <label>
+            <span>{t('admin.admissionSignerName', { defaultMessage: 'Provost / signer name' })}</span>
+            <input defaultValue={status?.admission_signer_name ?? ''} name="admission_signer_name" />
+          </label>
+          <label>
+            <span>{t('admin.admissionSignerTitle', { defaultMessage: 'Signer title' })}</span>
+            <input defaultValue={status?.admission_signer_title ?? ''} name="admission_signer_title" />
+          </label>
+          <label>
+            <span>{t('admin.admissionLetterhead', { defaultMessage: 'Letterhead image' })}</span>
+            <input accept="image/*" name="admission_letterhead_file" type="file" />
+            {letterheadId ? <small>{letterheadId}</small> : null}
+          </label>
+          <label>
+            <span>{t('admin.admissionSignature', { defaultMessage: 'Provost signature (upload or draw externally)' })}</span>
+            <input accept="image/*" name="admission_signature_file" type="file" />
+            {signatureId ? <small>{signatureId}</small> : null}
           </label>
         </div>
         <footer className="form-footer">

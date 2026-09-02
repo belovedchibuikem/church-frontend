@@ -104,6 +104,7 @@ import {
   fetchKcaAttendance,
   fetchKcaDashboard,
   fetchKcaMe,
+  fetchKcaAdmissionLetter,
   fetchKcaCurrentApplication,
   fetchKcaMentor,
   fetchKcaModule,
@@ -123,6 +124,8 @@ import {
   fetchKcaDirectory,
   submitKcaEvidence,
   downloadKcaCertificatePdf,
+  kcaAdmissionLetterAssetUrl,
+  kcaAdmissionLetterDownloadUrl,
   completeKcaLesson,
   type KcaLessonDetail,
   type KcaChapterSummary,
@@ -5832,15 +5835,15 @@ function KcaAdmissionLetterDocument() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [access, setAccess] = useState<KcaAccess | null>(null);
-  const [holder, setHolder] = useState('Applicant');
+  const [letter, setLetter] = useState<Awaited<ReturnType<typeof fetchKcaAdmissionLetter>> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([fetchKcaMe(), fetchCurrentUser().catch(() => null)])
-      .then(([me, user]) => {
+    void Promise.all([fetchKcaMe(), fetchKcaAdmissionLetter().catch(() => null)])
+      .then(([me, admissionLetter]) => {
         if (cancelled) return;
         setAccess(me);
-        if (user) setHolder(displayNameFromUser(user) || 'Applicant');
+        setLetter(admissionLetter);
         setState('ready');
       })
       .catch((err) => {
@@ -5868,22 +5871,45 @@ function KcaAdmissionLetterDocument() {
     );
   }
 
+  if (!letter) {
+    return (
+      <section className="panel">
+        <h3>Admission letter</h3>
+        <p>Your admission letter is being prepared by KCA administration.</p>
+      </section>
+    );
+  }
+
+  const bodyParagraphs = (letter.letter_body ?? '').split('\n\n').filter(Boolean);
+  const letterheadUrl = letter.letterhead_file_asset_id
+    ? kcaAdmissionLetterAssetUrl(letter.letterhead_file_asset_id)
+    : null;
+  const signatureUrl = letter.signature_file_asset_id
+    ? kcaAdmissionLetterAssetUrl(letter.signature_file_asset_id)
+    : null;
+
   return (
     <div className="document-wrap">
       <div className="document">
-        <span>⬡</span>
-        <h5><BrandName /></h5>
-        <h2>Admission Letter</h2>
-        <p>Dear {holder},</p>
-        <p>
-          You have been admitted to Kingdom Change Agents. Learning unlocks after your enrollment is
-          activated by admissions.
-        </p>
+        {letterheadUrl ? <img alt="" src={letterheadUrl} style={{ maxWidth: '100%', marginBottom: '1rem' }} /> : <span>⬡</span>}
+        {!letterheadUrl ? (
+          <>
+            <h5><BrandName /></h5>
+            <h2>Admission Letter</h2>
+          </>
+        ) : null}
+        <p><small>{letter.reference_code}</small></p>
+        <p>Dear {letter.applicant_name},</p>
+        {bodyParagraphs.length > 0 ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>) : (
+          <p>You have been admitted to Kingdom Change Agents. Learning unlocks after your enrollment is activated by admissions.</p>
+        )}
         <div className="signatures">
-          <i>{String(access?.application?.id ?? 'Application on file')}</i>
-          <i>{access?.label ?? 'Admitted'}</i>
+          {signatureUrl ? <img alt="" src={signatureUrl} style={{ maxHeight: 72 }} /> : null}
+          <i>{letter.signer_name ?? 'Provost, KCA'}</i>
+          <i>{letter.signer_title ?? access?.label ?? 'Admitted'}</i>
         </div>
       </div>
+      <a className="site-button" href={kcaAdmissionLetterDownloadUrl()}>Download PDF</a>
     </div>
   );
 }

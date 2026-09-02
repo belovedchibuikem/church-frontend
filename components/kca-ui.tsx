@@ -17,6 +17,9 @@ import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
 import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-cache';
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
+import { getKcaAdmissionLetter, issueKcaAdmissionLetter, type KcaAdmissionLetter } from '../lib/admin-platform-api';
+import { resolveApiV1BaseUrl } from '../lib/api-config.ts';
+import { pathEntityId } from '../lib/site-api.ts';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
 import { flattenKcaRegistrationPayload, kcaRegistrationSteps } from '../lib/kca-registration-steps';
@@ -339,6 +342,175 @@ function KcaLeadershipRecommendationAdmin({ screen }: { screen: AdminScreen }) {
   );
 }
 
+function applicationPermitsEnrollment(status: string): boolean {
+  return status === 'accepted' || status === 'provisionally_accepted';
+}
+
+function KcaAdmissionPostDecisionPanel({
+  applicationId,
+  personName,
+  status,
+  onEnrolled,
+  onMessage,
+  onError,
+}: {
+  applicationId: string;
+  personName: string;
+  status: string;
+  onEnrolled: (enrollment: Record<string, unknown>) => void;
+  onMessage: (message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const { t } = useLocale();
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const [enrollment, setEnrollment] = useState<Record<string, unknown> | null>(null);
+  const [loadingEnrollment, setLoadingEnrollment] = useState(live);
+  const [cohortId, setCohortId] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [startsOn, setStartsOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!live || !applicationPermitsEnrollment(status)) {
+      setLoadingEnrollment(false);
+      return;
+    }
+    let cancelled = false;
+    void listCatalogDomain('kca.enrollments', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE })
+      .then((result) => {
+        if (cancelled) return;
+        const match = result.items.find((item) => String(item.application_id) === applicationId) ?? null;
+        setEnrollment(match as Record<string, unknown> | null);
+      })
+      .catch(() => {
+        if (!cancelled) setEnrollment(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingEnrollment(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId, live, status]);
+
+  async function submitEnrollment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!cohortId.trim()) {
+      onError('Select a cohort before enrolling.');
+      return;
+    }
+    if (!registrationNumber.trim()) {
+      onError('Registration number is required.');
+      return;
+    }
+    if (!startsOn.trim()) {
+      onError('Start date is required.');
+      return;
+    }
+    setBusy(true);
+    onError('');
+    try {
+      const result = await executeAdminAction({
+        route: `/admin/kca/applications/${applicationId}/decision`,
+        label: 'Enroll student',
+        payload: {
+          application_id: applicationId,
+          cohort_id: cohortId,
+          registration_number: registrationNumber.trim(),
+          starts_on: startsOn,
+        },
+        recordId: applicationId,
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      const record = (result.data as { data?: Record<string, unknown> })?.data ?? (result.data as Record<string, unknown>);
+      const nextEnrollment = record && typeof record === 'object' ? record : { id: result.id, application_id: applicationId };
+      setEnrollment(nextEnrollment);
+      onEnrolled(nextEnrollment);
+      onMessage(`${personName} enrolled successfully. The student dashboard will unlock for this applicant.`);
+    } catch (err) {
+      onError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!applicationPermitsEnrollment(status)) return null;
+
+  return (
+    <section className="kca-post-decision-panel" aria-labelledby="kca-post-decision-title">
+      <span className="kca-overline">{t('member.kca.nextSteps', { defaultMessage: 'Next steps' })}</span>
+      <h3 id="kca-post-decision-title">{t('member.kca.completeAdmissionJourney', { defaultMessage: 'Complete admission & enrollment' })}</h3>
+      <p className="maps-settings-lead">
+        {t('member.kca.postDecisionCopy', {
+          defaultMessage: '{name} has been {status}. Issue the admission letter, then enroll the student into a cohort to activate learning.',
+          vars: { name: personName, status: status.replaceAll('_', ' ') },
+        })}
+      </p>
+      <div className="kca-post-decision-actions">
+        <Link className="ghost-button link-button" href={`/admin/kca/applications/${applicationId}/admission-letter`}>
+          {t('member.kca.viewAdmissionLetter', { defaultMessage: 'View admission letter' })}
+        </Link>
+      </div>
+      {loadingEnrollment ? (
+        <p className="maps-settings-lead" role="status">{t('common.loading', { defaultMessage: 'Loading…' })}</p>
+      ) : enrollment ? (
+        <div className="kca-enrollment-summary">
+          <p><KcaBadge value="enrolled" /></p>
+          <dl>
+            <div><dt>{t('member.kca.registrationNumber', { defaultMessage: 'Registration number' })}</dt><dd>{String(enrollment.registration_number ?? '—')}</dd></div>
+            <div><dt>{t('member.kca.batch', { defaultMessage: 'Batch' })}</dt><dd>{String(enrollment.cohort_name ?? enrollment.batch_name ?? '—')}</dd></div>
+            <div><dt>{t('member.kca.startsOn', { defaultMessage: 'Starts on' })}</dt><dd>{String(enrollment.starts_on ?? '—')}</dd></div>
+          </dl>
+          {enrollment.id ? (
+            <Link className="primary-button link-button" href={`/admin/kca/students/${String(enrollment.id)}`}>
+              {t('member.kca.viewStudentRecord', { defaultMessage: 'View student record' })}
+            </Link>
+          ) : null}
+        </div>
+      ) : (
+        <form className="kca-form-grid" onSubmit={(event) => void submitEnrollment(event)}>
+          <label className="wide">
+            <span>{t('member.kca.cohort', { defaultMessage: 'Cohort / batch' })}</span>
+            <EntitySearchSelect
+              catalog="kcaCohort"
+              name="cohort_id"
+              onValueChange={setCohortId}
+              placeholder={t('member.kca.searchCohort', { defaultMessage: 'Search cohort' })}
+              required
+              value={cohortId}
+            />
+          </label>
+          <label>
+            <span>{t('member.kca.registrationNumber', { defaultMessage: 'Registration number' })}</span>
+            <input
+              name="registration_number"
+              onChange={(event) => setRegistrationNumber(event.target.value)}
+              placeholder="KCA-2026-0001"
+              required
+              value={registrationNumber}
+            />
+          </label>
+          <label>
+            <span>{t('member.kca.startsOn', { defaultMessage: 'Starts on' })}</span>
+            <input
+              name="starts_on"
+              onChange={(event) => setStartsOn(event.target.value)}
+              required
+              type="date"
+              value={startsOn}
+            />
+          </label>
+          <footer className="form-footer wide">
+            <button className="primary-button" disabled={busy} type="submit">
+              {t('member.kca.enrollStudent', { defaultMessage: 'Enroll student' })}
+            </button>
+          </footer>
+        </form>
+      )}
+    </section>
+  );
+}
+
 function KcaDecision({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
@@ -367,6 +539,14 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
     };
   }, [applicationId, live]);
 
+  async function refreshApplication() {
+    if (!applicationId) return null;
+    const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
+    const match = (result.items.find((item) => String(item.id) === applicationId) as Record<string, unknown>) ?? null;
+    setApplication(match);
+    return match;
+  }
+
   async function submitDecision(status: string, label: string) {
     if (!applicationId) return;
     const current = String(application?.status ?? '').toLowerCase();
@@ -387,8 +567,7 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
         scope: CATALOG_GLOBAL_SCOPE,
       });
       setMessage(`Decision recorded: ${status.replaceAll('_', ' ')}.`);
-      const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
-      setApplication((result.items.find((item) => String(item.id) === applicationId) as Record<string, unknown>) ?? null);
+      await refreshApplication();
     } catch (err) {
       setError(formatAdminMutationError(err));
     } finally {
@@ -410,8 +589,7 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
         scope: CATALOG_GLOBAL_SCOPE,
       });
       setMessage('Orientation marked complete. Application is ready for admission decision.');
-      const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
-      setApplication((result.items.find((item) => String(item.id) === applicationId) as Record<string, unknown>) ?? null);
+      await refreshApplication();
     } catch (err) {
       setError(formatAdminMutationError(err));
     } finally {
@@ -427,6 +605,7 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
       ? (application.orientation_progress as string[])
       : [];
     const orientationComplete = Boolean(application?.orientation_completed_at);
+    const showPostDecisionPanel = applicationPermitsEnrollment(status);
     return (
       <div className="kca-decision-layout">
         <aside className="card kca-review-summary">
@@ -435,6 +614,14 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           <small>{applicationId}</small>
           <p><KcaBadge value={status} /></p>
           <p>{application?.received_at ? `Received ${String(application.received_at)}` : null}</p>
+          {application?.batch_name ? <p>{t('member.kca.batch', { defaultMessage: 'Batch' })}: {String(application.batch_name)}</p> : null}
+          {showPostDecisionPanel ? (
+            <p>
+              <Link href={`/admin/kca/applications/${applicationId}/admission-letter`}>
+                {t('member.kca.viewAdmissionLetter', { defaultMessage: 'View admission letter' })}
+              </Link>
+            </p>
+          ) : null}
           {status === 'interview' ? (
             <p>
               Orientation: {orientationComplete ? 'Complete' : `${orientationProgress.length}/4 stages`}
@@ -477,6 +664,16 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
               <span>×</span><strong>{t('member.kca.notAccepted', { defaultMessage: 'Not Accepted' })}</strong>
             </button>
           </div>
+          <KcaAdmissionPostDecisionPanel
+            applicationId={applicationId}
+            onEnrolled={() => {
+              void refreshApplication();
+            }}
+            onError={setError}
+            onMessage={setMessage}
+            personName={personName}
+            status={status}
+          />
           <label><span>{t('member.kca.admissionNotesOptional', { defaultMessage: 'Admission Notes (Optional)' })}</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t('member.kca.privateNotesPlaceholder', { defaultMessage: 'Write your private notes here...' })} /></label>
           <footer><Link className="ghost-button" href="/admin/kca/applications">{t('common.back', { defaultMessage: 'Back' })}</Link></footer>
         </article>
@@ -500,8 +697,109 @@ function KcaOutcome({ screen }: { screen: AdminScreen }) {
 
 function KcaLetter({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const applicationId = extractUlid(screen.route) ?? pathEntityId(screen.route);
+  const [letter, setLetter] = useState<KcaAdmissionLetter | null>(null);
+  const [message, setMessage] = useState(live ? t('common.loading', { defaultMessage: 'Loading…' }) : '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const details = screen.details ?? {};
-  return <div className="kca-document-layout" style={{ display: 'block' }}><article className="card kca-letter" style={{ maxWidth: 780, margin: '0 auto' }} aria-labelledby="admission-letter-title"><header><div className="kca-seal" aria-hidden="true">{t('member.kca', { defaultMessage: 'KCA' })}</div><div><strong>{t('member.kca.academyName', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</strong><small>{t('member.kca.familyHouseConnect', { defaultMessage: 'Family House Connect' })}</small></div></header><h1 id="admission-letter-title" aria-level={2}>{t('member.kca.admissionLetter', { defaultMessage: 'ADMISSION LETTER' })}</h1><div className="kca-letter-meta"><span>{t('member.kca.letterDate', { defaultMessage: 'Date: {date}', vars: { date: details.Date ?? '' } })}</span><span>{t('member.kca.letterRef', { defaultMessage: 'Ref: {ref}', vars: { ref: 'KCA/ADM/2024/0124' } })}</span></div><p>{t('member.kca.dear', { defaultMessage: 'Dear' })} <strong>{details.To}</strong>,</p><p>{t('member.kca.letterAccepted', { defaultMessage: 'We are pleased to inform you that you have been provisionally accepted into the Kingdom Citizens Academy for Batch 2024-06.' })}</p><p>{t('member.kca.letterConfidence', { defaultMessage: 'Your admission reflects our confidence in your potential, character, and commitment to Christian leadership.' })}</p><h3>{t('member.kca.nextSteps', { defaultMessage: 'Next Steps' })}</h3><ol>{details['Next Steps']?.split(' · ').slice(0, 3).map(item => <li key={item}>{item}</li>)}</ol><p>{t('member.kca.letterWelcome', { defaultMessage: 'Congratulations and welcome to KCA.' })}</p><div className="kca-letter-signature"><strong>Pastor Daniel David</strong><span>{t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}</span></div></article></div>;
+
+  useEffect(() => {
+    if (!live || !applicationId || !/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(applicationId)) return;
+    let cancelled = false;
+    void getKcaAdmissionLetter(applicationId)
+      .then((data) => {
+        if (cancelled) return;
+        setLetter(data);
+        setMessage('');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatAdminMutationError(err));
+        setMessage('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId, live]);
+
+  const issue = async () => {
+    if (!applicationId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await issueKcaAdmissionLetter(applicationId);
+      setLetter(data);
+      setMessage(t('member.kca.letterIssued', { defaultMessage: 'Admission letter issued.' }));
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applicant = letter?.applicant_name ?? details.To ?? 'Applicant';
+  const reference = letter?.reference_code ?? 'KCA/ADM/2024/0124';
+  const issuedOn = letter?.issued_at ? new Date(letter.issued_at).toLocaleDateString() : (details.Date ?? '');
+  const batchLabel = letter?.batch_label ?? '';
+  const bodyParagraphs = (letter?.letter_body ?? '').split('\n\n').filter(Boolean);
+  const letterheadUrl = letter?.letterhead_file_asset_id
+    ? `${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId ?? '')}/admission-letter/assets/${encodeURIComponent(letter.letterhead_file_asset_id)}`
+    : null;
+  const signatureUrl = letter?.signature_file_asset_id
+    ? `${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId ?? '')}/admission-letter/assets/${encodeURIComponent(letter.signature_file_asset_id)}`
+    : null;
+
+  return (
+    <div className="kca-document-layout" style={{ display: 'block' }}>
+      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+      {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      {live && !letter && !error ? (
+        <footer className="form-footer">
+          <button className="primary-button" disabled={busy || !applicationId} onClick={() => void issue()} type="button">
+            {t('member.kca.issueLetter', { defaultMessage: 'Issue admission letter' })}
+          </button>
+        </footer>
+      ) : null}
+      <article className="card kca-letter" style={{ maxWidth: 780, margin: '0 auto' }} aria-labelledby="admission-letter-title">
+        <header>
+          {letterheadUrl ? (
+            <img alt="" src={letterheadUrl} style={{ maxWidth: '100%', marginBottom: '1rem' }} />
+          ) : (
+            <>
+              <div className="kca-seal" aria-hidden="true">{t('member.kca', { defaultMessage: 'KCA' })}</div>
+              <div>
+                <strong>{t('member.kca.academyName', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</strong>
+                <small>{t('member.kca.familyHouseConnect', { defaultMessage: 'Family House Connect' })}</small>
+              </div>
+            </>
+          )}
+        </header>
+        <h1 id="admission-letter-title" aria-level={2}>{t('member.kca.admissionLetter', { defaultMessage: 'ADMISSION LETTER' })}</h1>
+        <div className="kca-letter-meta">
+          <span>{t('member.kca.letterDate', { defaultMessage: 'Date: {date}', vars: { date: issuedOn } })}</span>
+          <span>{t('member.kca.letterRef', { defaultMessage: 'Ref: {ref}', vars: { ref: reference } })}</span>
+        </div>
+        <p>{t('member.kca.dear', { defaultMessage: 'Dear' })} <strong>{applicant}</strong>,</p>
+        {bodyParagraphs.length > 0 ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>) : (
+          <p>{t('member.kca.letterAccepted', { defaultMessage: 'We are pleased to inform you that you have been accepted into the Kingdom Citizens Academy{batch}.', vars: { batch: batchLabel ? ` for ${batchLabel}` : '' } })}</p>
+        )}
+        <div className="kca-letter-signature">
+          {signatureUrl ? <img alt="" src={signatureUrl} style={{ maxHeight: 72, marginBottom: '0.5rem' }} /> : null}
+          <strong>{letter?.signer_name ?? 'Pastor Daniel David'}</strong>
+          <span>{letter?.signer_title ?? t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}</span>
+        </div>
+      </article>
+      {letter && applicationId ? (
+        <footer className="form-footer">
+          <a className="primary-button link-button" href={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/download`}>
+            {t('member.kca.downloadPdf', { defaultMessage: 'Download PDF' })}
+          </a>
+        </footer>
+      ) : null}
+    </div>
+  );
 }
 
 function KcaOrientation({ screen }: { screen: AdminScreen }) {

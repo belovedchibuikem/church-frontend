@@ -465,6 +465,10 @@ export type KcaGovernanceStatus = {
   require_signed_pdf: boolean;
   certificate_signer_name?: string | null;
   certificate_signer_title?: string | null;
+  admission_signer_name?: string | null;
+  admission_signer_title?: string | null;
+  admission_letterhead_file_asset_id?: string | null;
+  admission_signature_file_asset_id?: string | null;
   configuration_revision?: number;
 };
 
@@ -480,6 +484,62 @@ export async function configureKcaGovernance(
   scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
 ): Promise<KcaGovernanceStatus> {
   return platformMutate<KcaGovernanceStatus>('PUT', 'admin/kca/governance', body, scope);
+}
+
+export type KcaAdmissionLetter = {
+  id: string;
+  application_id?: string;
+  reference_code: string;
+  applicant_name: string;
+  church_name?: string | null;
+  batch_label?: string | null;
+  letter_body?: string | null;
+  signer_name?: string | null;
+  signer_title?: string | null;
+  letterhead_file_asset_id?: string | null;
+  signature_file_asset_id?: string | null;
+  issued_at?: string | null;
+  status?: string;
+};
+
+export async function getKcaAdmissionLetter(
+  applicationId: string,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaAdmissionLetter> {
+  return (await platformGet<KcaAdmissionLetter>(
+    `admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter`,
+    scope,
+  )).data;
+}
+
+export async function issueKcaAdmissionLetter(
+  applicationId: string,
+  body: Partial<KcaAdmissionLetter> = {},
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaAdmissionLetter> {
+  return platformMutate<KcaAdmissionLetter>(
+    'POST',
+    `admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/issue`,
+    body,
+    scope,
+  );
+}
+
+export async function uploadPlatformGovernanceFile(
+  file: File,
+  purpose: 'kca_admission_letterhead' | 'kca_admission_signature',
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<{ id: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('purpose', purpose);
+  formData.append('classification', 'internal');
+  formData.append('idempotency_key', crypto.randomUUID());
+  const asset = await apiRequestForm<{ id: string }>('admin/platform/files', formData, {
+    ...withScope(scope),
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  });
+  return { id: asset.id };
 }
 
 export type AdminBrandingStatus = {
