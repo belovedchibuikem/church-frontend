@@ -144,7 +144,7 @@ function OrganizationCreateForms({
   const { t } = useLocale();
   const [message, setMessage] = useState(
     t('admin.hierarchy.createLead', {
-      defaultMessage: 'Create countries, levels, units, and locations against live Laravel APIs.',
+      defaultMessage: 'Create countries, levels, units, and locations using the live geography catalogue.',
     }),
   );
   const [countryId, setCountryId] = useState(snapshot.countries[0]?.id ?? '');

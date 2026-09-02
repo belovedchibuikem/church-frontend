@@ -104,7 +104,7 @@ export const kcaRegistrationSteps: KcaRegistrationStep[] = [
     fields: [
       { label: 'Admit and enroll now', name: 'admit_and_enroll', type: 'checkbox', placeholder: 'Accept the application and create a cohort enrollment in one step.' },
       { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', placeholder: 'Search cohort (required when enrolling)' },
-      { label: 'Registration number', name: 'registration_number', type: 'text', placeholder: 'e.g. KCA-2026-0001' },
+      { label: 'Registration number', name: 'registration_number', type: 'text', placeholder: 'Auto-assigned on enroll', helpText: 'Generated automatically when you submit enrollment.' },
       { label: 'Starts on', name: 'starts_on', type: 'date' },
     ],
   },

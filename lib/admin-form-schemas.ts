@@ -329,7 +329,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     fields: [
       { label: 'Admitted application', name: 'application_id', type: 'search-select', catalog: 'kcaApplication', required: true, placeholder: 'Search accepted application' },
       { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', required: true, placeholder: 'Search cohort' },
-      { label: 'Registration number', name: 'registration_number', type: 'text', required: true, placeholder: 'e.g. KCA-2026-0001' },
+      { label: 'Registration number', name: 'registration_number', type: 'text', placeholder: 'Auto-assigned on enroll', helpText: 'Generated automatically when enrollment is submitted.' },
       { label: 'Starts on', name: 'starts_on', type: 'date', required: true },
     ],
   },
@@ -364,7 +364,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
           'suspended',
           'revoked',
         ],
-        helpText: 'Admission status is changed through the Laravel transition endpoint, not a generic record update.',
+        helpText: 'Admission status is changed through the dedicated decision workflow, not a generic record update.',
       },
       {
         label: 'Reason code',

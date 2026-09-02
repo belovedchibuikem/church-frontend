@@ -63,7 +63,7 @@ const roleMessageKeys: Record<(typeof roles)[number][0], { title: string; copy: 
 };
 
 const recoveryOptions = [
-  ['Reset password by email', 'Calls POST /auth/password/forgot. Delivery depends on Laravel mail being configured.', '/forgot-password'],
+  ['Reset password by email', 'Sends a password reset link when email delivery is configured.', '/forgot-password'],
   ['MFA recovery code', 'Use a one-time recovery code from authenticator setup via POST /auth/mfa/challenge.', '/otp?mode=recovery'],
 ] as const;
 
@@ -374,7 +374,7 @@ function ApiConfigMissing() {
       {t('auth.apiNotConfigured', { defaultMessage: 'Authentication API is not configured.' })}{' '}
       {t('errors.authNotConfigured', {
         defaultMessage:
-          'Set NEXT_PUBLIC_FHC_API_URL (…/api/v1) or NEXT_PUBLIC_FHC_API_BASE_URL (origin) for your Laravel API.',
+          'Set NEXT_PUBLIC_FHC_API_URL (…/api/v1) or NEXT_PUBLIC_FHC_API_BASE_URL (origin) for your platform API.',
       })}
     </AuthBanner>
   );
@@ -1071,7 +1071,7 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             setSuccess(
               t('auth.resetAccepted', {
                 defaultMessage:
-                  'If an account exists for that email, a reset was accepted. Delivery depends on Laravel mail being configured — this app does not claim the message was delivered.',
+                  'If an account exists for that email, a reset was accepted. Delivery depends on mail being configured — this app does not claim the message was delivered.',
               }),
             );
           } catch (err) {

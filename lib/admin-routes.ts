@@ -254,6 +254,24 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     };
   }
 
+  const kcaStudentDetail = route.match(/^\/admin\/kca\/students\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/i);
+  if (kcaStudentDetail) {
+    const template = adminScreens.find((screen) => screen.id === 'H-02');
+    if (!template) return undefined;
+    return {
+      ...template,
+      route,
+      title: 'Student',
+      subtitle: kcaStudentDetail[1],
+      kind: 'detail',
+      details: {
+        'Registration number': 'Loading',
+        Cohort: 'Loading',
+        'Starts on': 'Loading',
+      },
+    };
+  }
+
   const homeChurchDecision = route.match(/^\/admin\/home-churches\/applications\/([^/]+)\/decision$/);
   if (homeChurchDecision) {
     const template = adminScreens.find((screen) => screen.id === 'D-05');

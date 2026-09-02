@@ -18,7 +18,7 @@ import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-ca
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { KcaAdmissionLetterSheet } from './kca-admission-letter-sheet';
-import { getKcaAdmissionLetter, fetchKcaAdmissionLetterAssetBlob, issueKcaAdmissionLetter, downloadKcaAdmissionLetterPdf, type KcaAdmissionLetter } from '../lib/admin-platform-api';
+import { getKcaAdmissionLetter, fetchKcaAdmissionLetterAssetBlob, issueKcaAdmissionLetter, downloadKcaAdmissionLetterPdf, previewKcaRegistrationNumber, type KcaAdmissionLetter } from '../lib/admin-platform-api';
 import { downloadBlob } from '../lib/download-blob.ts';
 import { pathEntityId } from '../lib/site-api.ts';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
@@ -280,6 +280,14 @@ function applicationIdFromRoute(route: string): string | null {
   return extractUlid(segment) ?? segment;
 }
 
+function enrollmentIdFromRoute(route: string): string | null {
+  const match = route.match(/^\/admin\/kca\/students\/([^/]+)$/);
+  if (!match) return null;
+  const segment = match[1];
+  if (segment === 'register' || segment === 'samuel-david') return null;
+  return extractUlid(segment) ?? segment;
+}
+
 function KcaLeadershipRecommendationAdmin({ screen }: { screen: AdminScreen }) {
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
   const applicationId = applicationIdFromRoute(screen.route);
@@ -410,6 +418,24 @@ function KcaAdmissionPostDecisionPanel({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!live || !cohortId.trim()) {
+      if (!cohortId.trim()) setRegistrationNumber('');
+      return;
+    }
+    let cancelled = false;
+    void previewKcaRegistrationNumber(cohortId.trim(), CATALOG_GLOBAL_SCOPE)
+      .then((nextNumber) => {
+        if (!cancelled) setRegistrationNumber(nextNumber);
+      })
+      .catch(() => {
+        if (!cancelled) setRegistrationNumber('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cohortId, live]);
+
+  useEffect(() => {
     if (!live || !applicationPermitsEnrollment(status)) {
       setLoadingEnrollment(false);
       return;
@@ -445,10 +471,6 @@ function KcaAdmissionPostDecisionPanel({
       onError('Select a cohort before enrolling.');
       return;
     }
-    if (!registrationNumber.trim()) {
-      onError('Registration number is required.');
-      return;
-    }
     if (!startsOn.trim()) {
       onError('Start date is required.');
       return;
@@ -462,7 +484,7 @@ function KcaAdmissionPostDecisionPanel({
         payload: {
           application_id: applicationId,
           cohort_id: cohortId,
-          registration_number: registrationNumber.trim(),
+          registration_number: registrationNumber.trim() || undefined,
           starts_on: startsOn,
         },
         recordId: applicationId,
@@ -540,9 +562,8 @@ function KcaAdmissionPostDecisionPanel({
             <span>{t('member.kca.registrationNumber', { defaultMessage: 'Registration number' })}</span>
             <input
               name="registration_number"
-              onChange={(event) => setRegistrationNumber(event.target.value)}
-              placeholder="KCA-2026-0001"
-              required
+              placeholder={t('member.kca.autoAssignedOnEnroll', { defaultMessage: 'Auto-assigned when you enroll' })}
+              readOnly
               value={registrationNumber}
             />
           </label>
@@ -1029,7 +1050,67 @@ function KcaOrientation({ screen }: { screen: AdminScreen }) {
 function KcaEntityDetail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const isStudent = screen.id === 'H-02';
-  return <div className="kca-entity-page"><article className="card kca-identity-banner"><div className="kca-avatar large">{screen.title.split(' ').map(part => part[0]).slice(0,2).join('')}</div><div><span className="kca-overline">{isStudent ? t('member.kca.studentProfile', { defaultMessage: 'Student profile' }) : screen.subtitle}</span><h2>{screen.title} <KcaBadge value={t('member.kca.active', { defaultMessage: 'Active' })}/></h2><p>{isStudent ? t('member.kca.studentCohortMeta', { defaultMessage: 'KCA-2024-0001 · 2024 Cohort A' }) : t('member.kca.lagosNigeria', { defaultMessage: 'Lagos, Nigeria' })}</p><div className="kca-contact-line"><span>✉ {screen.title.toLowerCase().replaceAll(' ', '.')}@kca.org</span><span>☎ +234 803 111 2222</span></div></div></article><div className="kca-overview-grid"><article className="card kca-detail-panel"><h2>{isStudent ? t('member.kca.personalInformation', { defaultMessage: 'Personal Information' }) : t('member.kca.profileOverview', { defaultMessage: 'Profile Overview' })}</h2><dl>{Object.entries(screen.details ?? {}).map(([key,value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card kca-detail-panel kca-performance-panel"><h2>{isStudent ? t('member.kca.progressOverview', { defaultMessage: 'Progress Overview' }) : t('member.kca.performance', { defaultMessage: 'Performance' })}</h2>{(screen.items ?? []).map((item,index) => { const [label,value] = item.split(' — '); const progress = Number(value?.match(/\d+/)?.[0] ?? (86 - index * 9)); return <div className="kca-performance-row" key={item}><header><span>{label}</span><strong>{value}</strong></header><i role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(progress,100)}><b style={{ width: `${Math.min(progress,100)}%` }}/></i></div>; })}</article></div></div>;
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
+  const enrollmentId = isStudent ? enrollmentIdFromRoute(screen.route) : null;
+  const [record, setRecord] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(Boolean(live && enrollmentId));
+
+  useEffect(() => {
+    if (!live || !enrollmentId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void listCatalogDomain('kca.enrollments', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE })
+      .then((result) => {
+        if (cancelled) return;
+        const match = result.items.find((item) => String(item.id) === enrollmentId) ?? null;
+        setRecord(match as Record<string, unknown> | null);
+      })
+      .catch(() => {
+        if (!cancelled) setRecord(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enrollmentId, live]);
+
+  const personName = String(record?.person_name ?? screen.title);
+  const initials = personName.split(' ').map((part) => part[0]).slice(0, 2).join('') || '?';
+  const registrationNumber = String(record?.registration_number ?? screen.details?.['Registration number'] ?? '—');
+  const cohortName = String(record?.cohort_name ?? record?.batch_name ?? screen.details?.Cohort ?? '—');
+  const startsOn = String(record?.starts_on ?? screen.details?.['Starts on'] ?? '—');
+  const yearName = String(record?.year_name ?? '—');
+  const status = String(record?.status ?? t('member.kca.active', { defaultMessage: 'Active' }));
+
+  if (loading) {
+    return <p className="maps-settings-lead" role="status">{t('common.loading', { defaultMessage: 'Loading…' })}</p>;
+  }
+
+  if (live && enrollmentId && !record) {
+    return (
+      <article className="card">
+        <h2>{t('member.kca.studentNotFound', { defaultMessage: 'Student record not found' })}</h2>
+        <p className="maps-settings-lead">{t('member.kca.studentNotFoundCopy', { defaultMessage: 'This enrollment may have been removed or is outside your current scope.' })}</p>
+        <Link className="primary-button link-button" href="/admin/kca/students">{t('member.kca.backToStudents', { defaultMessage: 'Back to students' })}</Link>
+      </article>
+    );
+  }
+
+  const detailEntries = isStudent
+    ? {
+        [t('member.kca.registrationNumber', { defaultMessage: 'Registration number' })]: registrationNumber,
+        [t('member.kca.cohort', { defaultMessage: 'Cohort / batch' })]: cohortName,
+        [t('member.kca.kcaYear', { defaultMessage: 'KCA year' })]: yearName,
+        [t('member.kca.startsOn', { defaultMessage: 'Starts on' })]: startsOn,
+        [t('member.kca.status', { defaultMessage: 'Status' })]: status,
+      }
+    : (screen.details ?? {});
+
+  return <div className="kca-entity-page"><article className="card kca-identity-banner"><div className="kca-avatar large">{initials}</div><div><span className="kca-overline">{isStudent ? t('member.kca.studentProfile', { defaultMessage: 'Student profile' }) : screen.subtitle}</span><h2>{personName} <KcaBadge value={status}/></h2><p>{isStudent ? `${registrationNumber}${yearName !== '—' ? ` · ${yearName}` : ''}` : t('member.kca.lagosNigeria', { defaultMessage: 'Lagos, Nigeria' })}</p><div className="kca-contact-line"><span>✉ {personName.toLowerCase().replaceAll(' ', '.')}@kca.org</span><span>☎ +234 803 111 2222</span></div></div></article><div className="kca-overview-grid"><article className="card kca-detail-panel"><h2>{isStudent ? t('member.kca.personalInformation', { defaultMessage: 'Personal Information' }) : t('member.kca.profileOverview', { defaultMessage: 'Profile Overview' })}</h2><dl>{Object.entries(detailEntries).map(([key,value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card kca-detail-panel kca-performance-panel"><h2>{isStudent ? t('member.kca.progressOverview', { defaultMessage: 'Progress Overview' }) : t('member.kca.performance', { defaultMessage: 'Performance' })}</h2>{(screen.items ?? []).map((item,index) => { const [label,value] = item.split(' — '); const progress = Number(value?.match(/\d+/)?.[0] ?? (86 - index * 9)); return <div className="kca-performance-row" key={item}><header><span>{label}</span><strong>{value}</strong></header><i role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(progress,100)}><b style={{ width: `${Math.min(progress,100)}%` }}/></i></div>; })}</article></div></div>;
 }
 
 function KcaCohorts({ screen }: { screen: AdminScreen }) {
@@ -1277,7 +1358,7 @@ function KcaPrerequisites({ screen }: { screen: AdminScreen }) {
       setModules([]);
       setTotal(0);
       setError(catalogErrorMessage(reason, 'Unable to load KCA prerequisites.'));
-      setMessage('Live prerequisite data unavailable');
+      setMessage('Prerequisite data is currently unavailable');
     }
   };
 
@@ -1668,6 +1749,30 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
   const [message, setMessage] = useState<string | null>(null);
   const step = kcaRegistrationSteps[wizard.currentStep] ?? kcaRegistrationSteps[0];
 
+  useEffect(() => {
+    if (!live || step.id !== 'enrollment') return;
+    const cohortId = values.cohort_id?.trim();
+    if (!cohortId) {
+      setValues((current) => (current.registration_number ? { ...current, registration_number: '' } : current));
+      return;
+    }
+    let cancelled = false;
+    void previewKcaRegistrationNumber(cohortId, CATALOG_GLOBAL_SCOPE)
+      .then((registrationNumber) => {
+        if (!cancelled) {
+          setValues((current) => ({ ...current, registration_number: registrationNumber }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setValues((current) => ({ ...current, registration_number: '' }));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, step.id, values.cohort_id]);
+
   function captureStepValues() {
     const card = document.querySelector('.kca-registration-form');
     const nextValues = { ...values };
@@ -1721,7 +1826,6 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
     }
     if (finalize && payload.admit_and_enroll) {
       if (!payload.cohort_id) return 'Cohort is required when admitting and enrolling.';
-      if (!payload.registration_number) return 'Registration number is required when admitting and enrolling.';
       if (!payload.starts_on) return 'Start date is required when admitting and enrolling.';
     }
     return null;
@@ -1730,7 +1834,7 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
   async function persistRegistration(finalize: boolean): Promise<boolean> {
     const merged = captureStepValues();
     if (!live) {
-      setError('Live API is required to register KCA students.');
+      setError('Connect to the platform to register KCA students.');
       return false;
     }
     const payload = flattenKcaRegistrationPayload({
@@ -1760,10 +1864,10 @@ function KcaStudentRegistration({ screen }: { screen: AdminScreen }) {
         setMessage(result.id ? `Draft saved (${result.id}). You can continue later.` : 'Draft saved.');
         return true;
       }
-      if (payload.admit_and_enroll && result.id && payload.cohort_id && payload.registration_number && payload.starts_on) {
+      if (payload.admit_and_enroll && result.id && payload.cohort_id && payload.starts_on) {
         const enrollment = await admitAndEnrollKcaStudent(result.id, {
           cohort_id: payload.cohort_id,
-          registration_number: payload.registration_number,
+          registration_number: payload.registration_number ?? '',
           starts_on: payload.starts_on,
         });
         setMessage(
@@ -2356,14 +2460,13 @@ function KcaModuleRowActions({
       <button type="button" className="table-action" data-interaction-native="true" onClick={() => onManageLessons(row)}>
         {t('member.kca.manageLessons', { defaultMessage: 'Manage lessons' })}
       </button>
-      <button type="button" className="table-action" data-interaction-native="true" onClick={() => onAddLesson(row)} disabled={isPublished}>
+      <button type="button" className="table-action" data-interaction-native="true" onClick={() => onAddLesson(row)}>
         {t('member.kca.addLesson', { defaultMessage: 'Add lesson' })}
       </button>
       <button
         type="button"
         className="table-action"
         data-interaction-native="true"
-        disabled={isPublished}
         onClick={() => {
           void runKcaModuleAction(moduleId, 'Map learning days')
             .then(() => onActionComplete())

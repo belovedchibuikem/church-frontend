@@ -30,6 +30,7 @@ export const CATALOG_PATHS = {
   'kca.prerequisites': 'kca/prerequisites',
   'kca.lecturer_assignments': 'kca/lecturer-assignments',
   'kca.mentor_assignments': 'kca/mentor-assignments',
+  'kca.assignments': 'kca/assignments',
   'kca.evidence': 'kca/evidence-submissions',
   'kca.assessments': 'kca/assessment-results',
   'kca.attendance': 'kca/attendance',
@@ -341,6 +342,7 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/alumni') return 'kca.certificates';
   if (route === '/admin/kca/lecturers') return 'kca.lecturer_assignments';
   if (route === '/admin/kca/mentors') return 'kca.mentor_assignments';
+  if (route === '/admin/kca/assignments') return 'kca.assignments';
   if (route === '/admin/kca/orientation') return 'kca.orientation';
   return null;
 }
@@ -394,8 +396,8 @@ export function catalogRecordsToRows(
         );
       } else if (key.includes('applicant')) {
         mapped[column] = get('person_name', 'applicant_name', 'name');
-      } else if (key.includes('status')) {
-        mapped[column] = humanizeCatalogToken(get('status'));
+      } else if (key.includes('status') || key === 'state') {
+        mapped[column] = humanizeCatalogToken(get('status', 'state'));
       } else if (key.includes('author') || key.includes('donor') || key.includes('user') || key === 'by') {
         mapped[column] = get(
           'author_name',
@@ -465,6 +467,8 @@ export function catalogRecordsToRows(
                 'status_changed_at',
                 'reviewed_at',
                 'decided_at',
+                'due_at',
+                'assigned_at',
               );
         mapped[column] = formatTimestamp(timestamp === '—' ? null : timestamp);
       } else if (key.includes('amount')) {
@@ -483,6 +487,8 @@ export function catalogRecordsToRows(
         mapped[column] = get('score');
       } else if (key.includes('assessment')) {
         mapped[column] = get('assessment_code', 'title', 'name');
+      } else if (key.includes('assignment')) {
+        mapped[column] = get('title', 'assignment_kind', 'name');
       } else if (key.includes('lecturer') || key.includes('mentor')) {
         mapped[column] = get('lecturer_name', 'mentor_name', 'person_name');
       } else if (key.includes('specialization') || key.includes('module')) {

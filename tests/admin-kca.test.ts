@@ -18,6 +18,7 @@ const landings = [
   '/admin/kca/lecturers',
   '/admin/kca/modules',
   '/admin/kca/lessons',
+  '/admin/kca/assignments',
   '/admin/kca/certificates',
   '/admin/kca/alumni',
 ];
@@ -41,6 +42,13 @@ test('KCA application ULID decision route resolves', () => {
   assert.ok(getAdminScreen(`/admin/kca/applications/${id}/decision`));
   assert.equal(getAdminScreen(`/admin/kca/applications/${id}/admission-letter`)?.id, 'G-16');
   assert.ok(isCanonicalAdminRoute(`/admin/kca/applications/${id}/admission-letter`));
+});
+
+test('KCA student enrollment ULID route resolves', () => {
+  const id = '01m1hnghvrayhckw700d5377z8';
+  assert.equal(getAdminScreen(`/admin/kca/students/${id}`)?.id, 'H-02');
+  assert.equal(getAdminScreen(`/admin/kca/students/${id}`)?.kind, 'detail');
+  assert.ok(isCanonicalAdminRoute(`/admin/kca/students/${id}`));
 });
 
 test('KCA UI permissions accept Laravel application view', () => {
@@ -68,6 +76,19 @@ test('member KCA destinations map to authoritative routes', () => {
   assert.equal(kcaIsActivatedStudent('student_dashboard'), true);
   assert.equal(kcaIsActivatedStudent('admission_progress'), false);
   assert.equal(kcaPrimaryCta('overview').href, '/kca/enrol');
+});
+
+test('KCA assignments screen resolves to live catalog', async () => {
+  const screen = getAdminScreen('/admin/kca/assignments')!;
+  assert.equal(screen.id, 'H-14');
+  assert.equal(screen.action, '+ Add Assignment');
+  const catalogApi = await readFile(new URL('../lib/admin-catalog-api.ts', import.meta.url), 'utf8');
+  assert.match(catalogApi, /'kca\.assignments': 'kca\/assignments'/);
+  assert.match(catalogApi, /route === '\/admin\/kca\/assignments'\) return 'kca\.assignments'/);
+  const { resolveEntityKey, fieldsForEntity } = await import('../lib/admin-form-schemas.ts');
+  assert.equal(resolveEntityKey('/admin/kca/assignments', 'H-14'), 'kca_assignment');
+  assert.ok(fieldsForEntity('kca_assignment').some((field) => field.name === 'kca_enrollment_id'));
+  assert.ok(fieldsForEntity('kca_assignment').some((field) => field.name === 'kca_module_id'));
 });
 
 test('KCA years and assessments use dedicated form schemas', async () => {

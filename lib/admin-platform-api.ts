@@ -477,6 +477,8 @@ export type KcaGovernanceStatus = {
   admission_programme_venue?: string | null;
   admission_programme_schedule?: string | null;
   admission_programme_mentor?: string | null;
+  orientation_welcome?: string | null;
+  orientation_review_welcome?: string | null;
   admission_letterhead_file_asset_id?: string | null;
   admission_signature_file_asset_id?: string | null;
   configuration_revision?: number;
@@ -494,6 +496,37 @@ export async function configureKcaGovernance(
   scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
 ): Promise<KcaGovernanceStatus> {
   return platformMutate<KcaGovernanceStatus>('PUT', 'admin/kca/governance', body, scope);
+}
+
+export type KcaOrientationStepRecord = {
+  id?: string | null;
+  slug: string;
+  title: string;
+  subtitle?: string | null;
+  body?: string | null;
+  display_type: 'content' | 'modules_list' | 'mentor';
+  sequence: number;
+  is_active?: boolean;
+};
+
+export async function getKcaOrientationSteps(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaOrientationStepRecord[]> {
+  const data = await platformGet<{ steps?: KcaOrientationStepRecord[] }>('admin/kca/orientation-steps', scope);
+  return Array.isArray(data.data?.steps) ? data.data.steps : [];
+}
+
+export async function syncKcaOrientationSteps(
+  steps: KcaOrientationStepRecord[],
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaOrientationStepRecord[]> {
+  const data = await platformMutate<{ steps?: KcaOrientationStepRecord[] }>(
+    'PUT',
+    'admin/kca/orientation-steps',
+    { steps },
+    scope,
+  );
+  return Array.isArray(data.steps) ? data.steps : [];
 }
 
 export type KcaAdmissionLetter = {
@@ -515,6 +548,19 @@ export type KcaAdmissionLetter = {
   applicant_signature_name?: string | null;
   requires_guardian_confirmation?: boolean;
 };
+
+export async function previewKcaRegistrationNumber(
+  cohortId?: string,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<string> {
+  const query = cohortId ? `?cohort_id=${encodeURIComponent(cohortId)}` : '';
+  const response = await platformGet<{ registration_number: string }>(
+    `admin/kca/enrollments/registration-number-preview${query}`,
+    scope,
+  );
+
+  return response.data.registration_number;
+}
 
 export async function getKcaAdmissionLetter(
   applicationId: string,

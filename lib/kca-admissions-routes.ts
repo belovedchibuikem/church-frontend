@@ -24,8 +24,8 @@ const applicationSteps = [
 
 export const kcaAdmissionsScreens: AdminScreen[] = [
   {
-    id: 'G-01', batch: 'G', route: '/admin/kca', title: 'KCA Dashboard',
-    subtitle: 'Kingdom Citizens Academy admissions overview.', kind: 'dashboard',
+    id: 'G-01', batch: 'G', route: '/admin/kca', title: 'Kingdom Change Agents',
+    subtitle: 'Admissions and enrollment overview.', kind: 'dashboard',
     permission: 'kca.dashboard.view', scope: 'assigned', nav: 'dashboard',
     metrics: [
       { label: 'Total Applications', value: '2,458', trend: '+8% vs Apr' },
@@ -202,11 +202,11 @@ export const kcaAdmissionsScreens: AdminScreen[] = [
   },
   {
     id: 'G-16', batch: 'G', route: '/admin/kca/applications/samuel-david/admission-letter',
-    title: 'Admission Letter', subtitle: 'Kingdom Citizens Academy provisional admission.', kind: 'detail',
+    title: 'Admission Letter', subtitle: 'Kingdom Change Agents provisional admission.', kind: 'detail',
     permission: 'kca.application.view', scope: 'assigned', nav: 'kca-decisions', action: 'Download PDF',
     details: {
       Date: 'May 31, 2024', To: 'Samuel David', From: 'Pastor Daniel David · KCA Admissions Team',
-      Subject: 'Provisional Admission into Kingdom Citizens Academy — Batch 2024-06',
+      Subject: 'Provisional Admission into Kingdom Change Agents — Batch 2024-06',
       'Next Steps': 'Attend the orientation program · Complete registration · Prepare for the program',
       'Certificate ID': 'KCA-CERT-0000-0001', Status: 'Issued',
     },

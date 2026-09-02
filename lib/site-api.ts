@@ -633,7 +633,7 @@ export async function verifyKcaCertificate(code: string): Promise<KcaCertificate
 
 /** There is no public contact-inbox write API on /api/v1. Do not treat form POST as delivered. */
 export const PUBLIC_CONTACT_INBOX_UNAVAILABLE_MESSAGE =
-  'Contact form delivery is not connected to a Laravel inbox API yet. Email hello@familyhouseconnect.org directly.';
+  'Contact form delivery is not connected yet. Email hello@familyhouseconnect.org directly.';
 
 export function publicErrorMessage(error: unknown, fallback = 'Unable to load this content right now.'): string {
   if (error instanceof PublicApiError) {

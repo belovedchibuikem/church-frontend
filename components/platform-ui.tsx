@@ -50,8 +50,11 @@ import {
   type PlatformConfiguration,
   configureKcaGovernance,
   getKcaGovernance,
+  getKcaOrientationSteps,
+  syncKcaOrientationSteps,
   uploadPlatformGovernanceFile,
   type KcaGovernanceStatus,
+  type KcaOrientationStepRecord,
 } from '../lib/admin-platform-api.ts';
 import type { JsonValue } from '../lib/api-types.ts';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
@@ -870,6 +873,8 @@ export function KcaSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [letterheadId, setLetterheadId] = useState<string | null>(null);
   const [signatureId, setSignatureId] = useState<string | null>(null);
+  const [orientationSteps, setOrientationSteps] = useState<KcaOrientationStepRecord[]>([]);
+  const [stepsBusy, setStepsBusy] = useState(false);
   const templateRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -885,6 +890,9 @@ export function KcaSettingsPanel() {
       .catch((error) => {
         setMessage(platformErrorMessage(error, t('errors.loadKcaGovernance', { defaultMessage: 'Could not load KCA governance. Requires kca.governance.view and recent MFA.' })));
       });
+    void getKcaOrientationSteps()
+      .then((steps) => setOrientationSteps(steps))
+      .catch(() => setOrientationSteps([]));
   }, [t]);
 
   const uploadAsset = async (
@@ -928,6 +936,8 @@ export function KcaSettingsPanel() {
         admission_programme_venue: String(form.get('admission_programme_venue') || ''),
         admission_programme_schedule: String(form.get('admission_programme_schedule') || ''),
         admission_programme_mentor: String(form.get('admission_programme_mentor') || ''),
+        orientation_welcome: String(form.get('orientation_welcome') || ''),
+        orientation_review_welcome: String(form.get('orientation_review_welcome') || ''),
         admission_letterhead_file_asset_id: nextLetterheadId,
         admission_signature_file_asset_id: nextSignatureId,
       });
@@ -942,11 +952,28 @@ export function KcaSettingsPanel() {
     }
   };
 
+  const saveOrientationSteps = async () => {
+    setStepsBusy(true);
+    try {
+      const saved = await syncKcaOrientationSteps(orientationSteps);
+      setOrientationSteps(saved);
+      setMessage(t('admin.kcaOrientationStepsSaved', { defaultMessage: 'Orientation programme saved.' }));
+    } catch (error) {
+      setMessage(platformErrorMessage(error, t('errors.saveKcaOrientationSteps', { defaultMessage: 'Could not save orientation steps.' })));
+    } finally {
+      setStepsBusy(false);
+    }
+  };
+
+  const updateOrientationStep = (index: number, patch: Partial<KcaOrientationStepRecord>) => {
+    setOrientationSteps((current) => current.map((step, i) => (i === index ? { ...step, ...patch } : step)));
+  };
+
   return (
     <form className="platform-settings kca-governance-form" noValidate onSubmit={(event) => void save(event)}>
       <article className="platform-card platform-settings-body">
         <header className="platform-settings-heading">
-          <span className="platform-overline">{t('admin.kcaOverline', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</span>
+          <span className="platform-overline">{t('admin.kcaOverline', { defaultMessage: 'KINGDOM CHANGE AGENTS' })}</span>
           <h2>{t('admin.certificationGovernance', { defaultMessage: 'Certification governance' })}</h2>
           <p>{t('admin.kcaLead', { defaultMessage: 'Pass thresholds, signer identity, signed PDF requirement, and revocation authority are server-owned.' })}</p>
         </header>
@@ -1062,6 +1089,68 @@ export function KcaSettingsPanel() {
             </button>
           </div>
         </div>
+        <h3>{t('admin.kcaOrientationProgram', { defaultMessage: 'Orientation programme' })}</h3>
+        <p>{t('admin.kcaOrientationProgramLead', { defaultMessage: 'Edit step titles and content shown to applicants and students. Slugs are fixed after creation; rename the title students see.' })}</p>
+        <div className="platform-form-grid">
+          <label style={{ gridColumn: '1 / -1' }}>
+            <span>{t('admin.orientationWelcome', { defaultMessage: 'Welcome message (first visit)' })}</span>
+            <textarea defaultValue={status?.orientation_welcome ?? ''} name="orientation_welcome" rows={3} />
+          </label>
+          <label style={{ gridColumn: '1 / -1' }}>
+            <span>{t('admin.orientationReviewWelcome', { defaultMessage: 'Welcome message (revisit after completion)' })}</span>
+            <textarea defaultValue={status?.orientation_review_welcome ?? ''} name="orientation_review_welcome" rows={3} />
+          </label>
+        </div>
+        {orientationSteps.map((step, index) => (
+          <fieldset className="platform-card" key={step.id ?? step.slug} style={{ marginTop: '1rem' }}>
+            <legend>{step.slug}</legend>
+            <div className="platform-form-grid">
+              <label>
+                <span>{t('admin.stepTitle', { defaultMessage: 'Step title' })}</span>
+                <input
+                  onChange={(event) => updateOrientationStep(index, { title: event.target.value })}
+                  value={step.title}
+                />
+              </label>
+              <label>
+                <span>{t('admin.stepSubtitle', { defaultMessage: 'Subtitle' })}</span>
+                <input
+                  onChange={(event) => updateOrientationStep(index, { subtitle: event.target.value })}
+                  value={step.subtitle ?? ''}
+                />
+              </label>
+              {step.display_type === 'content' ? (
+                <label style={{ gridColumn: '1 / -1' }}>
+                  <span>{t('admin.stepBody', { defaultMessage: 'Content' })}</span>
+                  <textarea
+                    onChange={(event) => updateOrientationStep(index, { body: event.target.value })}
+                    rows={8}
+                    value={step.body ?? ''}
+                  />
+                </label>
+              ) : (
+                <p style={{ gridColumn: '1 / -1' }}>
+                  {step.display_type === 'modules_list'
+                    ? t('admin.orientationModulesList', { defaultMessage: 'This step lists published KCA modules automatically.' })
+                    : t('admin.orientationMentorStep', { defaultMessage: 'This step shows the assigned mentor when enrollment is active.' })}
+                </p>
+              )}
+            </div>
+          </fieldset>
+        ))}
+        <footer className="form-footer kca-governance-footer">
+          <button
+            className="ghost-button"
+            data-interaction-native="true"
+            disabled={stepsBusy || orientationSteps.length === 0}
+            onClick={() => void saveOrientationSteps()}
+            type="button"
+          >
+            {stepsBusy
+              ? t('common.saving', { defaultMessage: 'Saving…' })
+              : t('admin.saveOrientationSteps', { defaultMessage: 'Save orientation steps' })}
+          </button>
+        </footer>
         <footer className="form-footer kca-governance-footer">
           <button className="platform-primary" data-interaction-native="true" disabled={busy} type="submit">
             {busy

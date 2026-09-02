@@ -48,7 +48,11 @@ function useResolvedAsset(
 }
 
 function isStructuredTemplate(body: string): boolean {
-  return body.length > 400 || body.includes('ADMISSION & ACCEPTANCE LETTER') || body.includes('YOUR KCA COMMITMENT');
+  return body.length > 400
+    || body.includes('ADMISSION & ACCEPTANCE LETTER')
+    || body.includes('YOUR KCA COMMITMENT')
+    || body.includes('YOUR COMMITMENT')
+    || body.includes('12-SESSION JOURNEY');
 }
 
 function normalizeSignerValue(value: string): string {
@@ -77,9 +81,11 @@ function syncReferenceInBody(
     return body;
   }
 
-  return body
-    .replace(/Ref\.?\s*No\.?\s*:\s*Pending/gi, `Ref. No.: ${referenceCode}`)
+  const updated = body
+    .replace(/Ref\.?\s*No\.?\s*:[^\n]*/gi, `Ref. No.: ${referenceCode}`)
     .replace(/\{reference_code\}/gi, referenceCode);
+
+  return updated;
 }
 
 function renderSignatureImage(signatureSrc: string, key: string): ReactNode {
@@ -228,8 +234,8 @@ export function KcaAdmissionLetterSheet({
   const structured = isStructuredTemplate(body);
 
   const defaultBody = batchLabel
-    ? `We are pleased to inform you that you have been accepted into the Kingdom Citizens Academy for ${batchLabel}.`
-    : 'We are pleased to inform you that you have been accepted into the Kingdom Citizens Academy.';
+    ? `We are pleased to inform you that you have been accepted into the Kingdom Change Agents programme for ${batchLabel}.`
+    : 'We are pleased to inform you that you have been accepted into the Kingdom Change Agents programme.';
 
   if (hasLetterhead) {
     return (

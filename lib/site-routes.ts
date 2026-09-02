@@ -402,6 +402,18 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
     };
   }
 
+  const kcaOrientationStageMatch = path.match(/^\/account\/kca\/orientation\/([a-z0-9_]+)$/i);
+  if (kcaOrientationStageMatch) {
+    return {
+      path,
+      title: 'KCA Orientation',
+      subtitle: subtitles.KCA,
+      surface: 'member',
+      kind: 'detail',
+      section: 'KCA',
+    };
+  }
+
   const homeChurchMatch = path.match(/^\/home-churches\/([0-9A-HJKMNP-TV-Z]{26})$/i);
   if (homeChurchMatch || (path.startsWith('/home-churches/') && ULID.test(path.split('/').pop() ?? ''))) {
     return { path, title: 'Home Church', action: 'Request to Join', subtitle: subtitles.Church, surface: 'public', kind: 'detail', section: 'Church' };

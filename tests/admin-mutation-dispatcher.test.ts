@@ -63,7 +63,7 @@ test('dispatcher maps to Laravel admin.php operations and refuses unmapped actio
   assert.match(source, /admin\/platform\/advisory\/requests/);
   assert.match(source, /admin\/finance\/payment-intents/);
   assert.match(source, /Idempotency-Key/);
-  assert.match(source, /No Laravel operation is registered for this action/);
+  assert.match(source, /This action is not available for the selected record/);
   assert.match(source, /throw new UnregisteredAdminActionError/);
   assert.doesNotMatch(source, /admin\/catalog\//);
 });

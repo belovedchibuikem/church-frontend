@@ -69,7 +69,7 @@ import { downloadBlob } from './download-blob.ts';
 export { GLOBAL_ADMIN_SCOPE };
 
 export const UNREGISTERED_ADMIN_ACTION_MESSAGE =
-  'No Laravel operation is registered for this action. Use View to inspect the selected record; Edit/Delete only work where an API endpoint exists.';
+  'This action is not available for the selected record. Use View to inspect it; Edit and Delete only work where the platform supports them.';
 
 export class UnregisteredAdminActionError extends Error {
   constructor(message = UNREGISTERED_ADMIN_ACTION_MESSAGE) {

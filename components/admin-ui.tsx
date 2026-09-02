@@ -261,6 +261,7 @@ const navByBatch = {
     ['kca-students', '♙', 'Students', '/admin/kca/students'], ['kca-cohorts', '◎', 'Cohorts', '/admin/kca/cohorts'],
     ['kca-mentors', '♛', 'Mentors', '/admin/kca/mentors'], ['kca-lecturers', '▦', 'Lecturers', '/admin/kca/lecturers'],
     ['kca-modules', '◇', 'Modules', '/admin/kca/modules'], ['kca-learning', '▣', 'Learning', '/admin/kca/attendance'],
+    ['kca-assignments', '▤', 'Assignments', '/admin/kca/assignments'],
     ['kca-assessments', '□', 'Assessments', '/admin/kca/assessments/final'], ['kca-certification', '✓', 'Certifications', '/admin/kca/certificates'],
     ['kca-alumni', '♙', 'Alumni', '/admin/kca/alumni'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
   ],
@@ -269,6 +270,7 @@ const navByBatch = {
     ['kca-cohorts', '◎', 'Cohorts', '/admin/kca/cohorts'], ['kca-years', '▥', 'KCA Years', '/admin/kca/years'],
     ['kca-mentors', '♛', 'Mentors', '/admin/kca/mentors'], ['kca-lecturers', '▦', 'Lecturers', '/admin/kca/lecturers'],
     ['kca-modules', '◇', 'Modules', '/admin/kca/modules'], ['kca-learning', '▣', 'Learning', '/admin/kca/attendance'],
+    ['kca-assignments', '▤', 'Assignments', '/admin/kca/assignments'],
     ['kca-assessments', '□', 'Assessments', '/admin/kca/assessments/final'], ['kca-certification', '✓', 'Certification', '/admin/kca/certificates'],
     ['kca-alumni', '♙', 'Alumni', '/admin/kca/alumni'], ['settings', '⚙', 'Settings', '/admin/geography/settings'],
   ],
@@ -1009,7 +1011,7 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
   async function onAssignScope(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!apiReady) {
-      setMessage('The Laravel API is not configured.');
+      setMessage('The platform API is not configured.');
       return;
     }
     const formEl = event.currentTarget;
@@ -1049,7 +1051,7 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
                 defaultMessage: 'Assign a scope to an existing role assignment. Scope record values must be live ULIDs.',
               })
             : t('admin.assignScopeBlocked', {
-                defaultMessage: 'The Laravel API is not configured; scope assignment submit is blocked.',
+                defaultMessage: 'The platform API is not configured; scope assignment submit is blocked.',
               })}
         </p>
         <div className="form-grid">
@@ -1093,7 +1095,7 @@ function IdentityScopeAssignmentsView({ requestedScope }: { requestedScope?: str
         </div>
         {message ? <p className="field-help" role="status">{message}</p> : null}
         <div className="form-footer">
-          <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The Laravel API is not configured' })}>
+          <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The platform API is not configured', })}>
             {busy ? t('admin.assigning', { defaultMessage: 'Assigning…' }) : t('admin.assignScope', { defaultMessage: 'Assign Scope' })}
           </button>
         </div>
@@ -2798,7 +2800,7 @@ function IdentityRoleGrantForm({
   async function onGrant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!apiReady) {
-      setError('The Laravel API is not configured.');
+      setError('The platform API is not configured.');
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -2849,7 +2851,7 @@ function IdentityRoleGrantForm({
       {error ? <IdentityLoadState message={error} tone="danger" /> : null}
       {message ? <p className="field-help" role="status">{message}</p> : null}
       <div className="form-footer">
-        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The Laravel API is not configured' })}>
+        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The platform API is not configured', })}>
           {busy ? t('admin.granting', { defaultMessage: 'Granting…' }) : t('admin.grantPermission', { defaultMessage: 'Grant permission' })}
         </button>
       </div>
@@ -2892,7 +2894,7 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
   async function onAssign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!apiReady) {
-      setError('The Laravel API is not configured.');
+      setError('The platform API is not configured.');
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -2935,7 +2937,7 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
               defaultMessage: 'Assign a live catalogue role to a live user. Submit calls POST /admin/users/{user}/role-assignments.',
             })
           : t('admin.assignRoleBlocked', {
-              defaultMessage: 'The Laravel API is not configured; role assignment submit is blocked.',
+              defaultMessage: 'The platform API is not configured; role assignment submit is blocked.',
             })}
       </p>
       <div className="form-grid">
@@ -2966,7 +2968,7 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
       {message ? <p className="field-help" role="status">{message}</p> : null}
       <div className="form-footer">
         <button className="ghost-button" type="button">{t('common.cancel', { defaultMessage: 'Cancel' })}</button>
-        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The Laravel API is not configured' })}>
+        <button className="primary-button" type="submit" disabled={!apiReady || busy} title={apiReady ? undefined : t('admin.apiNotConfigured', { defaultMessage: 'The platform API is not configured', })}>
           {busy ? t('common.saving', { defaultMessage: 'Saving…' }) : screen.action ?? t('admin.saveAssignments', { defaultMessage: 'Save Assignments' })}
         </button>
       </div>
@@ -3016,7 +3018,7 @@ function OrganizationScopeForm({ screen, requestedScope }: { screen: AdminScreen
   async function onAssignScope(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!apiReady) {
-      setError('The Laravel API is not configured.');
+      setError('The platform API is not configured.');
       return;
     }
     const formEl = event.currentTarget;
@@ -3104,7 +3106,7 @@ function OrganizationScopeForm({ screen, requestedScope }: { screen: AdminScreen
           className="primary-button"
           type="submit"
           disabled={!apiReady || busy}
-          title={apiReady ? undefined : 'The Laravel API is not configured'}
+          title={apiReady ? undefined : 'The platform API is not configured'}
         >
           {busy ? 'Assigning…' : screen.action ?? 'Assign Scope'}
         </button>
@@ -3964,7 +3966,7 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
             <Link href="/forgot-password">{t('auth.forgotPassword', { defaultMessage: 'Forgot password?' })}</Link>
           </div>
           <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy || !apiReady}>{busy ? t('auth.signingIn', { defaultMessage: 'Signing in…' }) : t('auth.signIn', { defaultMessage: 'Sign In' })}</button>
-          {!apiReady ? <small role="status">{t('auth.adminApiUrlHint', { defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL so admin sign-in can reach Laravel.' })}</small> : <small>{t('auth.needHelp', { defaultMessage: 'Need help?' })} <Link href="/contact">{t('auth.contactSupport', { defaultMessage: 'Contact Support' })}</Link></small>}
+          {!apiReady ? <small role="status">{t('auth.adminApiUrlHint', { defaultMessage: 'Set NEXT_PUBLIC_FHC_API_URL so admin sign-in can reach the platform API.' })}</small> : <small>{t('auth.needHelp', { defaultMessage: 'Need help?' })} <Link href="/contact">{t('auth.contactSupport', { defaultMessage: 'Contact Support' })}</Link></small>}
         </div>
       </form>
     </main>

@@ -2903,32 +2903,30 @@ function KcaOrientationMember() {
 
   const allStagesComplete = (orientation?.stages ?? []).every((stage) => stage.completed);
   const canSubmit = orientation?.can_complete && allStagesComplete && !orientation?.orientation_completed_at;
+  const reviewMode = orientation?.review_mode || Boolean(orientation?.orientation_completed_at);
 
   return (
     <section className="panel">
       <h3>KCA Orientation</h3>
       <p>{orientation?.welcome ?? 'Walk through each stage of orientation.'}</p>
+      {reviewMode ? <p>Revisit vision, mission, and why KCA any time from this programme.</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {message ? <p role="status">{message}</p> : null}
       <ul className="check-list">
         {(orientation?.stages ?? []).map((stage) => {
           const stageKey = stage.key ?? '';
-          const href = stage.lesson_id
-            ? `/account/kca/lessons/${stage.lesson_id}`
-            : stage.module_id
-              ? `/account/kca/modules/${stage.module_id}`
-              : stage.key === 'mentors'
-                ? '/account/kca/mentor'
-                : stage.key === 'path'
-                  ? '/account/kca/modules'
-                  : `/account/kca/orientation/${stageKey}`;
+          const href = stage.display_type === 'modules_list' || stageKey === 'path'
+            ? '/account/kca/modules'
+            : stage.display_type === 'mentor' || stageKey === 'mentors'
+              ? '/account/kca/mentor'
+              : `/account/kca/orientation/${stageKey}`;
           return (
             <li key={stage.key ?? stage.title}>
               <Link href={href}>
                 <strong>{stage.completed ? '✓ ' : ''}{stage.title}</strong>
                 {stage.subtitle ? ` — ${stage.subtitle}` : ''}
               </Link>
-              {stage.body ? <p>{stage.body}</p> : null}
+              {stage.body && stage.display_type !== 'modules_list' ? <p>{stage.body}</p> : null}
               {orientation?.can_complete && stageKey && !stage.completed ? (
                 <button className="ghost-button" type="button" disabled={busy} onClick={() => void markStageComplete(stageKey)}>
                   Mark stage complete
@@ -2942,12 +2940,96 @@ function KcaOrientationMember() {
         <button className="site-button" type="button" disabled={busy} onClick={() => void submitOrientation()}>
           Submit orientation
         </button>
+      ) : reviewMode ? (
+        <Link className="site-button ghost-button" href="/account/kca">
+          Back to KCA dashboard
+        </Link>
       ) : orientation?.orientation_completed_at ? (
         <p>Orientation completed. Track your admission progress from the application status page.</p>
       ) : null}
-      <Link className="site-button ghost-button" href="/kca/apply/status">
-        View admission progress
-      </Link>
+      {!reviewMode ? (
+        <Link className="site-button ghost-button" href="/kca/apply/status">
+          View admission progress
+        </Link>
+      ) : null}
+    </section>
+  );
+}
+
+function KcaOrientationStageMember({ route }: { route: SiteRoute }) {
+  const stageKey = route.path.split('/').pop() ?? '';
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [orientation, setOrientation] = useState<import('@/lib/user-api').KcaOrientation | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchKcaOrientation()
+      .then((data) => {
+        if (cancelled) return;
+        setOrientation(data);
+        setState('ready');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(formatUserApiError(err));
+        setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stage = (orientation?.stages ?? []).find((row) => row.key === stageKey);
+
+  async function markStageComplete() {
+    if (!stageKey) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completeKcaOrientationStage(stageKey);
+      const data = await fetchKcaOrientation();
+      setOrientation(data);
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (state === 'loading') return <p className="panel">Loading orientation…</p>;
+  if (state === 'error' && !orientation) return <KcaUnavailable title="KCA Orientation" message={error ?? undefined} />;
+  if (!stage) return <KcaUnavailable title="KCA Orientation" message="This orientation step is not available." />;
+
+  const reviewMode = orientation?.review_mode || Boolean(orientation?.orientation_completed_at);
+
+  return (
+    <section className="panel">
+      <Link className="ghost-link" href="/account/kca/orientation">← Back to orientation</Link>
+      <h3>{stage.title}</h3>
+      {stage.subtitle ? <p>{stage.subtitle}</p> : null}
+      {stage.body ? <div style={{ whiteSpace: 'pre-wrap' }}>{stage.body}</div> : null}
+      {Array.isArray(stage.modules) && stage.modules.length > 0 ? (
+        <ul className="check-list">
+          {stage.modules.map((module) => (
+            <li key={String(module.id ?? module.code)}>
+              <Link href={module.id ? `/account/kca/modules/${String(module.id)}` : '/account/kca/modules'}>
+                {String(module.title ?? module.code ?? 'Module')}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {stage.mentor ? (
+        <Link className="site-button ghost-button" href="/account/kca/mentor">View mentor</Link>
+      ) : null}
+      {error ? <p role="alert">{error}</p> : null}
+      {orientation?.can_complete && !stage.completed && !reviewMode ? (
+        <button className="site-button" type="button" disabled={busy} onClick={() => void markStageComplete()}>
+          Mark stage complete
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -3221,6 +3303,7 @@ function KcaLiveStudentDashboard() {
           ['Assignments', '/account/kca/assignments', String(dashboard?.assignments_open ?? 0)],
           ['Attendance', '/account/kca/attendance', String(dashboard?.attendance_recorded ?? 0)],
           ['Mentor', '/account/kca/mentor', mentorName],
+          ['Orientation', '/account/kca/orientation', 'Review'],
           ['Bible plan', '/bible', bible ? `${bible.percent ?? 0}%` : 'Not enrolled'],
           ['Notes', '/account/kca', String(notes?.count ?? 0)],
           ['Devotionals', '/press/devotionals', String(devotionals?.count ?? 0)],
@@ -4545,6 +4628,7 @@ function Dashboard({ route }: { route: SiteRoute }) {
   if (route.path.startsWith('/account/kca/lessons/')) return <KcaLessonPlayer route={route} />;
   if (route.path.startsWith('/account/kca/chapters/')) return <KcaChapterPlayer route={route} />;
   if (route.path === '/account/kca/certificate') return <LiveCertificateDocument route={route} />;
+  if (route.path.startsWith('/account/kca/orientation/')) return <KcaOrientationStageMember route={route} />;
   if (route.path === '/account/kca/orientation') return <KcaOrientationMember />;
   if (route.path === '/account/kca/practical-service') return <KcaPracticalServiceMember />;
   if (route.path === '/account/kca/directory') return <KcaDirectoryMember />;

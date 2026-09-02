@@ -142,15 +142,9 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-14', batch: 'H', route: '/admin/kca/assignments', title: 'Assignments',
-    subtitle: 'Manage module assignments. Soul-winning assignments stay open until the defined soul tree is complete.', kind: 'table', permission: 'kca.assignment.view', scope: 'assigned', nav: 'kca-learning', action: '+ Add Assignment',
-    details: { Module: 'Identity in Christ' },
-    columns: ['Assignment', 'Type', 'Due Date', 'Submissions'],
-    rows: [
-      { Assignment: 'Identity Reflection Essay', Type: 'Written', 'Due Date': 'May 25, 2024', Submissions: '210/246' },
-      { Assignment: 'Memory Verse Challenge', Type: 'Evidence', 'Due Date': 'May 28, 2024', Submissions: '230/246' },
-      { Assignment: 'Practical Application', Type: 'Written', 'Due Date': 'Jun 1, 2024', Submissions: '200/246' },
-      { Assignment: 'Group Discussion', Type: 'Evidence', 'Due Date': 'Jun 5, 2024', Submissions: '190/246' },
-    ],
+    subtitle: 'Assign module work to enrolled students. Soul-winning assignments stay open until the defined soul tree is complete.', kind: 'table', permission: 'kca.assignment.view', scope: 'assigned', nav: 'kca-assignments', action: '+ Add Assignment',
+    columns: ['Student', 'Assignment', 'Module', 'Type', 'Due Date', 'Status'],
+    rows: [],
   },
   {
     id: 'H-15', batch: 'H', route: '/admin/kca/evidence-reviews', title: 'Evidence Reviews',
@@ -199,7 +193,7 @@ export const kcaLearningScreens: AdminScreen[] = [
     id: 'H-19', batch: 'H', route: '/admin/kca/certificates/kca-cert-0000-0001', title: 'Certificate Detail',
     subtitle: 'Certificate of Completion', kind: 'detail', permission: 'kca.certificate.view', scope: 'assigned', nav: 'kca-certification', action: 'Download PDF',
     details: { 'Certificate ID': 'KCA-CERT-0000-0001', Student: 'Samuel David', Year: 'Year 1 Foundation', Cohort: '2024 Cohort A', 'Issue Date': 'May 18, 2024', Status: 'Approved' },
-    items: ['Kingdom Citizens Academy', 'Certificate of Completion', 'Awarded to Samuel David', 'YEAR 1 FOUNDATION', 'Issued May 18, 2024'],
+    items: ['Kingdom Change Agents', 'Certificate of Completion', 'Awarded to Samuel David', 'YEAR 1 FOUNDATION', 'Issued May 18, 2024'],
   },
   {
     id: 'H-20', batch: 'H', route: '/admin/kca/alumni', title: 'Alumni',

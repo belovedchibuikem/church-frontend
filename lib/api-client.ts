@@ -98,7 +98,7 @@ function requireV1BaseUrl(): string {
   if (!baseUrl) {
     throw new ApiError(
       503,
-      'The Laravel API is not configured. Set FHC_LARAVEL_API_URL or NEXT_PUBLIC_FHC_API_URL (…/api/v1), or NEXT_PUBLIC_FHC_API_BASE_URL (origin only).',
+      'The platform API is not configured. Set FHC_LARAVEL_API_URL or NEXT_PUBLIC_FHC_API_URL (…/api/v1), or NEXT_PUBLIC_FHC_API_BASE_URL (origin only).',
     );
   }
   return baseUrl;

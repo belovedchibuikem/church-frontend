@@ -1602,6 +1602,7 @@ export type KcaOrientationStage = {
   title?: string;
   subtitle?: string;
   body?: string | null;
+  display_type?: 'content' | 'modules_list' | 'mentor';
   module_id?: string | null;
   lesson_id?: string | null;
   modules?: Array<JsonObject>;
@@ -1612,10 +1613,12 @@ export type KcaOrientationStage = {
 export type KcaOrientation = {
   enrolled?: boolean;
   welcome?: string;
+  review_mode?: boolean;
   application_status?: string;
   orientation_completed_at?: string | null;
   stages_completed?: string[];
   can_complete?: boolean;
+  can_view?: boolean;
   stages?: KcaOrientationStage[];
 };
 
