@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { useLocale } from '@/components/locale-provider';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
@@ -17,6 +17,7 @@ import { shouldUseDesignFixtures, formatTimestamp } from '../lib/admin-identity-
 import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-cache';
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
+import { KcaAdmissionLetterSheet } from './kca-admission-letter-sheet';
 import { getKcaAdmissionLetter, fetchKcaAdmissionLetterAssetBlob, issueKcaAdmissionLetter, type KcaAdmissionLetter } from '../lib/admin-platform-api';
 import { resolveApiV1BaseUrl } from '../lib/api-config.ts';
 import { pathEntityId } from '../lib/site-api.ts';
@@ -795,41 +796,6 @@ function KcaOutcome({ screen }: { screen: AdminScreen }) {
   return <article className={`card kca-outcome is-${tone}`}><div className="kca-outcome-symbol" aria-hidden="true">{symbol}</div><h2>{screen.title}</h2><p>{screen.subtitle}</p><dl>{Object.entries(screen.details ?? {}).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{key === 'Status' ? <KcaBadge value={value}/> : value}</dd></div>)}</dl><div className="kca-outcome-actions"><button className={isDestructive ? 'danger-button' : 'primary-button'} type="button">{translateAction(t, screen.action)}</button>{screen.items?.[1] && <button className="ghost-button" type="button">{screen.items[1]}</button>}</div></article>;
 }
 
-function KcaAdmissionLetterAssetImage({
-  applicationId,
-  fileAssetId,
-  alt,
-  style,
-}: {
-  applicationId: string;
-  fileAssetId: string;
-  alt: string;
-  style?: CSSProperties;
-}) {
-  const [src, setSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    void fetchKcaAdmissionLetterAssetBlob(applicationId, fileAssetId)
-      .then((blob) => {
-        if (cancelled || !blob.size) return;
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setSrc(null);
-      });
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [applicationId, fileAssetId]);
-
-  if (!src) return null;
-  return <img alt={alt} src={src} style={style} />;
-}
-
 function KcaLetter({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
@@ -885,13 +851,11 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
   const reference = letter?.reference_code ?? (live
     ? t('member.kca.pendingReference', { defaultMessage: 'Pending' })
     : 'KCA/ADM/2024/0124');
-  const issuedOn = letter?.issued_at
-    ? new Date(letter.issued_at).toLocaleDateString()
-    : (live ? new Date().toLocaleDateString() : (details.Date ?? ''));
   const batchLabel = letter?.batch_label ?? '';
-  const bodyParagraphs = (letter?.letter_body ?? '').split('\n\n').filter(Boolean);
-  const letterheadAssetId = letter?.letterhead_file_asset_id ?? null;
-  const signatureAssetId = letter?.signature_file_asset_id ?? null;
+
+  const resolveAsset = live && applicationId
+    ? (fileAssetId: string) => fetchKcaAdmissionLetterAssetBlob(applicationId, fileAssetId)
+    : undefined;
 
   return (
     <div className="kca-document-layout">
@@ -899,22 +863,12 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
         {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
         {loading ? <p className="maps-settings-lead" role="status">{t('common.loading', { defaultMessage: 'Loading…' })}</p> : null}
         {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
-        <article className="card kca-letter" aria-labelledby="admission-letter-title">
-          <header>
-            {live && applicationId && letterheadAssetId ? (
-              <KcaAdmissionLetterAssetImage
-                alt=""
-                applicationId={applicationId}
-                fileAssetId={letterheadAssetId}
-                style={{ maxWidth: '100%', marginBottom: '1rem' }}
-              />
-            ) : letterheadAssetId ? (
-              <img
-                alt=""
-                src={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId ?? '')}/admission-letter/assets/${encodeURIComponent(letterheadAssetId)}`}
-                style={{ maxWidth: '100%', marginBottom: '1rem' }}
-              />
-            ) : (
+        {letter ? (
+          <KcaAdmissionLetterSheet
+            admissionsTeamLabel={t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}
+            dateLabel={(date) => t('member.kca.letterDate', { defaultMessage: 'Date: {date}', vars: { date } })}
+            dearLabel={t('member.kca.dear', { defaultMessage: 'Dear' })}
+            fallbackHeader={(
               <>
                 <div className="kca-seal" aria-hidden="true">{t('member.kca', { defaultMessage: 'KCA' })}</div>
                 <div>
@@ -923,35 +877,26 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
                 </div>
               </>
             )}
-          </header>
-          <h1 id="admission-letter-title" aria-level={2}>{t('member.kca.admissionLetter', { defaultMessage: 'ADMISSION LETTER' })}</h1>
-          <div className="kca-letter-meta">
-            <span>{t('member.kca.letterDate', { defaultMessage: 'Date: {date}', vars: { date: issuedOn } })}</span>
-            <span>{t('member.kca.letterRef', { defaultMessage: 'Ref: {ref}', vars: { ref: reference } })}</span>
-          </div>
-          <p>{t('member.kca.dear', { defaultMessage: 'Dear' })} <strong>{applicant}</strong>,</p>
-          {bodyParagraphs.length > 0 ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>) : (
-            <p>{t('member.kca.letterAccepted', { defaultMessage: 'We are pleased to inform you that you have been accepted into the Kingdom Citizens Academy{batch}.', vars: { batch: batchLabel ? ` for ${batchLabel}` : '' } })}</p>
-          )}
-          <div className="kca-letter-signature">
-            {live && applicationId && signatureAssetId ? (
-              <KcaAdmissionLetterAssetImage
-                alt=""
-                applicationId={applicationId}
-                fileAssetId={signatureAssetId}
-                style={{ maxHeight: 72, marginBottom: '0.5rem' }}
-              />
-            ) : signatureAssetId ? (
-              <img
-                alt=""
-                src={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId ?? '')}/admission-letter/assets/${encodeURIComponent(signatureAssetId)}`}
-                style={{ maxHeight: 72, marginBottom: '0.5rem' }}
-              />
-            ) : null}
-            <strong>{letter?.signer_name ?? (live ? t('member.kca.signerPending', { defaultMessage: 'Signer not configured' }) : 'Pastor Daniel David')}</strong>
-            <span>{letter?.signer_title ?? t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}</span>
-          </div>
-        </article>
+            letter={{
+              applicant_name: applicant,
+              reference_code: reference === t('member.kca.pendingReference', { defaultMessage: 'Pending' }) ? null : reference,
+              letter_body: letter.letter_body,
+              signer_name: letter.signer_name,
+              signer_title: letter.signer_title,
+              issued_at: letter.issued_at,
+              batch_label: batchLabel,
+              letterhead_file_asset_id: letter.letterhead_file_asset_id,
+              signature_file_asset_id: letter.signature_file_asset_id,
+            }}
+            pendingReferenceLabel={t('member.kca.pendingReference', { defaultMessage: 'Pending' })}
+            refLabel={(ref) => t('member.kca.letterRef', { defaultMessage: 'Ref: {ref}', vars: { ref } })}
+            resolveAsset={resolveAsset}
+          />
+        ) : !loading ? (
+          <article className="card kca-letter" aria-labelledby="admission-letter-title">
+            <h1 id="admission-letter-title" aria-level={2}>{t('member.kca.admissionLetter', { defaultMessage: 'ADMISSION LETTER' })}</h1>
+          </article>
+        ) : null}
       </div>
       <aside className="card kca-document-meta">
         <h2>{t('member.kca.letterActions', { defaultMessage: 'Letter actions' })}</h2>

@@ -1281,6 +1281,19 @@ export async function fetchKcaAdmissionLetter(): Promise<KcaAdmissionLetter> {
   });
 }
 
+/** Authenticated admission letter asset bytes (letterhead or signature). */
+export async function fetchKcaAdmissionLetterAssetBlob(fileAssetId: string): Promise<Blob> {
+  const response = await apiRequestResponse(
+    `user/kca/admission-letter/assets/${encodeURIComponent(fileAssetId)}`,
+    {
+      method: 'GET',
+      headers: await serverSessionHeaders(),
+    },
+  );
+
+  return response.blob();
+}
+
 /** Authenticated admission letter asset URL (letterhead or signature). */
 export function kcaAdmissionLetterAssetUrl(fileAssetId: string, download = false): string {
   const base = resolveApiV1BaseUrl();

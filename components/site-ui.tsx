@@ -105,6 +105,7 @@ import {
   fetchKcaDashboard,
   fetchKcaMe,
   fetchKcaAdmissionLetter,
+  fetchKcaAdmissionLetterAssetBlob,
   fetchKcaCurrentApplication,
   fetchKcaMentor,
   fetchKcaModule,
@@ -124,7 +125,6 @@ import {
   fetchKcaDirectory,
   submitKcaEvidence,
   downloadKcaCertificatePdf,
-  kcaAdmissionLetterAssetUrl,
   kcaAdmissionLetterDownloadUrl,
   completeKcaLesson,
   type KcaLessonDetail,
@@ -191,7 +191,7 @@ import {
 } from '@/lib/user-api';
 import { flowNext, successHref, heroPrimaryHref, kcaApplySteps, homeChurchSteps } from '@/lib/site-flow';
 import { kcaHrefForDestination, kcaIsActivatedStudent, kcaPrimaryCta } from '@/lib/kca-access';
-import { LiveWatchExperience } from '@/components/live-watch';
+import { KcaAdmissionLetterSheet } from '@/components/kca-admission-letter-sheet';
 import { fetchCurrentLivestream } from '@/lib/livestream-api';
 import { SearchSelect } from '@/components/search-select';
 import { GeographySelect } from '@/components/geography-select';
@@ -5880,36 +5880,14 @@ function KcaAdmissionLetterDocument() {
     );
   }
 
-  const bodyParagraphs = (letter.letter_body ?? '').split('\n\n').filter(Boolean);
-  const letterheadUrl = letter.letterhead_file_asset_id
-    ? kcaAdmissionLetterAssetUrl(letter.letterhead_file_asset_id)
-    : null;
-  const signatureUrl = letter.signature_file_asset_id
-    ? kcaAdmissionLetterAssetUrl(letter.signature_file_asset_id)
-    : null;
-
   return (
     <div className="document-wrap">
-      <div className="document">
-        {letterheadUrl ? <img alt="" src={letterheadUrl} style={{ maxWidth: '100%', marginBottom: '1rem' }} /> : <span>⬡</span>}
-        {!letterheadUrl ? (
-          <>
-            <h5><BrandName /></h5>
-            <h2>Admission Letter</h2>
-          </>
-        ) : null}
-        <p><small>{letter.reference_code}</small></p>
-        <p>Dear {letter.applicant_name},</p>
-        {bodyParagraphs.length > 0 ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>) : (
-          <p>You have been admitted to Kingdom Change Agents. Learning unlocks after your enrollment is activated by admissions.</p>
-        )}
-        <div className="signatures">
-          {signatureUrl ? <img alt="" src={signatureUrl} style={{ maxHeight: 72 }} /> : null}
-          <i>{letter.signer_name ?? 'Provost, KCA'}</i>
-          <i>{letter.signer_title ?? access?.label ?? 'Admitted'}</i>
-        </div>
-      </div>
-      <a className="site-button" href={kcaAdmissionLetterDownloadUrl()}>Download PDF</a>
+      <KcaAdmissionLetterSheet
+        letter={letter}
+        resolveAsset={(fileAssetId) => fetchKcaAdmissionLetterAssetBlob(fileAssetId)}
+        fallbackHeader={<><h5><BrandName /></h5><h2>Admission Letter</h2></>}
+      />
+      <a className="site-button" download href={kcaAdmissionLetterDownloadUrl()}>Download PDF</a>
     </div>
   );
 }
