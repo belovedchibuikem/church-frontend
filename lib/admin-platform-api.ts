@@ -2,6 +2,7 @@ import {
   apiRequest,
   apiRequestData,
   apiRequestForm,
+  apiRequestResponse,
   ApiError,
   type ApiSuccessEnvelope,
 } from './api-client.ts';
@@ -525,6 +526,19 @@ export async function issueKcaAdmissionLetter(
   );
 }
 
+export async function fetchKcaAdmissionLetterAssetBlob(
+  applicationId: string,
+  fileAssetId: string,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<Blob> {
+  const response = await apiRequestResponse(
+    `admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/assets/${encodeURIComponent(fileAssetId)}`,
+    withScope(scope),
+  );
+
+  return response.blob();
+}
+
 export async function uploadPlatformGovernanceFile(
   file: File,
   purpose: 'kca_admission_letterhead' | 'kca_admission_signature',
@@ -539,6 +553,11 @@ export async function uploadPlatformGovernanceFile(
     ...withScope(scope),
     headers: { 'Idempotency-Key': crypto.randomUUID() },
   });
+  try {
+    await platformMutate('POST', `admin/platform/files/${encodeURIComponent(asset.id)}/approval`, undefined, scope);
+  } catch {
+    // Asset may already be approved or approval may be handled on governance save.
+  }
   return { id: asset.id };
 }
 
