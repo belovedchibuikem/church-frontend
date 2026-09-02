@@ -1498,6 +1498,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     return mutate(`admin/kca/recommendations/${encodeURIComponent(recommendationId)}/verify`, {}, opts);
   }
   if (
+    routeStarts(route, '/admin/kca/applications') &&
+    (field(payload, 'action') === 'complete_orientation' || labelIs(label, /complete orientation/))
+  ) {
+    return mutate(
+      `admin/kca/applications/${encodeURIComponent(requireId(pickRecord(ctx, 'application_id', 'id'), 'application'))}/orientation/complete`,
+      {},
+      opts,
+    );
+  }
+  if (
     routeStarts(route, '/admin/kca/applications', '/admin/kca/review-queue') &&
     (kcaApplicationStatus(payload) ||
       labelIs(label, /transition|approv|defer|accept|admit|reject|not accepted|decision|submit|edit|update|save|interview|orientation|request info|information required/))
@@ -1716,23 +1726,82 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   }
 
   // --- Events ---
-  if ((routeStarts(route, '/admin/settings/events') || labelIs(label, /create event|add event/)) && labelIs(label, /create event|add event|save|submit/)) {
+  if (
+    (routeStarts(route, '/admin/settings/events', '/admin/events/create', '/admin/events') || labelIs(label, /create event|add event/))
+    && labelIs(label, /create event|add event|save|submit/)
+    && !labelIs(label, /update|edit|delete|publish|unpublish/)
+  ) {
+    const toIso = (value?: string) => {
+      if (!value || value.trim() === '') return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    };
     return mutate(
       'admin/events',
       {
         name: field(payload, 'name', 'title') ?? '',
         category_code: field(payload, 'category_code', 'category') ?? 'general',
-        starts_at: field(payload, 'starts_at', 'startDate') ?? '',
-        ends_at: field(payload, 'ends_at', 'endDate') ?? '',
+        starts_at: toIso(field(payload, 'starts_at', 'startDate') ?? '') ?? '',
+        ends_at: toIso(field(payload, 'ends_at', 'endDate') ?? '') ?? '',
         location_id: firstUlid(payload.location_id) ?? null,
-        registration_opens_at: field(payload, 'registration_opens_at') ?? null,
-        registration_closes_at: field(payload, 'registration_closes_at') ?? null,
+        registration_opens_at: toIso(field(payload, 'registration_opens_at') ?? undefined),
+        registration_closes_at: toIso(field(payload, 'registration_closes_at') ?? undefined),
         fee_amount_minor: asInt(field(payload, 'fee_amount_minor', 'amount')) ?? null,
         fee_currency: field(payload, 'fee_currency') ?? null,
         capacity: asInt(field(payload, 'capacity')) ?? null,
-        published_at: field(payload, 'published_at') ?? null,
+        published_at: toIso(field(payload, 'published_at') ?? undefined),
       },
       opts,
+    );
+  }
+  if (routeStarts(route, '/admin/events') && labelIs(label, /update event|save event|edit event/) && pickRecord(ctx, 'event_id', 'id')) {
+    const toIso = (value?: string) => {
+      if (!value || value.trim() === '') return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    };
+    return mutate(
+      `admin/events/${encodeURIComponent(requireId(pickRecord(ctx, 'event_id', 'id'), 'event'))}`,
+      jsonBody({
+        name: field(payload, 'name', 'title'),
+        category_code: field(payload, 'category_code', 'category'),
+        starts_at: toIso(field(payload, 'starts_at', 'startDate') ?? undefined),
+        ends_at: toIso(field(payload, 'ends_at', 'endDate') ?? undefined),
+        location_id: firstUlid(payload.location_id) ?? null,
+        registration_opens_at: toIso(field(payload, 'registration_opens_at') ?? undefined),
+        registration_closes_at: toIso(field(payload, 'registration_closes_at') ?? undefined),
+        fee_amount_minor: asInt(field(payload, 'fee_amount_minor', 'amount')) ?? null,
+        fee_currency: field(payload, 'fee_currency') ?? null,
+        capacity: asInt(field(payload, 'capacity')) ?? null,
+        published_at: toIso(field(payload, 'published_at') ?? undefined),
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/events') && labelIs(label, /publish event/) && pickRecord(ctx, 'event_id', 'id')) {
+    const toIso = (value?: string) => {
+      if (!value || value.trim() === '') return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    };
+    return mutate(
+      `admin/events/${encodeURIComponent(requireId(pickRecord(ctx, 'event_id', 'id'), 'event'))}`,
+      { published_at: toIso(field(payload, 'published_at') ?? new Date().toISOString()) },
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/events') && labelIs(label, /unpublish event/) && pickRecord(ctx, 'event_id', 'id')) {
+    return mutate(
+      `admin/events/${encodeURIComponent(requireId(pickRecord(ctx, 'event_id', 'id'), 'event'))}`,
+      { published_at: null },
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/events') && labelIs(label, /delete event/) && pickRecord(ctx, 'event_id', 'id')) {
+    return mutate(
+      `admin/events/${encodeURIComponent(requireId(pickRecord(ctx, 'event_id', 'id'), 'event'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
     );
   }
   if (labelIs(label, /register (for )?event|add registration/)) {
@@ -1755,6 +1824,82 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       `admin/events/registrations/${encodeURIComponent(requireId(pickRecord(ctx, 'registration_id', 'id'), 'registration'))}/feedback`,
       { rating: asInt(field(payload, 'rating')) ?? 5 },
       opts,
+    );
+  }
+
+  // --- KCA orientation sessions ---
+  if (
+    (routeStarts(route, '/admin/kca/orientation/create', '/admin/kca/orientation') || labelIs(label, /create orientation session|new orientation/))
+    && labelIs(label, /create orientation session|new orientation|save|submit/)
+    && !labelIs(label, /update|edit|delete|publish|unpublish/)
+  ) {
+    const toIso = (value?: string) => {
+      if (!value || value.trim() === '') return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    };
+    return mutate(
+      'admin/kca/orientation-sessions',
+      {
+        name: field(payload, 'name', 'title') ?? '',
+        cohort_id: firstUlid(payload.cohort_id) ?? null,
+        location_id: firstUlid(payload.location_id) ?? null,
+        venue_label: field(payload, 'venue_label', 'venue') ?? null,
+        starts_at: toIso(field(payload, 'starts_at', 'startDate') ?? '') ?? '',
+        ends_at: toIso(field(payload, 'ends_at', 'endDate') ?? undefined),
+        capacity: asInt(field(payload, 'capacity')) ?? null,
+        notes: field(payload, 'notes') ?? null,
+        published_at: toIso(field(payload, 'published_at') ?? undefined),
+      },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/orientation') && labelIs(label, /update orientation session|save session|edit orientation/) && pickRecord(ctx, 'session_id', 'id')) {
+    const toIso = (value?: string) => {
+      if (!value || value.trim() === '') return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    };
+    return mutate(
+      `admin/kca/orientation-sessions/${encodeURIComponent(requireId(pickRecord(ctx, 'session_id', 'id'), 'session'))}`,
+      jsonBody({
+        name: field(payload, 'name', 'title'),
+        cohort_id: firstUlid(payload.cohort_id) ?? null,
+        location_id: firstUlid(payload.location_id) ?? null,
+        venue_label: field(payload, 'venue_label', 'venue'),
+        starts_at: toIso(field(payload, 'starts_at', 'startDate') ?? undefined),
+        ends_at: toIso(field(payload, 'ends_at', 'endDate') ?? undefined),
+        capacity: asInt(field(payload, 'capacity')) ?? null,
+        notes: field(payload, 'notes'),
+        published_at: toIso(field(payload, 'published_at') ?? undefined),
+      }),
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/orientation') && labelIs(label, /publish orientation session/) && pickRecord(ctx, 'session_id', 'id')) {
+    const toIso = (value?: string) => {
+      if (!value || value.trim() === '') return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    };
+    return mutate(
+      `admin/kca/orientation-sessions/${encodeURIComponent(requireId(pickRecord(ctx, 'session_id', 'id'), 'session'))}`,
+      { published_at: toIso(field(payload, 'published_at') ?? new Date().toISOString()) },
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/orientation') && labelIs(label, /unpublish orientation session/) && pickRecord(ctx, 'session_id', 'id')) {
+    return mutate(
+      `admin/kca/orientation-sessions/${encodeURIComponent(requireId(pickRecord(ctx, 'session_id', 'id'), 'session'))}`,
+      { published_at: null },
+      { ...opts, method: 'PUT' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/orientation') && labelIs(label, /delete orientation session/) && pickRecord(ctx, 'session_id', 'id')) {
+    return mutate(
+      `admin/kca/orientation-sessions/${encodeURIComponent(requireId(pickRecord(ctx, 'session_id', 'id'), 'session'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
     );
   }
 

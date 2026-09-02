@@ -477,7 +477,7 @@ function QuickActionsLive() {
     { label: 'Create Announcement', href: '/admin/communications', copy: 'Open communications' },
     { label: 'Add New Church', href: '/admin/churches/create', copy: 'Register a church' },
     { label: 'Approve Requests', href: '/admin/approvals', copy: 'Approval inbox' },
-    { label: 'Create Event', href: '/admin/events', copy: 'Events catalogue' },
+    { label: 'Create Event', href: '/admin/events/create', copy: 'Events catalogue' },
     { label: 'Generate Report', href: '/admin/reports', copy: 'Reports home' },
     { label: 'Manage Users', href: '/admin/users', copy: 'User directory' },
     { label: 'System Settings', href: '/admin/settings/platform', copy: 'Platform configuration' },

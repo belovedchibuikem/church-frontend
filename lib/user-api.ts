@@ -1520,17 +1520,36 @@ export type KcaOrientationStage = {
   lesson_id?: string | null;
   modules?: Array<JsonObject>;
   mentor?: JsonObject | null;
+  completed?: boolean;
 };
 
 export type KcaOrientation = {
   enrolled?: boolean;
   welcome?: string;
+  application_status?: string;
+  orientation_completed_at?: string | null;
+  stages_completed?: string[];
+  can_complete?: boolean;
   stages?: KcaOrientationStage[];
 };
 
 export async function fetchKcaOrientation(): Promise<KcaOrientation> {
   return apiRequestData<KcaOrientation>('user/kca/orientation', {
     method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function completeKcaOrientationStage(stage: string): Promise<JsonObject> {
+  return apiRequestData<JsonObject>(`user/kca/orientation/stages/${encodeURIComponent(stage)}/complete`, {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+  });
+}
+
+export async function completeKcaOrientation(): Promise<JsonObject> {
+  return apiRequestData<JsonObject>('user/kca/orientation/complete', {
+    method: 'POST',
     headers: await serverSessionHeaders(),
   });
 }

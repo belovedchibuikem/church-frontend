@@ -28,6 +28,7 @@ import {
 } from '../lib/kca-module-builder';
 import { EntitySearchSelect } from './entity-search-select';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
+import { KcaOrientationCreateForm, KcaOrientationDetailPanel } from './kca-orientation-ui';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { TableRowActions } from './table-row-actions';
 import {
@@ -395,10 +396,37 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
     }
   }
 
+  async function completeOrientation() {
+    if (!applicationId) return;
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await executeAdminAction({
+        route: screen.route,
+        label: 'Complete orientation',
+        payload: { action: 'complete_orientation' },
+        recordId: applicationId,
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      setMessage('Orientation marked complete. Application is ready for admission decision.');
+      const result = await listCatalogDomain('kca.applications', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE });
+      setApplication((result.items.find((item) => String(item.id) === applicationId) as Record<string, unknown>) ?? null);
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (live && applicationId) {
     const personName = String(application?.person_name ?? 'Applicant');
     const initials = personName.split(' ').map((part) => part[0]).slice(0, 2).join('') || '?';
     const status = String(application?.status ?? 'received');
+    const orientationProgress = Array.isArray(application?.orientation_progress)
+      ? (application.orientation_progress as string[])
+      : [];
+    const orientationComplete = Boolean(application?.orientation_completed_at);
     return (
       <div className="kca-decision-layout">
         <aside className="card kca-review-summary">
@@ -407,6 +435,11 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           <small>{applicationId}</small>
           <p><KcaBadge value={status} /></p>
           <p>{application?.received_at ? `Received ${String(application.received_at)}` : null}</p>
+          {status === 'interview' ? (
+            <p>
+              Orientation: {orientationComplete ? 'Complete' : `${orientationProgress.length}/4 stages`}
+            </p>
+          ) : null}
         </aside>
         <article className="card kca-decision-card">
           <span className="kca-overline">{t('member.kca.finalReview', { defaultMessage: 'Final review' })}</span>
@@ -414,6 +447,16 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           <p>{t('member.kca.decisionCopy', { defaultMessage: 'Choose the appropriate outcome for {name} after reviewing all application sections.', vars: { name: personName } })}</p>
           {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
           {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+          {status === 'interview' && !orientationComplete ? (
+            <p className="maps-settings-lead">
+              The applicant must complete orientation, or you can mark it complete from here before admitting.
+            </p>
+          ) : null}
+          {status === 'interview' && !orientationComplete ? (
+            <button className="primary-button" type="button" data-interaction-native="true" disabled={busy} onClick={() => void completeOrientation()}>
+              Mark Orientation Complete
+            </button>
+          ) : null}
           <div className="kca-decision-options">
             <button className="accept" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('accepted', 'Admit')}>
               <span>✓</span><strong>{t('member.kca.admit', { defaultMessage: 'Admit' })}</strong>
@@ -463,9 +506,70 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
 
 function KcaOrientation({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
+  const columns = screen.columns ?? [];
+  const columnKey = columns.join('\0');
+  const dataset = resolveCatalogDataset(screen);
+  const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData() && dataset !== null;
+  const [rows, setRows] = useState<Row[]>(live ? [] : (screen.rows ?? []));
+  const [total, setTotal] = useState(0);
+  const [message, setMessage] = useState(live ? t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }) : '');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!live || !dataset) return;
+    const mappedColumns = columnKey ? columnKey.split('\0') : [];
+    let cancelled = false;
+    void (async () => {
+      setError(null);
+      setMessage(t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
+      try {
+        const result = await listCatalogDomain(dataset, { perPage: 25 });
+        if (cancelled) return;
+        stashAdminRecords(result.items as Array<Record<string, unknown>>);
+        setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[]);
+        setTotal(result.pagination.total);
+        setMessage(
+          result.pagination.total === 0
+            ? t('errors.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
+            : t('common.showingOfRecords', { defaultMessage: 'Showing {visible} of {total} records', vars: { visible: result.items.length, total: result.pagination.total } }),
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setError(catalogErrorMessage(err, t('errors.unableToLoadDomainCatalog', { defaultMessage: 'Unable to load domain catalog.' })));
+        setMessage(t('errors.liveCatalogUnavailable', { defaultMessage: 'Live catalog unavailable' }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [columnKey, dataset, live, t]);
+
+  if (!shouldUseDesignFixtures() && !live) {
+    return (
+      <section className="kca-managed-table" aria-label={t('member.kca.orientationSessionsAria', { defaultMessage: 'Orientation sessions' })}>
+        <p className="maps-settings-lead" role="status">
+          {t('errors.noLiveListApiWired', { defaultMessage: 'No live list API is wired for this screen. Design fixtures are disabled.' })}
+        </p>
+      </section>
+    );
+  }
+
   return <section className="kca-managed-table" aria-label={t('member.kca.orientationSessionsAria', { defaultMessage: 'Orientation sessions' })}>
-    <KcaMetrics metrics={screen.metrics}/>
-    <KcaTable screen={screen} filterLabels={['All Batches', 'All Venues', 'All Statuses']} toolbarAction={screen.action}/>
+    {live ? (
+      <div className="kca-students-toolbar">
+        <KcaMetrics metrics={[
+          { label: t('admin.totalSessions', { defaultMessage: 'Sessions' }), value: String(total || rows.length) },
+          { label: t('admin.onThisPage', { defaultMessage: 'On this page' }), value: String(rows.length) },
+        ]} />
+        <Link className="primary-button link-button" href="/admin/kca/orientation/create">{screen.action ?? '+ New Orientation'}</Link>
+      </div>
+    ) : (
+      <KcaMetrics metrics={screen.metrics}/>
+    )}
+    {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+    {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+    <KcaTable screen={screen} rows={rows} columns={columns} filterLabels={['All Batches', 'All Venues', 'All Statuses']} toolbarAction={live ? undefined : screen.action} total={total || rows.length} />
   </section>;
 }
 
@@ -2007,6 +2111,13 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
 }
 
 export function KcaScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
+  if (!shouldUseDesignFixtures() && screen.route === '/admin/kca/orientation/create') {
+    return <KcaOrientationCreateForm screen={screen} />;
+  }
+  if (!shouldUseDesignFixtures() && /^\/admin\/kca\/orientation\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
+    return <KcaOrientationDetailPanel screen={screen} />;
+  }
+
   switch (screen.id) {
     case 'G-01': return <KcaDashboard screen={screen} requestedScope={requestedScope} />;
     case 'G-03': return <KcaApplicantOverview screen={screen}/>;

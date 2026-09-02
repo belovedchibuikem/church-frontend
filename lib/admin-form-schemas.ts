@@ -1,6 +1,6 @@
 import type { catalogOptions, FormCatalogKey, LiveCatalogKey } from './form-catalogs';
 
-export type FormFieldType = 'text' | 'email' | 'date' | 'number' | 'select' | 'search-select' | 'textarea' | 'checkbox';
+export type FormFieldType = 'text' | 'email' | 'date' | 'datetime-local' | 'number' | 'select' | 'search-select' | 'textarea' | 'checkbox';
 
 export type AdminFormField = {
   label: string;
@@ -386,9 +386,38 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   event: {
     entity: 'Event',
     fields: [
-      { label: 'Title', name: 'title', type: 'text' },
-      { label: 'Status', name: 'status', type: 'text' },
-      { label: 'Starts at', name: 'starts_at', type: 'text' },
+      { label: 'Name', name: 'name', type: 'text', required: true, placeholder: 'Leaders Retreat' },
+      {
+        label: 'Category',
+        name: 'category_code',
+        type: 'select',
+        required: true,
+        options: ['general', 'training', 'youth', 'conference', 'retreat', 'outreach'],
+        helpText: 'Stable lowercase category code used for filtering and reporting.',
+      },
+      { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
+      { label: 'Starts at', name: 'starts_at', type: 'datetime-local', required: true },
+      { label: 'Ends at', name: 'ends_at', type: 'datetime-local', required: true },
+      { label: 'Registration opens', name: 'registration_opens_at', type: 'datetime-local' },
+      { label: 'Registration closes', name: 'registration_closes_at', type: 'datetime-local' },
+      { label: 'Publish at', name: 'published_at', type: 'datetime-local', helpText: 'Leave blank to keep the event as a draft.' },
+      { label: 'Fee (minor units)', name: 'fee_amount_minor', type: 'number', placeholder: '500000' },
+      { label: 'Currency', name: 'fee_currency', type: 'text', placeholder: 'NGN' },
+      { label: 'Capacity', name: 'capacity', type: 'number', placeholder: '250' },
+    ],
+  },
+  kca_orientation_session: {
+    entity: 'Orientation Session',
+    fields: [
+      { label: 'Name', name: 'name', type: 'text', required: true, placeholder: 'Batch 2024-06 Orientation' },
+      { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', placeholder: 'Search cohort' },
+      { label: 'Location', name: 'location_id', type: 'search-select', catalog: 'location', placeholder: 'Search location' },
+      { label: 'Venue label', name: 'venue_label', type: 'text', placeholder: 'Online (Zoom)', helpText: 'Use when no location record exists.' },
+      { label: 'Starts at', name: 'starts_at', type: 'datetime-local', required: true },
+      { label: 'Ends at', name: 'ends_at', type: 'datetime-local' },
+      { label: 'Publish at', name: 'published_at', type: 'datetime-local', helpText: 'Leave blank to keep as draft.' },
+      { label: 'Capacity', name: 'capacity', type: 'number', placeholder: '100' },
+      { label: 'Notes', name: 'notes', type: 'textarea', wide: true },
     ],
   },
   press_publication: {
@@ -527,6 +556,7 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
   { pattern: /\/admin\/kca\/alumni/, entity: 'kca_alumni' },
   { pattern: /\/admin\/kca\/lecturers/, entity: 'kca_lecturer_assignment' },
   { pattern: /\/admin\/kca\/mentors/, entity: 'kca_mentor_assignment' },
+  { pattern: /\/admin\/kca\/orientation/, entity: 'kca_orientation_session' },
   { pattern: /\/admin\/kca\/students\/register/, entity: 'kca_application' },
   { pattern: /\/admin\/kca\/students/, entity: 'kca_enrollment' },
   { pattern: /\/admin\/kca\/applications/, entity: 'kca_application' },
@@ -560,6 +590,9 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
 ];
 
 const screenEntityMap: Record<string, string> = {
+  'P-01': 'event',
+  'P-02': 'event',
+  'P-03': 'event',
   'J-02': 'press_publication',
   'J-04': 'press_publication',
   'J-05': 'press_contributor',

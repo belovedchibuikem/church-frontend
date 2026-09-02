@@ -57,6 +57,7 @@ import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { MapsSettingsPanel } from './maps-settings-panel';
 import { PressPublicationCreateForm, PressPublicationDetail } from './press-ui';
+import { EventCreateForm, EventDetailPanel } from './events-ui';
 import { PaymentsSettingsPanel } from './payments-settings-panel';
 import { CommunicationsSettingsPanel } from './communications-settings-panel';
 import { CommunicationsComposePanel } from './communications-compose-panel';
@@ -379,6 +380,8 @@ function CatalogLiveTable({ screen }: { screen: AdminScreen }) {
                               <b><Link href={`/admin/finance/transactions/${row.__id}`}>{value}</Link></b>
                             ) : screen.route === '/admin/press/publications' && row.__id ? (
                               <b><Link href={`/admin/press/publications/${row.__id}`}>{value}</Link></b>
+                            ) : (screen.route === '/admin/events' || screen.route === '/admin/settings/events') && row.__id ? (
+                              <b><Link href={`/admin/events/${row.__id}`}>{value}</Link></b>
                             ) : screen.route === '/admin/security/safeguarding/cases' && row.__id ? (
                               <b><Link href={`/admin/security/safeguarding/cases/${row.__id}`}>{value}</Link></b>
                             ) : screen.route === '/admin/security/audit-logs' && row.__id ? (
@@ -1735,16 +1738,17 @@ export function PlatformSettingsScreen({ screen }: { screen: AdminScreen }) {
       return (
         <>
           <p className="maps-settings-lead" role="status">
-            Event settings list the live events catalog. Create uses `POST admin/events` — there is no separate event-preferences API.
+            Event preferences use the live events catalogue. <Link href="/admin/events">Open Events</Link> to create, edit, publish, or delete ministry events.
           </p>
           <DenseTable
             screen={{
               ...screen,
+              route: '/admin/events',
               kind: 'table',
               action: '+ Create Event',
-              columns: screen.columns?.length ? screen.columns : ['Name', 'Type', 'Status', 'Updated'],
+              columns: screen.columns?.length ? screen.columns : ['Name', 'Category', 'Status', 'Updated'],
             }}
-            columns={screen.columns?.length ? screen.columns : ['Name', 'Type', 'Status', 'Updated']}
+            columns={screen.columns?.length ? screen.columns : ['Name', 'Category', 'Status', 'Updated']}
           />
         </>
       );
@@ -1880,11 +1884,16 @@ export function PlatformScreenContent({ screen, requestedScope }: { screen: Admi
       if (!shouldUseDesignFixtures() && /^\/admin\/press\/publications\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
         return <PressPublicationDetail screen={screen} />;
       }
+      if (!shouldUseDesignFixtures() && /^\/admin\/events\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
+        return <EventDetailPanel screen={screen} />;
+      }
       return <Detail screen={screen}/>;
     case 'workflow': case 'approval': content=<Workflow screen={screen}/>; break;
     case 'form': case 'wizard':
       if (screen.route === '/admin/press/publications/create') {
         content = <PressPublicationCreateForm screen={screen} />;
+      } else if (screen.route === '/admin/events/create') {
+        content = <EventCreateForm screen={screen} />;
       } else if (screen.route === '/admin/communications/audiences/create') {
         content = <CommunicationsAudienceCreatePanel screen={screen} />;
       } else if (screen.route.startsWith('/admin/communications/') && !screen.route.includes('/settings')) {

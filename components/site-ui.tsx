@@ -117,6 +117,8 @@ import {
   createKcaStudyNote,
   recordKcaSoulWin,
   fetchKcaOrientation,
+  completeKcaOrientationStage,
+  completeKcaOrientation,
   fetchKcaPracticalService,
   fetchKcaDirectory,
   submitKcaEvidence,
@@ -2835,7 +2837,15 @@ function KcaUnavailable({ title = 'KCA learning', message }: { title?: string; m
 function KcaOrientationMember() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [orientation, setOrientation] = useState<import('@/lib/user-api').KcaOrientation | null>(null);
+
+  async function reload() {
+    const data = await fetchKcaOrientation();
+    setOrientation(data);
+    setState('ready');
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -2855,15 +2865,49 @@ function KcaOrientationMember() {
     };
   }, []);
 
+  async function markStageComplete(stageKey: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await completeKcaOrientationStage(stageKey);
+      await reload();
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitOrientation() {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await completeKcaOrientation();
+      await reload();
+      setMessage(`Orientation submitted. Application status: ${String(result.status ?? 'reviewed').replaceAll('_', ' ')}.`);
+    } catch (err) {
+      setError(formatUserApiError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (state === 'loading') return <p className="panel">Loading orientation…</p>;
-  if (state === 'error') return <KcaUnavailable title="KCA Orientation" message={error ?? undefined} />;
+  if (state === 'error' && !orientation) return <KcaUnavailable title="KCA Orientation" message={error ?? undefined} />;
+
+  const allStagesComplete = (orientation?.stages ?? []).every((stage) => stage.completed);
+  const canSubmit = orientation?.can_complete && allStagesComplete && !orientation?.orientation_completed_at;
 
   return (
     <section className="panel">
       <h3>KCA Orientation</h3>
       <p>{orientation?.welcome ?? 'Walk through each stage of orientation.'}</p>
+      {error ? <p role="alert">{error}</p> : null}
+      {message ? <p role="status">{message}</p> : null}
       <ul className="check-list">
         {(orientation?.stages ?? []).map((stage) => {
+          const stageKey = stage.key ?? '';
           const href = stage.lesson_id
             ? `/account/kca/lessons/${stage.lesson_id}`
             : stage.module_id
@@ -2872,20 +2916,32 @@ function KcaOrientationMember() {
                 ? '/account/kca/mentor'
                 : stage.key === 'path'
                   ? '/account/kca/modules'
-                  : '/account/kca/orientation';
+                  : `/account/kca/orientation/${stageKey}`;
           return (
             <li key={stage.key ?? stage.title}>
               <Link href={href}>
-                <strong>{stage.title}</strong>
+                <strong>{stage.completed ? '✓ ' : ''}{stage.title}</strong>
                 {stage.subtitle ? ` — ${stage.subtitle}` : ''}
               </Link>
               {stage.body ? <p>{stage.body}</p> : null}
+              {orientation?.can_complete && stageKey && !stage.completed ? (
+                <button className="ghost-button" type="button" disabled={busy} onClick={() => void markStageComplete(stageKey)}>
+                  Mark stage complete
+                </button>
+              ) : null}
             </li>
           );
         })}
       </ul>
-      <Link className="site-button" href="/account/kca/practical-service">
-        Continue to practical service
+      {canSubmit ? (
+        <button className="site-button" type="button" disabled={busy} onClick={() => void submitOrientation()}>
+          Submit orientation
+        </button>
+      ) : orientation?.orientation_completed_at ? (
+        <p>Orientation completed. Track your admission progress from the application status page.</p>
+      ) : null}
+      <Link className="site-button ghost-button" href="/kca/apply/status">
+        View admission progress
       </Link>
     </section>
   );

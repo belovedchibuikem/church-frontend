@@ -7,7 +7,7 @@ const actionDestinations: Record<string, string> = {
   'alert rules': '/admin/alerts/rules',
   'unread alerts': '/admin/alerts',
   'view review queue': '/admin/kca/review-queue',
-  'create orientation batch': '/admin/kca/orientation',
+  'create orientation batch': '/admin/kca/orientation/create',
   'generate reports': '/admin/reports',
   'admission settings': '/admin/settings/kca',
   'view all crusades': '/admin/mission/crusades',

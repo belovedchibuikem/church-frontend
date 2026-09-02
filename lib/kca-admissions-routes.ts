@@ -215,16 +215,18 @@ export const kcaAdmissionsScreens: AdminScreen[] = [
     id: 'G-17', batch: 'G', route: '/admin/kca/orientation', title: 'Orientation',
     subtitle: 'Manage orientation sessions and attendance.', kind: 'operations',
     permission: 'kca.orientation.manage', scope: 'assigned', nav: 'kca-students', action: '+ New Orientation',
-    metrics: [
-      { label: 'Upcoming Sessions', value: '3' }, { label: 'Total Students', value: '185' },
-      { label: 'Attended', value: '162' }, { label: 'Completion Rate', value: '87%' },
-    ],
-    columns: ['Session', 'Date', 'Time', 'Venue', 'Students', 'Status'],
-    rows: [
-      { Session: 'Batch 2024-06 Orientation', Date: 'Jun 6, 2024', Time: '9:00 AM', Venue: 'The Covenant Place', Students: '72', Status: 'Upcoming' },
-      { Session: 'Batch 2024-06 Orientation', Date: 'Jun 8, 2024', Time: '4:00 PM', Venue: 'Online (Zoom)', Students: '58', Status: 'Upcoming' },
-      { Session: 'Batch 2024-06 Make-up', Date: 'Jun 11, 2024', Time: '10:00 AM', Venue: 'The Covenant Place', Students: '55', Status: 'Scheduled' },
-    ],
+    columns: ['Name', 'Date', 'Time', 'Venue', 'Students', 'Status'],
+  },
+  {
+    id: 'G-17b', batch: 'G', route: '/admin/kca/orientation/create', title: 'New Orientation Session',
+    subtitle: 'Schedule an orientation session for a KCA cohort.', kind: 'form',
+    permission: 'kca.orientation.manage', scope: 'assigned', nav: 'kca-students', action: 'Create Session',
+  },
+  {
+    id: 'G-17c', batch: 'G', route: '/admin/kca/orientation/sample-session', title: 'Orientation Session',
+    subtitle: 'Review session details and attendance.', kind: 'detail',
+    permission: 'kca.orientation.manage', scope: 'assigned', nav: 'kca-students',
+    details: { Status: 'Loading' },
   },
   {
     id: 'G-18', batch: 'G', route: '/admin/kca/applications/samuel-david/record-created',

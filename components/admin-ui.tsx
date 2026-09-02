@@ -296,6 +296,11 @@ const navByBatch = {
     ['finance-providers', '◇', 'Providers', '/admin/finance/providers'],
     ['finance-alerts', '◇', 'Alerts', '/admin/finance/alerts'], ['settings', '⚙', 'Settings', '/admin/settings/payments'],
   ],
+  P: [
+    ['events', '▣', 'Events', '/admin/events'],
+    ['events', '◇', 'Registrations', '/admin/events/registrations'],
+    ['settings', '⚙', 'Settings', '/admin/settings/events'],
+  ],
   L: [
     ['dashboard', '⌂', 'Dashboard', '/admin'], ['people', '♙', 'People', '/admin/people'], ['churches', '▣', 'Churches', '/admin/churches'],
     ['home-churches', '◎', 'Home Churches', '/admin/home-churches'], ['mission', '◇', 'Missions', '/admin/mission'], ['kca', '▦', 'KCA', '/admin/kca'],
@@ -377,6 +382,7 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
   { id: 'kca', icon: '◇', label: 'KCA', items: navItems(['G', 'H'], ['Dashboard', 'Settings']) },
   { id: 'mission', icon: '⌖', label: 'Mission', items: navItems(['I'], ['Dashboard', 'Reports', 'Settings']) },
   { id: 'press', icon: '▤', label: 'Press', items: navItems(['J'], ['Dashboard', 'Analytics', 'Settings']) },
+  { id: 'events', icon: '▣', label: 'Events', items: navItems(['P'], ['Dashboard', 'Settings']) },
   { id: 'finance', icon: '₦', label: 'Finance', items: navItems(['K'], ['Dashboard', 'Reports', 'Settings']) },
   { id: 'communications', icon: '✉', label: 'Communications', items: navItems(['M'], ['Dashboard', 'Delivery Report', 'Settings', 'People', 'Churches']) },
   { id: 'reports', icon: '▦', label: 'Reports', items: reportItems },
@@ -391,7 +397,7 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
     { icon: '◇', label: 'KCA Settings', href: '/admin/settings/kca' },
     { icon: '⌖', label: 'Mission Settings', href: '/admin/settings/mission' },
     { icon: '▤', label: 'Press Settings', href: '/admin/settings/press' },
-    { icon: '▣', label: 'Event Settings', href: '/admin/settings/events' },
+    { icon: '▣', label: 'Event Settings', href: '/admin/events' },
     { icon: '₦', label: 'Payment Settings', href: '/admin/settings/payments' },
     { icon: '✉', label: 'Notification Providers', href: '/admin/settings/notifications' },
     { icon: '◎', label: 'Languages', href: '/admin/settings/languages' },
@@ -3954,7 +3960,7 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
 function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; requestedScope?: string }) {
   if (screen.batch === 'G' || screen.batch === 'H') return <KcaScreenContent screen={screen} requestedScope={requestedScope} />;
   if (screen.batch === 'I') return <MissionScreenContent screen={screen} requestedScope={requestedScope} />;
-  if (['J','K','L','M','N','O'].includes(screen.batch)) return <PlatformScreenContent screen={screen} requestedScope={requestedScope} />;
+  if (['J','K','L','M','N','O','P'].includes(screen.batch)) return <PlatformScreenContent screen={screen} requestedScope={requestedScope} />;
   if (screen.batch === 'C' && screen.route !== '/admin/geography' && !screen.route.includes('/geography/scope')) {
     return <GeographyScreenContent screen={screen} requestedScope={requestedScope} />;
   }

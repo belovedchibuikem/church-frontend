@@ -34,6 +34,7 @@ export const CATALOG_PATHS = {
   'kca.assessments': 'kca/assessment-results',
   'kca.attendance': 'kca/attendance',
   'kca.certificates': 'kca/certificates',
+  'kca.orientation': 'kca/orientation-sessions',
   'press.publications': 'press/publications',
   'press.translations': 'press/translations',
   'press.contributors': 'press/contributors',
@@ -309,7 +310,7 @@ export function resolveCatalogDataset(screen: {
     return 'reporting.alert_occurrences';
   }
   if (route === '/admin/alerts/rules') return 'reporting.alert_rules';
-  if (route === '/admin/settings/events' || route === '/admin/events' || route.startsWith('/admin/events/')) {
+  if (route === '/admin/settings/events' || route === '/admin/events' || route === '/admin/events/registrations') {
     return route.includes('registration') ? 'events.registrations' : 'events.events';
   }
   if (
@@ -340,6 +341,7 @@ export function resolveCatalogDataset(screen: {
   if (route === '/admin/kca/alumni') return 'kca.certificates';
   if (route === '/admin/kca/lecturers') return 'kca.lecturer_assignments';
   if (route === '/admin/kca/mentors') return 'kca.mentor_assignments';
+  if (route === '/admin/kca/orientation') return 'kca.orientation';
   return null;
 }
 
@@ -445,6 +447,7 @@ export function catalogRecordsToRows(
                 'reconciled_at',
                 'succeeded_at',
                 'created_at',
+                'starts_at',
               )
             : get(
                 'received_at',
@@ -486,6 +489,8 @@ export function catalogRecordsToRows(
         mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
       } else if (key.includes('student')) {
         mapped[column] = get('students_count', 'enrollments_count', 'student_name', 'person_name', 'enrollment_id');
+      } else if (key.includes('venue')) {
+        mapped[column] = get('venue', 'location_name', 'venue_label');
       } else if (key.includes('church')) {
         mapped[column] = get('church_name', 'home_church_name', 'church');
       } else if (key.includes('batch')) {

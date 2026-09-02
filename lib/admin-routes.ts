@@ -3,6 +3,7 @@ import { kcaAdmissionsScreens } from './kca-admissions-routes.ts';
 import { kcaLearningScreens } from './kca-learning-routes.ts';
 import { missionScreens } from './mission-routes.ts';
 import { platformScreens } from './platform-routes.ts';
+import { eventScreens } from './event-routes.ts';
 
 export type AdminScreenKind =
   | 'login' | 'mfa' | 'dashboard' | 'scope-grid' | 'command' | 'feed'
@@ -17,7 +18,7 @@ export type Row = Record<string, string>;
 
 export type AdminScreen = {
   id: string;
-  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O';
+  batch: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P';
   route: string;
   title: string;
   subtitle: string;
@@ -37,7 +38,7 @@ export type AdminScreen = {
     | 'mission' | 'partners' | 'ai-assistant'
     | 'press' | 'publications' | 'authors' | 'manuscripts' | 'distribution' | 'assets' | 'translations' | 'press-sales' | 'press-analytics'
     | 'finance-transactions' | 'finance-payments' | 'finance-reconciliation' | 'finance-providers' | 'finance-reports' | 'finance-alerts'
-    | 'platform-settings' | 'communications' | 'templates' | 'report-ai' | 'security' | 'privacy';
+    | 'platform-settings' | 'communications' | 'templates' | 'report-ai' | 'security' | 'privacy' | 'events';
   action?: string;
   tabs?: string[];
   metrics?: Metric[];
@@ -171,6 +172,7 @@ export const adminScreens: AdminScreen[] = [
   ...kcaLearningScreens,
   ...missionScreens,
   ...platformScreens,
+  ...eventScreens,
 ];
 
 export function normalizeAdminRoute(slug?: string[]): string {
@@ -436,6 +438,23 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
       details: {
         Status: 'Loading',
         'Publication ID': pressPublicationDetail[1],
+      },
+    };
+  }
+
+  const eventDetail = route.match(/^\/admin\/events\/([0-7][0-9A-HJKMNP-TV-Z]{25})$/i);
+  if (eventDetail) {
+    const template = adminScreens.find((screen) => screen.id === 'P-03');
+    if (!template) return undefined;
+    return {
+      ...template,
+      route,
+      title: 'Event',
+      subtitle: eventDetail[1],
+      kind: 'detail',
+      details: {
+        Status: 'Loading',
+        'Event ID': eventDetail[1],
       },
     };
   }
