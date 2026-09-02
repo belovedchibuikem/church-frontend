@@ -434,6 +434,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .kca-letter-body { flex:1; min-height:0; overflow:hidden; }
 .kca-letter-body p { margin:0 0 10px; font-size:10px; line-height:1.75; }
 .kca-letter-signature-block { margin-top:auto; display:grid; gap:2px; }
+.kca-letter-signature-block--inline { margin-top:0; }
 .kca-letter-signature-block strong { font-family:Georgia,serif; font-size:14px; font-style:italic; }
 .kca-letter-signature-block span { color:#5b6478; font-size:8px; }
 .kca-letter-signature-image { width:auto; max-width:180px; object-fit:contain; }

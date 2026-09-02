@@ -51,8 +51,19 @@ function isStructuredTemplate(body: string): boolean {
   return body.length > 400 || body.includes('ADMISSION & ACCEPTANCE LETTER') || body.includes('YOUR KCA COMMITMENT');
 }
 
-function renderTemplateBlocks(body: string): ReactNode {
-  return body.split('\n\n').filter(Boolean).map((block) => {
+function renderTemplateBlocks(
+  body: string,
+  options?: {
+    signatureSrc?: string | null;
+    signerName?: string | null;
+    signerTitle?: string | null;
+  },
+): ReactNode {
+  const signatureSrc = options?.signatureSrc ?? null;
+  const signerName = options?.signerName?.trim() ?? '';
+  const signerTitle = options?.signerTitle?.trim() ?? '';
+
+  return body.split('\n\n').filter(Boolean).map((block, index) => {
     const trimmed = block.trim();
     const isHeading = trimmed.length >= 8
       && trimmed === trimmed.toUpperCase()
@@ -60,11 +71,59 @@ function renderTemplateBlocks(body: string): ReactNode {
       && /^[A-Z0-9 '&().-]+$/.test(trimmed);
 
     if (isHeading) {
-      return <h3 className="kca-letter-section-title" key={trimmed}>{trimmed}</h3>;
+      return <h3 className="kca-letter-section-title" key={`${trimmed}-${index}`}>{trimmed}</h3>;
     }
 
-    return <p className="kca-letter-section-paragraph" key={trimmed}>{trimmed}</p>;
+    const nodes: ReactNode[] = [
+      <p className="kca-letter-section-paragraph" key={`${trimmed}-${index}`}>{trimmed}</p>,
+    ];
+
+    if (
+      signatureSrc
+      && signerName !== ''
+      && trimmed === signerName
+    ) {
+      nodes.push(
+        <div className="kca-letter-signature-block kca-letter-signature-block--inline" key={`signature-${index}`}>
+          <img
+            alt=""
+            className="kca-letter-signature-image"
+            src={signatureSrc}
+            style={{ maxHeight: 56, margin: '0.15rem 0 0.35rem' } as CSSProperties}
+          />
+        </div>,
+      );
+    }
+
+    return nodes;
   });
+}
+
+function ProvostSignatureBlock({
+  signatureSrc,
+  signerName,
+  signerTitle,
+  fallbackLabel,
+}: {
+  signatureSrc?: string | null;
+  signerName?: string | null;
+  signerTitle?: string | null;
+  fallbackLabel: string;
+}) {
+  return (
+    <div className="kca-letter-signature-block">
+      <strong>{signerName ?? fallbackLabel}</strong>
+      {signatureSrc ? (
+        <img
+          alt=""
+          className="kca-letter-signature-image"
+          src={signatureSrc}
+          style={{ maxHeight: 56, margin: '0.15rem 0 0.35rem' } as CSSProperties}
+        />
+      ) : null}
+      <span>{signerTitle ?? fallbackLabel}</span>
+    </div>
+  );
 }
 
 export function KcaAdmissionLetterSheet({
@@ -114,17 +173,11 @@ export function KcaAdmissionLetterSheet({
           <div className={`kca-letter-overlay${structured ? ' kca-letter-overlay--document' : ''}`}>
             {structured ? (
               <div className="kca-letter-document-scroll">
-                {renderTemplateBlocks(body)}
-                {signatureSrc ? (
-                  <div className="kca-letter-signature-block">
-                    <img
-                      alt=""
-                      className="kca-letter-signature-image"
-                      src={signatureSrc}
-                      style={{ maxHeight: 56, marginBottom: '0.35rem' } as CSSProperties}
-                    />
-                  </div>
-                ) : null}
+                {renderTemplateBlocks(body, {
+                  signatureSrc,
+                  signerName: letter.signer_name,
+                  signerTitle: letter.signer_title,
+                })}
               </div>
             ) : (
               <>
@@ -140,18 +193,12 @@ export function KcaAdmissionLetterSheet({
                     ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
                     : <p>{defaultBody}</p>}
                 </div>
-                <div className="kca-letter-signature-block">
-                  {signatureSrc ? (
-                    <img
-                      alt=""
-                      className="kca-letter-signature-image"
-                      src={signatureSrc}
-                      style={{ maxHeight: 56, marginBottom: '0.35rem' } as CSSProperties}
-                    />
-                  ) : null}
-                  <strong>{letter.signer_name ?? admissionsTeamLabel}</strong>
-                  <span>{letter.signer_title ?? admissionsTeamLabel}</span>
-                </div>
+                <ProvostSignatureBlock
+                  fallbackLabel={admissionsTeamLabel}
+                  signatureSrc={signatureSrc}
+                  signerName={letter.signer_name}
+                  signerTitle={letter.signer_title}
+                />
               </>
             )}
           </div>
@@ -165,7 +212,13 @@ export function KcaAdmissionLetterSheet({
       <header>{fallbackHeader}</header>
       <h1 aria-level={2}>ADMISSION LETTER</h1>
       {structured ? (
-        <div className="kca-letter-document-scroll is-plain">{renderTemplateBlocks(body)}</div>
+        <div className="kca-letter-document-scroll is-plain">
+          {renderTemplateBlocks(body, {
+            signatureSrc,
+            signerName: letter.signer_name,
+            signerTitle: letter.signer_title,
+          })}
+        </div>
       ) : (
         <>
           <div className="kca-letter-meta">
@@ -176,15 +229,14 @@ export function KcaAdmissionLetterSheet({
           {bodyParagraphs.length > 0
             ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)
             : <p>{defaultBody}</p>}
+          <ProvostSignatureBlock
+            fallbackLabel={admissionsTeamLabel}
+            signatureSrc={signatureSrc}
+            signerName={letter.signer_name}
+            signerTitle={letter.signer_title}
+          />
         </>
       )}
-      <div className="kca-letter-signature">
-        {signatureSrc ? (
-          <img alt="" src={signatureSrc} style={{ maxHeight: 72, marginBottom: '0.5rem' }} />
-        ) : null}
-        <strong>{letter.signer_name ?? admissionsTeamLabel}</strong>
-        <span>{letter.signer_title ?? admissionsTeamLabel}</span>
-      </div>
     </article>
   );
 }
