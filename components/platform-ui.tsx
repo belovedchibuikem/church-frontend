@@ -943,7 +943,7 @@ export function KcaSettingsPanel() {
   };
 
   return (
-    <form className="platform-settings" onSubmit={(event) => void save(event)}>
+    <form className="platform-settings kca-governance-form" noValidate onSubmit={(event) => void save(event)}>
       <article className="platform-card platform-settings-body">
         <header className="platform-settings-heading">
           <span className="platform-overline">{t('admin.kcaOverline', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</span>
@@ -1039,20 +1039,6 @@ export function KcaSettingsPanel() {
               placeholder="{reference_code}, {date}, {applicant_name}, {applicant_first_name}, {applicant_address}, {kca_year}, {programme_commencement}, {venue}, {signer_name}..."
               rows={18}
             />
-            <div className="form-footer" style={{ justifyContent: 'flex-start', gap: '0.75rem', marginTop: '0.75rem' }}>
-              <button
-                className="ghost-button"
-                disabled={!status?.admission_letter_template_default}
-                onClick={() => {
-                  if (templateRef.current && status?.admission_letter_template_default) {
-                    templateRef.current.value = status.admission_letter_template_default;
-                  }
-                }}
-                type="button"
-              >
-                {t('admin.loadDefaultAdmissionTemplate', { defaultMessage: 'Load default template' })}
-              </button>
-            </div>
             <small>{t('admin.admissionLetterTemplateHelp', { defaultMessage: 'Leave blank to use the default KCA admission letter. Placeholders are filled from applicant profile, application data, and programme settings above.' })}</small>
             {status?.admission_letter_template_placeholders ? (
               <small style={{ display: 'block', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
@@ -1060,10 +1046,27 @@ export function KcaSettingsPanel() {
               </small>
             ) : null}
           </label>
+          <div className="kca-template-actions" style={{ gridColumn: '1 / -1', display: 'flex', gap: '0.75rem' }}>
+            <button
+              className="ghost-button"
+              data-interaction-native="true"
+              disabled={!status?.admission_letter_template_default}
+              onClick={() => {
+                if (templateRef.current && status?.admission_letter_template_default) {
+                  templateRef.current.value = status.admission_letter_template_default;
+                }
+              }}
+              type="button"
+            >
+              {t('admin.loadDefaultAdmissionTemplate', { defaultMessage: 'Load default template' })}
+            </button>
+          </div>
         </div>
-        <footer className="form-footer">
-          <button className="platform-primary" disabled={busy} type="submit">
-            {t('admin.saveGovernance', { defaultMessage: 'Save governance' })}
+        <footer className="form-footer kca-governance-footer">
+          <button className="platform-primary" data-interaction-native="true" disabled={busy} type="submit">
+            {busy
+              ? t('common.saving', { defaultMessage: 'Saving…' })
+              : t('admin.saveGovernance', { defaultMessage: 'Save governance' })}
           </button>
         </footer>
       </article>
