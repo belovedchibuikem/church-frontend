@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { AdminScreen, Metric, Row } from '../lib/admin-routes.ts';
 import {
   catalogErrorMessage,
@@ -870,6 +870,7 @@ export function KcaSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [letterheadId, setLetterheadId] = useState<string | null>(null);
   const [signatureId, setSignatureId] = useState<string | null>(null);
+  const templateRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     void getKcaGovernance()
@@ -920,6 +921,13 @@ export function KcaSettingsPanel() {
         certificate_signer_title: String(form.get('certificate_signer_title') || ''),
         admission_signer_name: String(form.get('admission_signer_name') || ''),
         admission_signer_title: String(form.get('admission_signer_title') || ''),
+        admission_reference_prefix: String(form.get('admission_reference_prefix') || 'KCA/ADM'),
+        admission_letter_body_template: String(form.get('admission_letter_body_template') || ''),
+        admission_programme_commencement: String(form.get('admission_programme_commencement') || ''),
+        admission_programme_completion: String(form.get('admission_programme_completion') || ''),
+        admission_programme_venue: String(form.get('admission_programme_venue') || ''),
+        admission_programme_schedule: String(form.get('admission_programme_schedule') || ''),
+        admission_programme_mentor: String(form.get('admission_programme_mentor') || ''),
         admission_letterhead_file_asset_id: nextLetterheadId,
         admission_signature_file_asset_id: nextSignatureId,
       });
@@ -997,6 +1005,60 @@ export function KcaSettingsPanel() {
             <span>{t('admin.admissionSignature', { defaultMessage: 'Provost signature (upload or draw externally)' })}</span>
             <input accept="image/*" name="admission_signature_file" type="file" />
             {signatureId ? <small>{signatureId}</small> : null}
+          </label>
+          <label>
+            <span>{t('admin.admissionReferencePrefix', { defaultMessage: 'Admission reference prefix' })}</span>
+            <input defaultValue={status?.admission_reference_prefix ?? 'KCA/ADM'} name="admission_reference_prefix" placeholder="KCA/ADM" />
+          </label>
+          <label>
+            <span>{t('admin.programmeCommencement', { defaultMessage: 'Programme commencement date' })}</span>
+            <input defaultValue={status?.admission_programme_commencement ?? ''} name="admission_programme_commencement" />
+          </label>
+          <label>
+            <span>{t('admin.programmeCompletion', { defaultMessage: 'Programme completion date' })}</span>
+            <input defaultValue={status?.admission_programme_completion ?? ''} name="admission_programme_completion" />
+          </label>
+          <label>
+            <span>{t('admin.programmeVenue', { defaultMessage: 'Venue' })}</span>
+            <input defaultValue={status?.admission_programme_venue ?? ''} name="admission_programme_venue" />
+          </label>
+          <label>
+            <span>{t('admin.programmeSchedule', { defaultMessage: 'Training day/time' })}</span>
+            <input defaultValue={status?.admission_programme_schedule ?? ''} name="admission_programme_schedule" />
+          </label>
+          <label>
+            <span>{t('admin.programmeMentor', { defaultMessage: 'Default assigned mentor' })}</span>
+            <input defaultValue={status?.admission_programme_mentor ?? ''} name="admission_programme_mentor" />
+          </label>
+          <label style={{ gridColumn: '1 / -1' }}>
+            <span>{t('admin.admissionLetterTemplate', { defaultMessage: 'Admission letter content template' })}</span>
+            <textarea
+              ref={templateRef}
+              defaultValue={status?.admission_letter_body_template ?? ''}
+              name="admission_letter_body_template"
+              placeholder="{reference_code}, {date}, {applicant_name}, {applicant_first_name}, {applicant_address}, {kca_year}, {programme_commencement}, {venue}, {signer_name}..."
+              rows={18}
+            />
+            <div className="form-footer" style={{ justifyContent: 'flex-start', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <button
+                className="ghost-button"
+                disabled={!status?.admission_letter_template_default}
+                onClick={() => {
+                  if (templateRef.current && status?.admission_letter_template_default) {
+                    templateRef.current.value = status.admission_letter_template_default;
+                  }
+                }}
+                type="button"
+              >
+                {t('admin.loadDefaultAdmissionTemplate', { defaultMessage: 'Load default template' })}
+              </button>
+            </div>
+            <small>{t('admin.admissionLetterTemplateHelp', { defaultMessage: 'Leave blank to use the default KCA admission letter. Placeholders are filled from applicant profile, application data, and programme settings above.' })}</small>
+            {status?.admission_letter_template_placeholders ? (
+              <small style={{ display: 'block', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>
+                {status.admission_letter_template_placeholders}
+              </small>
+            ) : null}
           </label>
         </div>
         <footer className="form-footer">

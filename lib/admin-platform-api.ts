@@ -468,6 +468,15 @@ export type KcaGovernanceStatus = {
   certificate_signer_title?: string | null;
   admission_signer_name?: string | null;
   admission_signer_title?: string | null;
+  admission_reference_prefix?: string | null;
+  admission_letter_body_template?: string | null;
+  admission_letter_template_default?: string | null;
+  admission_letter_template_placeholders?: string | null;
+  admission_programme_commencement?: string | null;
+  admission_programme_completion?: string | null;
+  admission_programme_venue?: string | null;
+  admission_programme_schedule?: string | null;
+  admission_programme_mentor?: string | null;
   admission_letterhead_file_asset_id?: string | null;
   admission_signature_file_asset_id?: string | null;
   configuration_revision?: number;
@@ -501,6 +510,10 @@ export type KcaAdmissionLetter = {
   signature_file_asset_id?: string | null;
   issued_at?: string | null;
   status?: string;
+  acceptance_status?: 'pending' | 'accepted';
+  applicant_accepted_at?: string | null;
+  applicant_signature_name?: string | null;
+  requires_guardian_confirmation?: boolean;
 };
 
 export async function getKcaAdmissionLetter(

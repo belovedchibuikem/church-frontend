@@ -437,6 +437,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .kca-letter-signature-block strong { font-family:Georgia,serif; font-size:14px; font-style:italic; }
 .kca-letter-signature-block span { color:#5b6478; font-size:8px; }
 .kca-letter-signature-image { width:auto; max-width:180px; object-fit:contain; }
+.kca-letter-sheet.is-document { aspect-ratio:auto; min-height:960px; }
+.kca-letter-overlay--document { padding:24% 7% 10% 7%; overflow:visible; }
+.kca-letter-document-scroll { background:rgba(255,255,255,.94); border-radius:8px; padding:16px 18px; font-size:10px; line-height:1.65; color:#1b2030; max-height:none; overflow:visible; }
+.kca-letter-document-scroll.is-plain { background:#fff; border:1px solid #edf0f4; margin-top:12px; }
+.kca-letter-section-title { margin:14px 0 8px; font-size:10px; letter-spacing:.06em; font-weight:800; text-transform:uppercase; }
+.kca-letter-section-paragraph { margin:0 0 10px; white-space:pre-wrap; }
+.kca-letter-acceptance { margin-top:18px; padding:20px; display:grid; gap:12px; }
+.kca-letter-acceptance-check { display:flex; gap:10px; align-items:flex-start; font-size:10px; line-height:1.5; }
+.kca-signature-canvas { display:block; width:100%; max-width:420px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; touch-action:none; }
 .kca-outcome { max-width:680px; min-height:520px; margin:0 auto; display:flex; flex-direction:column; align-items:center; padding:45px 55px 28px; text-align:center; }
 .kca-outcome-symbol { width:68px; height:68px; display:grid; place-items:center; margin-bottom:14px; border-radius:50%; background:#169b5e; color:#fff; font-size:35px; box-shadow:0 9px 24px rgba(22,155,94,.18); }
 .kca-outcome.is-defer .kca-outcome-symbol { background:#e89422; }.kca-outcome.is-reject .kca-outcome-symbol { background:#d72d3a; }
@@ -1774,7 +1783,113 @@ html[dir="rtl"] .site-app.surface-member .member-sidebar {
   .bible-book-grid-classic { grid-template-columns: 1fr 1fr; }
 }
 
-
-
+/* KCA member curriculum lists */
+.kca-curriculum-list .list-row.rich-row .thumb.kca-module-seq {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6e38ef, #2c0a9a);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+.kca-inline-percent {
+  font-size: 12px;
+  font-weight: 800;
+  color: #4b18b7;
+  min-width: 36px;
+  text-align: right;
+}
+.kca-lesson-row.is-locked {
+  opacity: 0.82;
+}
+.kca-lesson-row.is-locked .thumb {
+  filter: grayscale(0.35);
+}
+.kca-lesson-row.is-complete .thumb {
+  color: #087b4a;
+  font-weight: 800;
+}
+.kca-lock-reason {
+  display: block;
+  margin-top: 4px;
+  color: #8a6370;
+}
+.kca-chapter-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.kca-chapter-list li {
+  padding: 8px 10px;
+  border: 1px solid var(--site-border, #e5e7f2);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.kca-chapter-list a {
+  color: #4b18b7;
+  font-weight: 700;
+}
+.kca-lesson-panel h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.kca-section-lead {
+  margin: -4px 0 14px;
+  color: var(--site-muted, #65708a);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.kca-lesson-content {
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 15px;
+  color: #1a2240;
+}
+.kca-lesson-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.kca-lesson-meta span {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: #f0eef8;
+  color: #4b18b7;
+  font-weight: 700;
+}
+.kca-resource-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #f4f0ff;
+  color: #4b18b7;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-decoration: none;
+}
+.kca-resource-link:hover {
+  background: #ebe4ff;
+}
+.kca-empty-copy,
+.kca-success-copy {
+  color: var(--site-muted, #65708a);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.kca-success-copy {
+  color: #087b4a;
+  font-weight: 700;
+}
 
 

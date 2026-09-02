@@ -106,6 +106,7 @@ import {
   fetchKcaMe,
   fetchKcaAdmissionLetter,
   fetchKcaAdmissionLetterAssetBlob,
+  acceptKcaAdmissionLetter,
   fetchKcaCurrentApplication,
   fetchKcaMentor,
   fetchKcaModule,
@@ -192,6 +193,7 @@ import {
 import { flowNext, successHref, heroPrimaryHref, kcaApplySteps, homeChurchSteps } from '@/lib/site-flow';
 import { kcaHrefForDestination, kcaIsActivatedStudent, kcaPrimaryCta } from '@/lib/kca-access';
 import { KcaAdmissionLetterSheet } from '@/components/kca-admission-letter-sheet';
+import { KcaAdmissionLetterAcceptancePanel } from '@/components/kca-admission-letter-acceptance';
 import { fetchCurrentLivestream } from '@/lib/livestream-api';
 import { SearchSelect } from '@/components/search-select';
 import { GeographySelect } from '@/components/geography-select';
@@ -3061,6 +3063,77 @@ function KcaDirectoryMember() {
   );
 }
 
+function kcaLessonTypeLabel(type?: string | null): string {
+  switch ((type ?? 'text').toLowerCase()) {
+    case 'video':
+      return 'Video';
+    case 'audio':
+      return 'Audio';
+    case 'reading':
+      return 'Reading';
+    case 'assignment':
+      return 'Assignment';
+    default:
+      return 'Lesson';
+  }
+}
+
+function kcaLessonTypeIcon(type?: string | null): string {
+  switch ((type ?? 'text').toLowerCase()) {
+    case 'video':
+      return '▶';
+    case 'audio':
+      return '♫';
+    case 'reading':
+      return '📖';
+    case 'assignment':
+      return '📝';
+    default:
+      return '◆';
+  }
+}
+
+function kcaModuleProgressLabel(module: KcaModuleSummary): string | null {
+  const total = module.lessons_total ?? module.lessons_count;
+  const done = module.lessons_completed;
+  if (typeof total === 'number' && total > 0 && typeof done === 'number') {
+    return `${done}/${total} lessons complete`;
+  }
+  if (typeof total === 'number' && total > 0) {
+    return `${total} lessons`;
+  }
+  return null;
+}
+
+function kcaModuleStatusLabel(state?: string | null): string | null {
+  switch (state) {
+    case 'completed':
+      return 'Completed';
+    case 'in_progress':
+      return 'In progress';
+    case 'not_started':
+      return 'Not started';
+    default:
+      return null;
+  }
+}
+
+function kcaLessonMetaLine(lesson: {
+  sequence?: number | null;
+  lesson_type?: string | null;
+  estimated_minutes?: number | null;
+  chapters_count?: number | null;
+  day_index?: number | null;
+}): string {
+  const parts: string[] = [];
+  if (lesson.sequence != null) parts.push(`Lesson ${lesson.sequence}`);
+  if (lesson.day_index != null) parts.push(`Day ${lesson.day_index}`);
+  if (lesson.lesson_type) parts.push(kcaLessonTypeLabel(lesson.lesson_type));
+  if (lesson.estimated_minutes != null && lesson.estimated_minutes > 0) parts.push(`${lesson.estimated_minutes} min`);
+  if (lesson.chapters_count != null && lesson.chapters_count > 0) parts.push(`${lesson.chapters_count} chapters`);
+  return parts.join(' · ');
+}
+
 function KcaStudentDashboard() {
   if (designFixturesEnabled()) return <KcaFixtureDashboard />;
   return <KcaLiveStudentDashboard />;
@@ -3132,14 +3205,14 @@ function KcaLiveStudentDashboard() {
       </div>
       <section className="panel kca-progress">
         <header>
-          <span>Module Progress</span>
+          <span>Curriculum Progress</span>
           <strong>{pct}%</strong>
         </header>
         <i role="progressbar" aria-label="KCA progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <b style={{ width: `${pct}%` }} />
         </i>
         <small>
-          {dashboard?.chapters_completed ?? 0}/{dashboard?.chapters_total ?? 0} chapters · {progress}/{total} lessons
+          {dashboard?.modules_with_progress ?? 0}/{dashboard?.modules_total ?? 0} modules · {dashboard?.lessons_completed ?? progress}/{dashboard?.lessons_total ?? total} lessons · {dashboard?.chapters_completed ?? 0}/{dashboard?.chapters_total ?? 0} chapters
         </small>
       </section>
       <div className="metric-grid">
@@ -3269,28 +3342,49 @@ function KcaLiveModulesList() {
   if (list.status !== 'ready') return <DataStatus state={list} emptyLabel="No active KCA modules published." />;
 
   return (
-    <section className="panel table-panel">
-      {list.items.map((module: KcaModuleSummary) => {
-        const href = `/account/kca/modules/${module.id ?? ''}`;
-        return (
-          <div className="list-row rich-row" key={module.id ?? module.code}>
-            <Link href={href} style={{ display: 'contents' }}>
-              <span className="thumb">📘</span>
-              <div>
-                <b>{module.title ?? 'Untitled module'}</b>
-                <small>
-                  Module {module.sequence ?? '—'}
-                  {module.lessons_count != null ? ` · ${module.lessons_count} lessons` : ''}
-                </small>
-              </div>
-            </Link>
-            <Link className="ghost-link" href={href}>
-              Open
-            </Link>
-          </div>
-        );
-      })}
-    </section>
+    <>
+      <div className="welcome">
+        <div>
+          <span className="eyebrow">KCA CURRICULUM</span>
+          <h2>My Modules</h2>
+          <p>Walk through each published module in order. Lessons unlock as you complete the previous bundle.</p>
+        </div>
+        <Link className="site-button secondary" href="/account/kca">
+          Dashboard
+        </Link>
+      </div>
+      <section className="panel table-panel kca-curriculum-list">
+        {list.items.map((module: KcaModuleSummary) => {
+          const href = `/account/kca/modules/${module.id ?? ''}`;
+          const progressLabel = kcaModuleProgressLabel(module);
+          const statusLabel = kcaModuleStatusLabel(module.progress_state);
+          const sequence = module.sequence ?? '—';
+          return (
+            <div className="list-row rich-row" key={module.id ?? module.code}>
+              <Link href={href} style={{ display: 'contents' }}>
+                <span className="thumb kca-module-seq">{sequence}</span>
+                <div>
+                  <b>{module.title ?? 'Untitled module'}</b>
+                  <small>
+                    {module.code ? `${module.code} · ` : ''}
+                    Module {sequence}
+                    {module.duration_days != null ? ` · ${module.duration_days} days` : ''}
+                    {progressLabel ? ` · ${progressLabel}` : ''}
+                  </small>
+                </div>
+              </Link>
+              {statusLabel ? <span className={`status kca-badge is-${(module.progress_state ?? '').replace('_', '-')}`}>{statusLabel}</span> : null}
+              {typeof module.percent === 'number' && module.percent > 0 ? (
+                <span className="kca-inline-percent">{module.percent}%</span>
+              ) : null}
+              <Link className="ghost-link" href={href}>
+                Open
+              </Link>
+            </div>
+          );
+        })}
+      </section>
+    </>
   );
 }
 
@@ -3348,7 +3442,7 @@ function KcaLiveAssignmentsList() {
                 <b>{item.title}</b>
                 <small>
                   {item.module?.title ?? 'Module'}
-                  {item.due_at ? ` · Due ${item.due_at}` : ''}
+                  {item.due_at ? ` · Due ${formatTimestamp(item.due_at)}` : ''}
                 </small>
               </div>
             </Link>
@@ -3562,54 +3656,60 @@ function KcaLiveModuleDetail({ route }: { route: SiteRoute }) {
             {module.code ? `${module.code} · ` : ''}
             {module.title}
           </h2>
-          <p>Published curriculum: Module → Lesson → Chapter.</p>
+          <p>
+            {kcaModuleProgressLabel(module) ?? 'Published curriculum'}
+            {module.duration_days != null ? ` · ${module.duration_days}-day module` : ''}
+          </p>
         </div>
-        <Link className="site-button" href="/account/kca/modules">
+        <Link className="site-button secondary" href="/account/kca/modules">
           All Modules
         </Link>
       </div>
-      <section className="panel">
+      <section className="panel kca-curriculum-list">
         {(module.lessons ?? []).length === 0 ? (
-          <p>No lessons published for this module yet.</p>
+          <p className="kca-empty-copy">No lessons published for this module yet.</p>
         ) : (
-          module.lessons!.map((lesson) => (
-            <div className="list-row" key={lesson.id ?? lesson.code}>
-              <span className="thumb">▶</span>
-              <div>
-                <b>
-                  {lesson.code ? `${lesson.code} · ` : ''}
-                  {lesson.title}
-                </b>
-                <small>
-                  Lesson {lesson.sequence ?? '—'}
-                  {lesson.chapters_count ? ` · ${lesson.chapters_count} chapters` : ''}
-                  {lesson.unlocked === false ? ' · Locked' : ''}
-                </small>
-                {lesson.unlocked !== false && (lesson.chapters ?? []).length > 0 ? (
-                  <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                    {lesson.chapters!.map((chapter) => (
-                      <li key={chapter.id ?? chapter.code}>
-                        {chapter.id ? (
-                          <Link href={`/account/kca/chapters/${chapter.id}`}>
-                            Chapter {chapter.sequence ?? ''} · {chapter.title}
-                          </Link>
-                        ) : (
-                          <>
-                            Chapter {chapter.sequence ?? ''} · {chapter.title}
-                          </>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+          module.lessons!.map((lesson) => {
+            const locked = lesson.unlocked === false;
+            const meta = kcaLessonMetaLine(lesson);
+            return (
+              <div className={`list-row rich-row kca-lesson-row${locked ? ' is-locked' : ''}${lesson.completed ? ' is-complete' : ''}`} key={lesson.id ?? lesson.code}>
+                <span className="thumb">{lesson.completed ? '✓' : kcaLessonTypeIcon(lesson.lesson_type)}</span>
+                <div>
+                  <b>
+                    {lesson.code ? `${lesson.code} · ` : ''}
+                    {lesson.title}
+                  </b>
+                  {meta ? <small>{meta}</small> : null}
+                  {locked && lesson.lock_reason ? <small className="kca-lock-reason">{lesson.lock_reason}</small> : null}
+                  {!locked && (lesson.chapters ?? []).length > 0 ? (
+                    <ul className="kca-chapter-list">
+                      {lesson.chapters!.map((chapter) => (
+                        <li key={chapter.id ?? chapter.code}>
+                          {chapter.id ? (
+                            <Link href={`/account/kca/chapters/${chapter.id}`}>
+                              Chapter {chapter.sequence ?? ''} · {chapter.title}
+                            </Link>
+                          ) : (
+                            <>
+                              Chapter {chapter.sequence ?? ''} · {chapter.title}
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                {locked ? <span className="status kca-badge is-pending">Locked</span> : null}
+                {lesson.completed && !locked ? <span className="status kca-badge is-complete">Done</span> : null}
+                {lesson.id && !locked ? (
+                  <Link className="ghost-link" href={`/account/kca/lessons/${lesson.id}`}>
+                    Open
+                  </Link>
                 ) : null}
               </div>
-              {lesson.id && lesson.unlocked !== false ? (
-                <Link className="ghost-link" href={`/account/kca/lessons/${lesson.id}`}>
-                  Open
-                </Link>
-              ) : null}
-            </div>
-          ))
+            );
+          })
         )}
       </section>
     </>
@@ -3664,56 +3764,84 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
   if (loading) return <p className="panel">Loading lesson…</p>;
   if (error && !lesson) return <KcaUnavailable title={route.title} message={error} />;
 
+  const moduleHref = lesson?.module_id ? `/account/kca/modules/${lesson.module_id}` : '/account/kca/modules';
+  const hasChapters = (lesson?.chapters ?? []).length > 0;
+  const lessonMeta = lesson ? kcaLessonMetaLine(lesson) : '';
+
   return (
     <>
       <div className="welcome">
         <div>
           <span className="eyebrow">KCA LESSON</span>
           <h2>{lesson?.title ?? route.title}</h2>
-          <p>{lesson?.summary ?? 'Published lesson body from the API.'}</p>
+          {lesson?.summary ? <p>{lesson.summary}</p> : null}
+          {lessonMeta ? (
+            <div className="kca-lesson-meta">
+              <span>{kcaLessonTypeLabel(lesson?.lesson_type)}</span>
+              {lesson?.estimated_minutes != null && lesson.estimated_minutes > 0 ? (
+                <span>{lesson.estimated_minutes} min</span>
+              ) : null}
+              {lesson?.sequence != null ? <span>Lesson {lesson.sequence}</span> : null}
+            </div>
+          ) : null}
         </div>
-        <Link className="site-button" href="/account/kca/modules">
-          Modules
+        <Link className="site-button secondary" href={moduleHref}>
+          Back to module
         </Link>
       </div>
-      {(lesson?.chapters ?? []).length > 0 ? (
-        <section className="panel">
+      {hasChapters ? (
+        <section className="panel kca-curriculum-list">
           <h3>Chapters</h3>
-          {lesson!.chapters!.map((chapter) => (
-            <div className="list-row" key={chapter.id ?? chapter.code}>
-              <div>
-                <b>
-                  Chapter {chapter.sequence ?? ''} · {chapter.title}
-                </b>
-                <small>
-                  {chapter.completed ? 'Completed' : chapter.unlocked === false ? 'Locked' : 'Open'}
-                </small>
+          <p className="kca-section-lead">Open each chapter in order. Your lesson is complete when every chapter is finished.</p>
+          {lesson!.chapters!.map((chapter) => {
+            const locked = chapter.unlocked === false;
+            return (
+              <div className={`list-row rich-row kca-lesson-row${locked ? ' is-locked' : ''}${chapter.completed ? ' is-complete' : ''}`} key={chapter.id ?? chapter.code}>
+                <span className="thumb">{chapter.completed ? '✓' : '§'}</span>
+                <div>
+                  <b>
+                    Chapter {chapter.sequence ?? ''} · {chapter.title}
+                  </b>
+                  <small>
+                    {chapter.completed ? 'Completed' : locked ? 'Locked' : 'Ready to read'}
+                  </small>
+                </div>
+                {locked ? <span className="status kca-badge is-pending">Locked</span> : null}
+                {chapter.completed && !locked ? <span className="status kca-badge is-complete">Done</span> : null}
+                {chapter.id && !locked ? (
+                  <Link className="ghost-link" href={`/account/kca/chapters/${chapter.id}`}>
+                    Open
+                  </Link>
+                ) : null}
               </div>
-              {chapter.id && chapter.unlocked !== false ? (
-                <Link className="ghost-link" href={`/account/kca/chapters/${chapter.id}`}>
-                  Open
-                </Link>
-              ) : null}
-            </div>
-          ))}
+            );
+          })}
         </section>
-      ) : (
-        <section className="panel">
+      ) : null}
+      {!hasChapters || lesson?.body || lesson?.content_url ? (
+        <section className="panel kca-lesson-panel">
+          {hasChapters && lesson?.body ? <h3>Lesson overview</h3> : null}
           {lesson?.content_url ? (
-            <p>
-              <a href={lesson.content_url} rel="noreferrer" target="_blank">
-                Open linked resource
-              </a>
-            </p>
+            <a className="kca-resource-link" href={lesson.content_url} rel="noreferrer" target="_blank">
+              {kcaLessonTypeLabel(lesson.lesson_type) === 'Video' ? '▶ Watch lesson video' : '↗ Open linked resource'}
+            </a>
           ) : null}
-          <div style={{ whiteSpace: 'pre-wrap' }}>{lesson?.body || 'This lesson has no body yet.'}</div>
-          {error ? <p role="alert">{error}</p> : null}
-          {done ? <p>Lesson marked complete.</p> : null}
-          <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>
-            {busy ? 'Saving…' : 'Mark complete'}
-          </button>
+          {lesson?.body ? (
+            <div className="kca-lesson-content">{lesson.body}</div>
+          ) : !hasChapters ? (
+            <p className="kca-empty-copy">This lesson has no body yet.</p>
+          ) : null}
+          {!hasChapters ? (
+            <>
+              {error ? <p role="alert">{error}</p> : null}
+              {done ? <p className="kca-success-copy">Lesson marked complete.</p> : null}
+              <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>
+                {busy ? 'Saving…' : 'Mark complete'}
+              </button>
+            </>
+          ) : null}
         </section>
-      )}
+      ) : null}
       {lesson?.id ? <KcaStudyNoteForm lessonId={lesson.id} /> : null}
     </>
   );
@@ -3782,17 +3910,15 @@ function KcaChapterPlayer({ route }: { route: SiteRoute }) {
           </Link>
         )}
       </div>
-      <section className="panel">
+      <section className="panel kca-lesson-panel">
         {chapter?.content_url ? (
-          <p>
-            <a href={chapter.content_url} rel="noreferrer" target="_blank">
-              Open linked resource
-            </a>
-          </p>
+          <a className="kca-resource-link" href={chapter.content_url} rel="noreferrer" target="_blank">
+            ↗ Open linked resource
+          </a>
         ) : null}
-        <div style={{ whiteSpace: 'pre-wrap' }}>{chapter?.body || 'This chapter has no body yet.'}</div>
+        <div className="kca-lesson-content">{chapter?.body || 'This chapter has no body yet.'}</div>
         {error ? <p role="alert">{error}</p> : null}
-        {done ? <p>Chapter marked complete.</p> : null}
+        {done ? <p className="kca-success-copy">Chapter marked complete.</p> : null}
         <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>
           {busy ? 'Saving…' : 'Mark chapter complete'}
         </button>
@@ -5836,6 +5962,7 @@ function KcaAdmissionLetterDocument() {
   const [error, setError] = useState<string | null>(null);
   const [access, setAccess] = useState<KcaAccess | null>(null);
   const [letter, setLetter] = useState<Awaited<ReturnType<typeof fetchKcaAdmissionLetter>> | null>(null);
+  const [acceptBusy, setAcceptBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -5887,6 +6014,24 @@ function KcaAdmissionLetterDocument() {
         resolveAsset={(fileAssetId) => fetchKcaAdmissionLetterAssetBlob(fileAssetId)}
         fallbackHeader={<><h5><BrandName /></h5><h2>Admission Letter</h2></>}
       />
+      {letter.acceptance_status !== 'accepted' ? (
+        <KcaAdmissionLetterAcceptancePanel
+          applicantName={letter.applicant_name}
+          busy={acceptBusy}
+          onAccept={async (payload) => {
+            setAcceptBusy(true);
+            try {
+              const updated = await acceptKcaAdmissionLetter(payload);
+              setLetter(updated);
+            } finally {
+              setAcceptBusy(false);
+            }
+          }}
+          requiresGuardian={letter.requires_guardian_confirmation}
+        />
+      ) : (
+        <p className="panel">You accepted this admission letter on {letter.applicant_accepted_at ? new Date(letter.applicant_accepted_at).toLocaleString() : 'record'}.</p>
+      )}
       <a className="site-button" download href={kcaAdmissionLetterDownloadUrl()}>Download PDF</a>
     </div>
   );

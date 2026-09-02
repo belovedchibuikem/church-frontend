@@ -171,13 +171,21 @@ export type KcaModuleSummary = {
   title?: string | null;
   sequence?: number | null;
   is_active?: boolean;
+  duration_days?: number | null;
   lessons_count?: number | null;
+  lessons_total?: number | null;
+  lessons_completed?: number | null;
+  percent?: number | null;
+  progress_state?: 'completed' | 'in_progress' | 'not_started' | string | null;
   lessons?: Array<{
     id?: string;
     code?: string | null;
     title?: string | null;
     sequence?: number | null;
+    lesson_type?: string | null;
+    estimated_minutes?: number | null;
     unlocked?: boolean;
+    completed?: boolean;
     day_index?: number | null;
     lock_reason?: string;
     chapters_count?: number | null;
@@ -1271,6 +1279,10 @@ export type KcaAdmissionLetter = {
   signature_file_asset_id?: string | null;
   issued_at?: string | null;
   status?: string;
+  acceptance_status?: 'pending' | 'accepted';
+  applicant_accepted_at?: string | null;
+  applicant_signature_name?: string | null;
+  requires_guardian_confirmation?: boolean;
 };
 
 /** GET /user/kca/admission-letter */
@@ -1278,6 +1290,21 @@ export async function fetchKcaAdmissionLetter(): Promise<KcaAdmissionLetter> {
   return apiRequestData<KcaAdmissionLetter>('user/kca/admission-letter', {
     method: 'GET',
     headers: await serverSessionHeaders(),
+  });
+}
+
+/** POST /user/kca/admission-letter/accept */
+export async function acceptKcaAdmissionLetter(body: {
+  applicant_signature_name: string;
+  applicant_signature_file_asset_id?: string | null;
+  guardian_name?: string | null;
+  guardian_signature_name?: string | null;
+  guardian_phone?: string | null;
+}): Promise<KcaAdmissionLetter> {
+  return apiRequestData<KcaAdmissionLetter>('user/kca/admission-letter/accept', {
+    method: 'POST',
+    headers: await serverSessionHeaders(),
+    body: JSON.stringify(body),
   });
 }
 
