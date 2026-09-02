@@ -213,6 +213,26 @@ test('executeAdminAction maps home church Edit onto PUT /admin/church/home-churc
   assert.equal((result.data as { name?: string }).name, 'Family House Home Church - Allen');
 });
 
+test('executeAdminAction maps issue admission letter onto POST /admin/kca/applications/{id}/admission-letter/issue', async () => {
+  const applicationId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  installFetch((call) => {
+    assert.match(call.url, new RegExp(`/admin/kca/applications/${applicationId}/admission-letter/issue$`));
+    assert.equal(call.method, 'POST');
+    return jsonResponse({ id: '01LETTER', status: 'issued', reference_code: 'KCA/ADM/2026/00001' });
+  });
+
+  const result = await executeAdminAction({
+    route: `/admin/kca/applications/${applicationId}/admission-letter`,
+    label: 'Issue admission letter',
+    payload: {},
+    recordId: applicationId,
+    scope: { type: 'global', id: 'platform' },
+  });
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(result.status, 'issued');
+});
+
 test('executeAdminAction maps Admit on the KCA decision page onto transitions', async () => {
   const applicationId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
   installFetch((call) => {

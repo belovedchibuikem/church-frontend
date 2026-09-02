@@ -60,8 +60,11 @@ import {
   upsertFeatureFlag,
   validateObjectStorage,
   wipeDemoDataset,
+  issueKcaAdmissionLetter,
+  downloadKcaAdmissionLetterPdf,
   type MapsProvider,
 } from './admin-platform-api.ts';
+import { downloadBlob } from './download-blob.ts';
 
 export { GLOBAL_ADMIN_SCOPE };
 
@@ -320,6 +323,34 @@ function routeStarts(route: string, ...prefixes: string[]): boolean {
 
 function labelIs(label: string, pattern: RegExp): boolean {
   return pattern.test(label);
+}
+
+function kcaApplicationId(ctx: Ctx): string {
+  return requireId(
+    firstUlid(ctx.recordId, ctx.payload.application_id, ctx.payload.id, extractUlid(ctx.route)),
+    'application',
+  );
+}
+
+export function isAdmissionLetterDownloadAction(label: string, route: string): boolean {
+  const normalized = normalizeLabel(label);
+  return routeStarts(route, '/admin/kca/applications')
+    && labelIs(normalized, /download (admission letter|pdf)|download admission letter/);
+}
+
+export function isAdmissionLetterIssueAction(label: string, route: string): boolean {
+  const normalized = normalizeLabel(label);
+  return routeStarts(route, '/admin/kca/applications')
+    && labelIs(normalized, /issue admission letter|issue letter/);
+}
+
+export async function executeAdmissionLetterDownload(input: AdminActionInput): Promise<void> {
+  const applicationId = requireId(
+    firstUlid(input.recordId, input.payload?.application_id, input.payload?.id, extractUlid(input.route)),
+    'application',
+  );
+  const blob = await downloadKcaAdmissionLetterPdf(applicationId, resolveScope(input.scope));
+  downloadBlob(blob, 'kca-admission-letter.pdf');
 }
 
 function pickRecord(ctx: Ctx, ...keys: string[]): string | undefined {
@@ -1505,6 +1536,21 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       `admin/kca/applications/${encodeURIComponent(requireId(pickRecord(ctx, 'application_id', 'id'), 'application'))}/orientation/complete`,
       {},
       opts,
+    );
+  }
+  if (
+    routeStarts(route, '/admin/kca/applications') &&
+    labelIs(label, /issue admission letter|issue letter/)
+  ) {
+    return issueKcaAdmissionLetter(
+      kcaApplicationId(ctx),
+      {
+        batch_label: field(payload, 'batch_label', 'batch') ?? undefined,
+        letter_body: field(payload, 'letter_body') ?? undefined,
+        signer_name: field(payload, 'signer_name') ?? undefined,
+        signer_title: field(payload, 'signer_title') ?? undefined,
+      },
+      ctx.scope,
     );
   }
   if (

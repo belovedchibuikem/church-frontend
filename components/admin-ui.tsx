@@ -4032,8 +4032,8 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo }: 
   const rendererOwnsHeader = new Set(['B-03','G-03','G-04','G-05','G-06','G-07','G-08','G-09','G-10','G-12','G-13','G-14','G-15','G-16','G-18','H-01b','H-02','H-06','H-08','H-10','H-13','H-17','H-19','H-20','I-03','I-04','I-06','I-07','I-09','I-11','I-17']).has(screen.id)
     || (/^\/admin\/home-churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route) && !screen.route.includes('/applications/'))
     || /^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route);
-  const rendererNeedsAction = new Set(['G-03','G-16']).has(screen.id);
-  const rendererOwnsAction = new Set(['G-01','G-17','H-01','H-11','H-13','H-17','H-20','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
+  const rendererNeedsAction = new Set(['G-03']).has(screen.id);
+  const rendererOwnsAction = new Set(['G-01','G-16','G-17','H-01','H-11','H-13','H-17','H-20','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
   return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
 }
 

@@ -10,9 +10,12 @@ import {
   UNREGISTERED_ADMIN_ACTION_MESSAGE,
   UnregisteredAdminActionError,
   executeAdminAction,
+  executeAdmissionLetterDownload,
   extractUlid,
   formatAdminActionSuccess,
   formatAdminMutationError,
+  isAdmissionLetterDownloadAction,
+  isAdmissionLetterIssueAction,
 } from '../lib/admin-mutation-dispatcher';
 import { getAdminRecordDetails } from '../lib/admin-record-cache';
 import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
@@ -286,6 +289,18 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       ...payload,
     };
     try {
+      if (isAdmissionLetterDownloadAction(action, route)) {
+        await executeAdmissionLetterDownload({
+          route,
+          label: action,
+          payload: mergedPayload,
+          recordId,
+          scope,
+        });
+        setOverlay(null);
+        setToast(t('admin.admissionLetterDownloaded', { defaultMessage: 'Admission letter downloaded.' }));
+        return;
+      }
       const result = await executeAdminAction({
         route,
         label: action,
@@ -357,6 +372,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     // (that was replacing Create Church with an "AfghanistanAF" actions drawer).
     if (button.closest('.search-select, .search-select-menu, [role="listbox"]')) return;
     if (button.closest('.table-card, .home-church-workspace, .person-summary')) return;
+    if (button.closest('.kca-document-actions, .kca-post-decision-actions, .kca-letter-main')) return;
     if (button.closest('form') && !button.closest('.interaction-overlay')) return;
     const label = (button.getAttribute('aria-label') || button.textContent || '').trim();
     const clean = normalize(label);
@@ -536,6 +552,33 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       navigate(destination);
       return;
     }
+
+    const kcaApplicationId = extractUlid(route);
+    if (kcaApplicationId && route.includes('/admin/kca/applications')) {
+      if (isAdmissionLetterIssueAction(clean, route)) {
+        event.preventDefault();
+        navigate(`/admin/kca/applications/${kcaApplicationId}/admission-letter`);
+        return;
+      }
+      if (isAdmissionLetterDownloadAction(clean, route)) {
+        event.preventDefault();
+        void executeAdmissionLetterDownload({
+          route,
+          label: clean,
+          payload: {},
+          recordId: kcaApplicationId,
+          scope,
+        })
+          .then(() => {
+            setToast(t('admin.admissionLetterDownloaded', { defaultMessage: 'Admission letter downloaded.' }));
+          })
+          .catch((error) => {
+            setToast(formatAdminMutationError(error));
+          });
+        return;
+      }
+    }
+
     if (/view|open|details|website/i.test(clean) && !/create|add|\+|new/i.test(clean)) {
       event.preventDefault();
       openAction(label || t('admin.recordDetails', { defaultMessage: 'Record details' }), 'preview');

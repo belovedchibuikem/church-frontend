@@ -18,8 +18,8 @@ import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-ca
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { KcaAdmissionLetterSheet } from './kca-admission-letter-sheet';
-import { getKcaAdmissionLetter, fetchKcaAdmissionLetterAssetBlob, issueKcaAdmissionLetter, type KcaAdmissionLetter } from '../lib/admin-platform-api';
-import { resolveApiV1BaseUrl } from '../lib/api-config.ts';
+import { getKcaAdmissionLetter, fetchKcaAdmissionLetterAssetBlob, issueKcaAdmissionLetter, downloadKcaAdmissionLetterPdf, type KcaAdmissionLetter } from '../lib/admin-platform-api';
+import { downloadBlob } from '../lib/download-blob.ts';
 import { pathEntityId } from '../lib/site-api.ts';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
@@ -805,6 +805,7 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const details = screen.details ?? {};
 
   useEffect(() => {
@@ -843,6 +844,21 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
       setError(formatAdminMutationError(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (!applicationId) return;
+    setDownloadBusy(true);
+    setError(null);
+    try {
+      const blob = await downloadKcaAdmissionLetterPdf(applicationId);
+      downloadBlob(blob, 'kca-admission-letter.pdf');
+      setMessage(t('member.kca.letterDownloadReady', { defaultMessage: 'Admission letter downloaded.' }));
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setDownloadBusy(false);
     }
   };
 
@@ -907,14 +923,20 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
         </p>
         <div className="kca-document-actions">
           {live && !loading && !error && !isIssued && applicationId ? (
-            <button className="primary-button" disabled={busy} onClick={() => void issue()} type="button">
+            <button className="primary-button" data-interaction-native="true" disabled={busy} onClick={() => void issue()} type="button">
               {t('member.kca.issueLetter', { defaultMessage: 'Issue admission letter' })}
             </button>
           ) : null}
           {isIssued && applicationId ? (
-            <a className="primary-button link-button" href={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/download`}>
+            <button
+              className="primary-button"
+              data-interaction-native="true"
+              disabled={downloadBusy}
+              onClick={() => void downloadPdf()}
+              type="button"
+            >
               {t('member.kca.downloadPdf', { defaultMessage: 'Download PDF' })}
-            </a>
+            </button>
           ) : null}
           {applicationId ? (
             <Link className="ghost-button link-button" href={`/admin/kca/applications/${applicationId}/decision`}>

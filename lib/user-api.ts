@@ -1329,6 +1329,16 @@ export function kcaAdmissionLetterAssetUrl(fileAssetId: string, download = false
 }
 
 /** GET /user/kca/admission-letter/download */
+export async function downloadKcaAdmissionLetterPdf(): Promise<Response> {
+  const headers = new Headers(await serverSessionHeaders());
+  headers.set('Accept', 'application/pdf, application/json');
+  return apiRequestResponse('user/kca/admission-letter/download', {
+    method: 'GET',
+    headers,
+  });
+}
+
+/** @deprecated Prefer downloadKcaAdmissionLetterPdf() for authenticated downloads. */
 export function kcaAdmissionLetterDownloadUrl(): string {
   return `${resolveApiV1BaseUrl()}/user/kca/admission-letter/download`;
 }

@@ -125,8 +125,8 @@ import {
   fetchKcaPracticalService,
   fetchKcaDirectory,
   submitKcaEvidence,
+  downloadKcaAdmissionLetterPdf,
   downloadKcaCertificatePdf,
-  kcaAdmissionLetterDownloadUrl,
   completeKcaLesson,
   type KcaLessonDetail,
   type KcaChapterSummary,
@@ -5963,6 +5963,8 @@ function KcaAdmissionLetterDocument() {
   const [access, setAccess] = useState<KcaAccess | null>(null);
   const [letter, setLetter] = useState<Awaited<ReturnType<typeof fetchKcaAdmissionLetter>> | null>(null);
   const [acceptBusy, setAcceptBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -6032,7 +6034,38 @@ function KcaAdmissionLetterDocument() {
       ) : (
         <p className="panel">You accepted this admission letter on {letter.applicant_accepted_at ? new Date(letter.applicant_accepted_at).toLocaleString() : 'record'}.</p>
       )}
-      <a className="site-button" download href={kcaAdmissionLetterDownloadUrl()}>Download PDF</a>
+      <button
+        className="site-button"
+        disabled={downloadBusy}
+        type="button"
+        onClick={() => {
+          void (async () => {
+            setDownloadError(null);
+            setDownloadBusy(true);
+            try {
+              const response = await downloadKcaAdmissionLetterPdf();
+              if (!response.ok) {
+                setDownloadError('Admission letter PDF is not available.');
+                return;
+              }
+              const blob = await response.blob();
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'kca-admission-letter.pdf';
+              link.click();
+              URL.revokeObjectURL(url);
+            } catch (err) {
+              setDownloadError(formatUserApiError(err, 'Unable to download admission letter PDF.'));
+            } finally {
+              setDownloadBusy(false);
+            }
+          })();
+        }}
+      >
+        {downloadBusy ? 'Downloading…' : 'Download PDF'}
+      </button>
+      {downloadError ? <p className="panel" role="alert">{downloadError}</p> : null}
     </div>
   );
 }

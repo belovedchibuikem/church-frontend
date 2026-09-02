@@ -552,6 +552,34 @@ export async function fetchKcaAdmissionLetterAssetBlob(
   return response.blob();
 }
 
+export async function downloadKcaAdmissionLetterPdf(
+  applicationId: string,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<Blob> {
+  const response = await apiRequestResponse(
+    `admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/download`,
+    {
+      ...withScope(scope),
+      headers: {
+        Accept: 'application/pdf, application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let message = 'Admission letter PDF is not available.';
+    try {
+      const payload = await response.json() as { error?: { message?: string } };
+      if (payload.error?.message) message = payload.error.message;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(response.status, message);
+  }
+
+  return response.blob();
+}
+
 export async function uploadPlatformGovernanceFile(
   file: File,
   purpose: 'kca_admission_letterhead' | 'kca_admission_signature',
