@@ -487,9 +487,9 @@ export async function configureKcaGovernance(
 }
 
 export type KcaAdmissionLetter = {
-  id: string;
+  id: string | null;
   application_id?: string;
-  reference_code: string;
+  reference_code: string | null;
   applicant_name: string;
   church_name?: string | null;
   batch_label?: string | null;

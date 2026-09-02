@@ -800,7 +800,8 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
   const applicationId = applicationIdFromRoute(screen.route);
   const [letter, setLetter] = useState<KcaAdmissionLetter | null>(null);
-  const [message, setMessage] = useState(live ? t('common.loading', { defaultMessage: 'Loading…' }) : '');
+  const [loading, setLoading] = useState(live);
+  const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const details = screen.details ?? {};
@@ -808,6 +809,8 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
   useEffect(() => {
     if (!live || !applicationId) return;
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     void getKcaAdmissionLetter(applicationId)
       .then((data) => {
         if (cancelled) return;
@@ -817,7 +820,10 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
       .catch((err) => {
         if (cancelled) return;
         setError(formatAdminMutationError(err));
-        setMessage('');
+        setLetter(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -839,9 +845,14 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
     }
   };
 
-  const applicant = letter?.applicant_name ?? details.To ?? 'Applicant';
-  const reference = letter?.reference_code ?? 'KCA/ADM/2024/0124';
-  const issuedOn = letter?.issued_at ? new Date(letter.issued_at).toLocaleDateString() : (details.Date ?? '');
+  const isIssued = letter?.status === 'issued';
+  const applicant = letter?.applicant_name ?? (live ? 'Applicant' : details.To ?? 'Applicant');
+  const reference = letter?.reference_code ?? (live
+    ? t('member.kca.pendingReference', { defaultMessage: 'Pending' })
+    : 'KCA/ADM/2024/0124');
+  const issuedOn = letter?.issued_at
+    ? new Date(letter.issued_at).toLocaleDateString()
+    : (live ? new Date().toLocaleDateString() : (details.Date ?? ''));
   const batchLabel = letter?.batch_label ?? '';
   const bodyParagraphs = (letter?.letter_body ?? '').split('\n\n').filter(Boolean);
   const letterheadUrl = letter?.letterhead_file_asset_id
@@ -855,6 +866,7 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
     <div className="kca-document-layout">
       <div className="kca-letter-main">
         {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+        {loading ? <p className="maps-settings-lead" role="status">{t('common.loading', { defaultMessage: 'Loading…' })}</p> : null}
         {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
         <article className="card kca-letter" aria-labelledby="admission-letter-title">
           <header>
@@ -881,7 +893,7 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
           )}
           <div className="kca-letter-signature">
             {signatureUrl ? <img alt="" src={signatureUrl} style={{ maxHeight: 72, marginBottom: '0.5rem' }} /> : null}
-            <strong>{letter?.signer_name ?? 'Pastor Daniel David'}</strong>
+            <strong>{letter?.signer_name ?? (live ? t('member.kca.signerPending', { defaultMessage: 'Signer not configured' }) : 'Pastor Daniel David')}</strong>
             <span>{letter?.signer_title ?? t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}</span>
           </div>
         </article>
@@ -894,12 +906,12 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
           })}
         </p>
         <div className="kca-document-actions">
-          {live && !letter && !error ? (
-            <button className="primary-button" disabled={busy || !applicationId} onClick={() => void issue()} type="button">
+          {live && !loading && !error && !isIssued && applicationId ? (
+            <button className="primary-button" disabled={busy} onClick={() => void issue()} type="button">
               {t('member.kca.issueLetter', { defaultMessage: 'Issue admission letter' })}
             </button>
           ) : null}
-          {letter && applicationId ? (
+          {isIssued && applicationId ? (
             <a className="primary-button link-button" href={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/download`}>
               {t('member.kca.downloadPdf', { defaultMessage: 'Download PDF' })}
             </a>
@@ -916,7 +928,7 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
         <dl className="kca-document-details">
           <div><dt>{t('member.kca.applicant', { defaultMessage: 'Applicant' })}</dt><dd>{applicant}</dd></div>
           <div><dt>{t('member.kca.reference', { defaultMessage: 'Reference' })}</dt><dd>{reference}</dd></div>
-          <div><dt>{t('admin.status', { defaultMessage: 'Status' })}</dt><dd>{letter ? t('member.kca.issued', { defaultMessage: 'Issued' }) : t('member.kca.notIssued', { defaultMessage: 'Not issued' })}</dd></div>
+          <div><dt>{t('admin.status', { defaultMessage: 'Status' })}</dt><dd>{isIssued ? t('member.kca.issued', { defaultMessage: 'Issued' }) : t('member.kca.notIssued', { defaultMessage: 'Not issued' })}</dd></div>
         </dl>
       </aside>
     </div>
