@@ -614,6 +614,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [showAppMembers, setShowAppMembers] = useState(false);
 
   const refresh = useCallback(async () => {
     const scope = defaultAdminScope(requestedScope);
@@ -626,6 +627,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
         page,
         perPage: 25,
         sort: '-created_at',
+        excludeAppMembers: !suspendedOnly && !showAppMembers,
       });
       stashAdminRecords(
         result.data.map((user) => ({
@@ -649,7 +651,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
       setError(identityErrorMessage(err));
       setMessage('Live user directory unavailable');
     }
-  }, [requestedScope, suspendedOnly, search, page]);
+  }, [requestedScope, suspendedOnly, search, page, showAppMembers]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => { void refresh(); }, 250);
@@ -711,7 +713,19 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
   return (
     <>
       <MetricCards metrics={metrics} />
-      <div className="table-toolbar"><input aria-label="Search users" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name or email" /></div>
+      <div className="table-toolbar">
+        <input aria-label="Search users" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search name or email" />
+        {!suspendedOnly ? (
+          <label className="table-toolbar-filter">
+            <input
+              checked={showAppMembers}
+              onChange={(event) => { setShowAppMembers(event.target.checked); setPage(1); }}
+              type="checkbox"
+            />
+            <span>{t('admin.showAppMembers', { defaultMessage: 'Show app members' })}</span>
+          </label>
+        ) : null}
+      </div>
       {error && <IdentityLoadState message={error} tone="danger" />}
       <div className="card table-card">
         <table>

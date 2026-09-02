@@ -13,7 +13,7 @@ import {
   resolveCatalogDataset,
   shouldUseCatalogLiveData,
 } from '../lib/admin-catalog-api';
-import { shouldUseDesignFixtures } from '../lib/admin-identity-api';
+import { shouldUseDesignFixtures, formatTimestamp } from '../lib/admin-identity-api';
 import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-cache';
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
@@ -346,6 +346,43 @@ function applicationPermitsEnrollment(status: string): boolean {
   return status === 'accepted' || status === 'provisionally_accepted';
 }
 
+function decisionIsFinal(status: string): boolean {
+  return ['accepted', 'provisionally_accepted', 'not_accepted', 'deferred'].includes(status);
+}
+
+function formatDecisionStatus(status: string): string {
+  return status.replaceAll('_', ' ');
+}
+
+function KcaAdmissionWorkflowSteps({
+  status,
+  letterIssued,
+  enrolled,
+}: {
+  status: string;
+  letterIssued: boolean;
+  enrolled: boolean;
+}) {
+  const decisionDone = decisionIsFinal(status);
+  const enrollmentAllowed = applicationPermitsEnrollment(status);
+  const steps = [
+    { label: 'Admission decision', done: decisionDone, active: !decisionDone },
+    { label: 'Issue letter', done: letterIssued, active: decisionDone && enrollmentAllowed && !letterIssued },
+    { label: 'Enroll student', done: enrolled, active: letterIssued && !enrolled },
+  ];
+
+  return (
+    <ol className="kca-admission-workflow" aria-label="Admission workflow">
+      {steps.map((step, index) => (
+        <li className={`${step.done ? 'is-done' : ''} ${step.active ? 'is-active' : ''}`.trim()} key={step.label}>
+          <span aria-hidden="true">{step.done ? '✓' : index + 1}</span>
+          <strong>{step.label}</strong>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function KcaAdmissionPostDecisionPanel({
   applicationId,
   personName,
@@ -364,6 +401,7 @@ function KcaAdmissionPostDecisionPanel({
   const { t } = useLocale();
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
   const [enrollment, setEnrollment] = useState<Record<string, unknown> | null>(null);
+  const [letterIssued, setLetterIssued] = useState(false);
   const [loadingEnrollment, setLoadingEnrollment] = useState(live);
   const [cohortId, setCohortId] = useState('');
   const [registrationNumber, setRegistrationNumber] = useState('');
@@ -376,14 +414,21 @@ function KcaAdmissionPostDecisionPanel({
       return;
     }
     let cancelled = false;
-    void listCatalogDomain('kca.enrollments', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE })
-      .then((result) => {
+    void Promise.all([
+      listCatalogDomain('kca.enrollments', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE }),
+      getKcaAdmissionLetter(applicationId).then(() => true).catch(() => false),
+    ])
+      .then(([result, hasLetter]) => {
         if (cancelled) return;
         const match = result.items.find((item) => String(item.application_id) === applicationId) ?? null;
         setEnrollment(match as Record<string, unknown> | null);
+        setLetterIssued(hasLetter);
       })
       .catch(() => {
-        if (!cancelled) setEnrollment(null);
+        if (!cancelled) {
+          setEnrollment(null);
+          setLetterIssued(false);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingEnrollment(false);
@@ -440,15 +485,25 @@ function KcaAdmissionPostDecisionPanel({
     <section className="kca-post-decision-panel" aria-labelledby="kca-post-decision-title">
       <span className="kca-overline">{t('member.kca.nextSteps', { defaultMessage: 'Next steps' })}</span>
       <h3 id="kca-post-decision-title">{t('member.kca.completeAdmissionJourney', { defaultMessage: 'Complete admission & enrollment' })}</h3>
+      <KcaAdmissionWorkflowSteps
+        enrolled={Boolean(enrollment)}
+        letterIssued={letterIssued}
+        status={status}
+      />
       <p className="maps-settings-lead">
         {t('member.kca.postDecisionCopy', {
           defaultMessage: '{name} has been {status}. Issue the admission letter, then enroll the student into a cohort to activate learning.',
-          vars: { name: personName, status: status.replaceAll('_', ' ') },
+          vars: { name: personName, status: formatDecisionStatus(status) },
         })}
       </p>
       <div className="kca-post-decision-actions">
-        <Link className="ghost-button link-button" href={`/admin/kca/applications/${applicationId}/admission-letter`}>
-          {t('member.kca.viewAdmissionLetter', { defaultMessage: 'View admission letter' })}
+        <Link className="primary-button link-button" href={`/admin/kca/applications/${applicationId}/admission-letter`}>
+          {letterIssued
+            ? t('member.kca.viewAdmissionLetter', { defaultMessage: 'View admission letter' })
+            : t('member.kca.issueAdmissionLetter', { defaultMessage: 'Issue admission letter' })}
+        </Link>
+        <Link className="ghost-button link-button" href="/admin/settings/kca">
+          {t('member.kca.configureLetter', { defaultMessage: 'Configure letter template' })}
         </Link>
       </div>
       {loadingEnrollment ? (
@@ -606,6 +661,7 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
       : [];
     const orientationComplete = Boolean(application?.orientation_completed_at);
     const showPostDecisionPanel = applicationPermitsEnrollment(status);
+    const finalDecision = decisionIsFinal(status);
     return (
       <div className="kca-decision-layout">
         <aside className="card kca-review-summary">
@@ -613,14 +669,17 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           <h2>{personName}</h2>
           <small>{applicationId}</small>
           <p><KcaBadge value={status} /></p>
-          <p>{application?.received_at ? `Received ${String(application.received_at)}` : null}</p>
+          <p>{application?.received_at ? `Received ${formatTimestamp(String(application.received_at))}` : null}</p>
           {application?.batch_name ? <p>{t('member.kca.batch', { defaultMessage: 'Batch' })}: {String(application.batch_name)}</p> : null}
           {showPostDecisionPanel ? (
-            <p>
+            <div className="kca-review-summary-links">
               <Link href={`/admin/kca/applications/${applicationId}/admission-letter`}>
-                {t('member.kca.viewAdmissionLetter', { defaultMessage: 'View admission letter' })}
+                {t('member.kca.admissionLetter', { defaultMessage: 'Admission letter' })}
               </Link>
-            </p>
+              <Link href="/admin/settings/kca">
+                {t('member.kca.letterSettings', { defaultMessage: 'Letter settings' })}
+              </Link>
+            </div>
           ) : null}
           {status === 'interview' ? (
             <p>
@@ -629,53 +688,94 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           ) : null}
         </aside>
         <article className="card kca-decision-card">
-          <span className="kca-overline">{t('member.kca.finalReview', { defaultMessage: 'Final review' })}</span>
-          <h2>{t('member.kca.selectAdmissionDecision', { defaultMessage: 'Select an admission decision' })}</h2>
-          <p>{t('member.kca.decisionCopy', { defaultMessage: 'Choose the appropriate outcome for {name} after reviewing all application sections.', vars: { name: personName } })}</p>
-          {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
-          {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
-          {status === 'interview' && !orientationComplete ? (
-            <p className="maps-settings-lead">
-              The applicant must complete orientation, or you can mark it complete from here before admitting.
-            </p>
+          {showPostDecisionPanel ? (
+            <>
+              <div className="kca-decision-recorded is-accept">
+                <span aria-hidden="true">✓</span>
+                <div>
+                  <strong>{t('member.kca.decisionRecorded', { defaultMessage: 'Decision recorded' })}</strong>
+                  <p>{personName} was {formatDecisionStatus(status)}.</p>
+                </div>
+              </div>
+              <KcaAdmissionPostDecisionPanel
+                applicationId={applicationId}
+                onEnrolled={() => {
+                  void refreshApplication();
+                }}
+                onError={setError}
+                onMessage={setMessage}
+                personName={personName}
+                status={status}
+              />
+              {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+              {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+            </>
+          ) : (
+            <>
+              <span className="kca-overline">{t('member.kca.finalReview', { defaultMessage: 'Final review' })}</span>
+              <h2>{t('member.kca.selectAdmissionDecision', { defaultMessage: 'Select an admission decision' })}</h2>
+              <p>{t('member.kca.decisionCopy', { defaultMessage: 'Choose the appropriate outcome for {name} after reviewing all application sections.', vars: { name: personName } })}</p>
+              {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+              {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+              {status === 'interview' && !orientationComplete ? (
+                <p className="maps-settings-lead">
+                  The applicant must complete orientation, or you can mark it complete from here before admitting.
+                </p>
+              ) : null}
+              {status === 'interview' && !orientationComplete ? (
+                <button className="primary-button" type="button" data-interaction-native="true" disabled={busy} onClick={() => void completeOrientation()}>
+                  Mark Orientation Complete
+                </button>
+              ) : null}
+              <div className="kca-decision-options">
+                <button className="accept" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('accepted', 'Admit')}>
+                  <span>✓</span><strong>{t('member.kca.admit', { defaultMessage: 'Admit' })}</strong>
+                </button>
+                <button className="accept" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('provisionally_accepted', 'Provisionally Accept')}>
+                  <span>✓</span><strong>{t('member.kca.provisionallyAccept', { defaultMessage: 'Provisionally Accept' })}</strong>
+                </button>
+                <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('information_required', 'Request Information')}>
+                  <span>◷</span><strong>Request Information</strong>
+                </button>
+                <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('interview', 'Interview')}>
+                  <span>◷</span><strong>Interview / Orientation</strong>
+                </button>
+                <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('deferred', 'Defer')}>
+                  <span>◷</span><strong>{t('member.kca.defer', { defaultMessage: 'Defer' })}</strong>
+                </button>
+                <button className="reject" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('not_accepted', 'Not Accepted')}>
+                  <span>×</span><strong>{t('member.kca.notAccepted', { defaultMessage: 'Not Accepted' })}</strong>
+                </button>
+              </div>
+            </>
+          )}
+          {!showPostDecisionPanel && finalDecision ? (
+            <div className={`kca-decision-recorded ${status === 'not_accepted' ? 'is-reject' : 'is-defer'}`}>
+              <span aria-hidden="true">{status === 'not_accepted' ? '×' : '◷'}</span>
+              <div>
+                <strong>{t('member.kca.decisionRecorded', { defaultMessage: 'Decision recorded' })}</strong>
+                <p>{personName} was {formatDecisionStatus(status)}.</p>
+              </div>
+            </div>
           ) : null}
-          {status === 'interview' && !orientationComplete ? (
-            <button className="primary-button" type="button" data-interaction-native="true" disabled={busy} onClick={() => void completeOrientation()}>
-              Mark Orientation Complete
-            </button>
+          {!showPostDecisionPanel && finalDecision ? (
+            <>
+              {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+              {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+            </>
           ) : null}
-          <div className="kca-decision-options">
-            <button className="accept" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('accepted', 'Admit')}>
-              <span>✓</span><strong>{t('member.kca.admit', { defaultMessage: 'Admit' })}</strong>
-            </button>
-            <button className="accept" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('provisionally_accepted', 'Provisionally Accept')}>
-              <span>✓</span><strong>{t('member.kca.provisionallyAccept', { defaultMessage: 'Provisionally Accept' })}</strong>
-            </button>
-            <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('information_required', 'Request Information')}>
-              <span>◷</span><strong>Request Information</strong>
-            </button>
-            <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('interview', 'Interview')}>
-              <span>◷</span><strong>Interview / Orientation</strong>
-            </button>
-            <button className="defer" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('deferred', 'Defer')}>
-              <span>◷</span><strong>{t('member.kca.defer', { defaultMessage: 'Defer' })}</strong>
-            </button>
-            <button className="reject" type="button" data-interaction-native="true" disabled={busy} onClick={() => void submitDecision('not_accepted', 'Not Accepted')}>
-              <span>×</span><strong>{t('member.kca.notAccepted', { defaultMessage: 'Not Accepted' })}</strong>
-            </button>
-          </div>
-          <KcaAdmissionPostDecisionPanel
-            applicationId={applicationId}
-            onEnrolled={() => {
-              void refreshApplication();
-            }}
-            onError={setError}
-            onMessage={setMessage}
-            personName={personName}
-            status={status}
-          />
-          <label><span>{t('member.kca.admissionNotesOptional', { defaultMessage: 'Admission Notes (Optional)' })}</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t('member.kca.privateNotesPlaceholder', { defaultMessage: 'Write your private notes here...' })} /></label>
-          <footer><Link className="ghost-button" href="/admin/kca/applications">{t('common.back', { defaultMessage: 'Back' })}</Link></footer>
+          <label className="kca-decision-notes">
+            <span>{t('member.kca.admissionNotesOptional', { defaultMessage: 'Admission Notes (Optional)' })}</span>
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={t('member.kca.privateNotesPlaceholder', { defaultMessage: 'Write your private notes here...' })} />
+          </label>
+          <footer>
+            <Link className="ghost-button" href="/admin/kca/applications">{t('common.back', { defaultMessage: 'Back' })}</Link>
+            {!showPostDecisionPanel ? (
+              <Link className="ghost-button link-button" href={`/admin/kca/applications/${applicationId}`}>
+                {t('member.kca.reviewApplication', { defaultMessage: 'Review application' })}
+              </Link>
+            ) : null}
+          </footer>
         </article>
       </div>
     );
@@ -698,7 +798,7 @@ function KcaOutcome({ screen }: { screen: AdminScreen }) {
 function KcaLetter({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
-  const applicationId = extractUlid(screen.route) ?? pathEntityId(screen.route);
+  const applicationId = applicationIdFromRoute(screen.route);
   const [letter, setLetter] = useState<KcaAdmissionLetter | null>(null);
   const [message, setMessage] = useState(live ? t('common.loading', { defaultMessage: 'Loading…' }) : '');
   const [error, setError] = useState<string | null>(null);
@@ -706,7 +806,7 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
   const details = screen.details ?? {};
 
   useEffect(() => {
-    if (!live || !applicationId || !/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(applicationId)) return;
+    if (!live || !applicationId) return;
     let cancelled = false;
     void getKcaAdmissionLetter(applicationId)
       .then((data) => {
@@ -752,52 +852,73 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
     : null;
 
   return (
-    <div className="kca-document-layout" style={{ display: 'block' }}>
-      {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
-      {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
-      {live && !letter && !error ? (
-        <footer className="form-footer">
-          <button className="primary-button" disabled={busy || !applicationId} onClick={() => void issue()} type="button">
-            {t('member.kca.issueLetter', { defaultMessage: 'Issue admission letter' })}
-          </button>
-        </footer>
-      ) : null}
-      <article className="card kca-letter" style={{ maxWidth: 780, margin: '0 auto' }} aria-labelledby="admission-letter-title">
-        <header>
-          {letterheadUrl ? (
-            <img alt="" src={letterheadUrl} style={{ maxWidth: '100%', marginBottom: '1rem' }} />
-          ) : (
-            <>
-              <div className="kca-seal" aria-hidden="true">{t('member.kca', { defaultMessage: 'KCA' })}</div>
-              <div>
-                <strong>{t('member.kca.academyName', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</strong>
-                <small>{t('member.kca.familyHouseConnect', { defaultMessage: 'Family House Connect' })}</small>
-              </div>
-            </>
+    <div className="kca-document-layout">
+      <div className="kca-letter-main">
+        {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
+        {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+        <article className="card kca-letter" aria-labelledby="admission-letter-title">
+          <header>
+            {letterheadUrl ? (
+              <img alt="" src={letterheadUrl} style={{ maxWidth: '100%', marginBottom: '1rem' }} />
+            ) : (
+              <>
+                <div className="kca-seal" aria-hidden="true">{t('member.kca', { defaultMessage: 'KCA' })}</div>
+                <div>
+                  <strong>{t('member.kca.academyName', { defaultMessage: 'KINGDOM CITIZENS ACADEMY' })}</strong>
+                  <small>{t('member.kca.familyHouseConnect', { defaultMessage: 'Family House Connect' })}</small>
+                </div>
+              </>
+            )}
+          </header>
+          <h1 id="admission-letter-title" aria-level={2}>{t('member.kca.admissionLetter', { defaultMessage: 'ADMISSION LETTER' })}</h1>
+          <div className="kca-letter-meta">
+            <span>{t('member.kca.letterDate', { defaultMessage: 'Date: {date}', vars: { date: issuedOn } })}</span>
+            <span>{t('member.kca.letterRef', { defaultMessage: 'Ref: {ref}', vars: { ref: reference } })}</span>
+          </div>
+          <p>{t('member.kca.dear', { defaultMessage: 'Dear' })} <strong>{applicant}</strong>,</p>
+          {bodyParagraphs.length > 0 ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>) : (
+            <p>{t('member.kca.letterAccepted', { defaultMessage: 'We are pleased to inform you that you have been accepted into the Kingdom Citizens Academy{batch}.', vars: { batch: batchLabel ? ` for ${batchLabel}` : '' } })}</p>
           )}
-        </header>
-        <h1 id="admission-letter-title" aria-level={2}>{t('member.kca.admissionLetter', { defaultMessage: 'ADMISSION LETTER' })}</h1>
-        <div className="kca-letter-meta">
-          <span>{t('member.kca.letterDate', { defaultMessage: 'Date: {date}', vars: { date: issuedOn } })}</span>
-          <span>{t('member.kca.letterRef', { defaultMessage: 'Ref: {ref}', vars: { ref: reference } })}</span>
+          <div className="kca-letter-signature">
+            {signatureUrl ? <img alt="" src={signatureUrl} style={{ maxHeight: 72, marginBottom: '0.5rem' }} /> : null}
+            <strong>{letter?.signer_name ?? 'Pastor Daniel David'}</strong>
+            <span>{letter?.signer_title ?? t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}</span>
+          </div>
+        </article>
+      </div>
+      <aside className="card kca-document-meta">
+        <h2>{t('member.kca.letterActions', { defaultMessage: 'Letter actions' })}</h2>
+        <p className="maps-settings-lead">
+          {t('member.kca.letterActionsCopy', {
+            defaultMessage: 'Configure the provost signature and letterhead once, then issue the letter for this applicant.',
+          })}
+        </p>
+        <div className="kca-document-actions">
+          {live && !letter && !error ? (
+            <button className="primary-button" disabled={busy || !applicationId} onClick={() => void issue()} type="button">
+              {t('member.kca.issueLetter', { defaultMessage: 'Issue admission letter' })}
+            </button>
+          ) : null}
+          {letter && applicationId ? (
+            <a className="primary-button link-button" href={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/download`}>
+              {t('member.kca.downloadPdf', { defaultMessage: 'Download PDF' })}
+            </a>
+          ) : null}
+          {applicationId ? (
+            <Link className="ghost-button link-button" href={`/admin/kca/applications/${applicationId}/decision`}>
+              {t('common.back', { defaultMessage: 'Back to decision' })}
+            </Link>
+          ) : null}
+          <Link className="ghost-button link-button" href="/admin/settings/kca">
+            {t('member.kca.configureLetter', { defaultMessage: 'Configure letter template' })}
+          </Link>
         </div>
-        <p>{t('member.kca.dear', { defaultMessage: 'Dear' })} <strong>{applicant}</strong>,</p>
-        {bodyParagraphs.length > 0 ? bodyParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>) : (
-          <p>{t('member.kca.letterAccepted', { defaultMessage: 'We are pleased to inform you that you have been accepted into the Kingdom Citizens Academy{batch}.', vars: { batch: batchLabel ? ` for ${batchLabel}` : '' } })}</p>
-        )}
-        <div className="kca-letter-signature">
-          {signatureUrl ? <img alt="" src={signatureUrl} style={{ maxHeight: 72, marginBottom: '0.5rem' }} /> : null}
-          <strong>{letter?.signer_name ?? 'Pastor Daniel David'}</strong>
-          <span>{letter?.signer_title ?? t('member.kca.admissionsTeam', { defaultMessage: 'KCA Admissions Team' })}</span>
-        </div>
-      </article>
-      {letter && applicationId ? (
-        <footer className="form-footer">
-          <a className="primary-button link-button" href={`${resolveApiV1BaseUrl()}/admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter/download`}>
-            {t('member.kca.downloadPdf', { defaultMessage: 'Download PDF' })}
-          </a>
-        </footer>
-      ) : null}
+        <dl className="kca-document-details">
+          <div><dt>{t('member.kca.applicant', { defaultMessage: 'Applicant' })}</dt><dd>{applicant}</dd></div>
+          <div><dt>{t('member.kca.reference', { defaultMessage: 'Reference' })}</dt><dd>{reference}</dd></div>
+          <div><dt>{t('admin.status', { defaultMessage: 'Status' })}</dt><dd>{letter ? t('member.kca.issued', { defaultMessage: 'Issued' }) : t('member.kca.notIssued', { defaultMessage: 'Not issued' })}</dd></div>
+        </dl>
+      </aside>
     </div>
   );
 }
@@ -2414,6 +2535,9 @@ export function KcaScreenContent({ screen, requestedScope }: { screen: AdminScre
   }
   if (!shouldUseDesignFixtures() && /^\/admin\/kca\/orientation\/[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(screen.route)) {
     return <KcaOrientationDetailPanel screen={screen} />;
+  }
+  if (!shouldUseDesignFixtures() && /^\/admin\/kca\/applications\/[0-7][0-9A-HJKMNP-TV-Z]{25}\/admission-letter$/i.test(screen.route)) {
+    return <KcaLetter screen={screen} />;
   }
 
   switch (screen.id) {

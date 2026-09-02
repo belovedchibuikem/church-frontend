@@ -230,6 +230,18 @@ export function getAdminScreen(route: string): AdminScreen | undefined {
     };
   }
 
+  const kcaApplicationAdmissionLetter = route.match(/^\/admin\/kca\/applications\/([^/]+)\/admission-letter$/);
+  if (kcaApplicationAdmissionLetter && kcaApplicationAdmissionLetter[1] !== 'samuel-david') {
+    const template = adminScreens.find((screen) => screen.id === 'G-16');
+    if (!template) return undefined;
+    return {
+      ...template,
+      route,
+      title: 'Admission Letter',
+      subtitle: 'Review, issue, and download the applicant admission letter.',
+    };
+  }
+
   const kcaApplicationDetail = route.match(/^\/admin\/kca\/applications\/([^/]+)$/);
   if (kcaApplicationDetail && kcaApplicationDetail[1] !== 'samuel-david') {
     const template = adminScreens.find((screen) => screen.id === 'G-03');

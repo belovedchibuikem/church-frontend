@@ -399,6 +399,31 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .kca-decision-options .defer { border-color:#f1d49e; background:#fffbf3; color:#c17300; }.kca-decision-options .defer span { background:#fff0cf; }
 .kca-decision-options .reject { border-color:#edbcc1; background:#fff8f8; color:#c62b3a; }.kca-decision-options .reject span { background:#ffe7e8; }
 .kca-decision-card>label { display:grid; gap:6px; margin-top:18px; color:#4c5367; font-size:8px; font-weight:700; }
+.kca-decision-recorded { display:flex; align-items:flex-start; gap:12px; margin:0 0 18px; padding:14px 16px; border:1px solid #b8e2cd; border-radius:8px; background:#f5fcf8; color:#0d8653; }
+.kca-decision-recorded.is-defer { border-color:#f1d49e; background:#fffbf3; color:#c17300; }
+.kca-decision-recorded.is-reject { border-color:#edbcc1; background:#fff8f8; color:#c62b3a; }
+.kca-decision-recorded>span { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:50%; background:#dff5e9; font-size:17px; }
+.kca-decision-recorded.is-defer>span { background:#fff0cf; }.kca-decision-recorded.is-reject>span { background:#ffe7e8; }
+.kca-decision-recorded strong { display:block; font-size:11px; }.kca-decision-recorded p { margin:4px 0 0; color:inherit; opacity:.85; font-size:9px; }
+.kca-review-summary-links { display:grid; gap:8px; margin-top:14px; text-align:left; }
+.kca-admission-workflow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0 0 16px; padding:0; list-style:none; }
+.kca-admission-workflow li { display:grid; justify-items:center; gap:6px; padding:12px 8px; border:1px solid #e5e7ed; border-radius:8px; background:#fafbfc; color:#7a8092; font-size:8px; text-align:center; }
+.kca-admission-workflow li>span { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; border:1px solid #d5d9e3; background:#fff; font-size:12px; font-weight:700; }
+.kca-admission-workflow li.is-active { border-color:#c7b6ff; background:#f7f3ff; color:#4b18b7; }
+.kca-admission-workflow li.is-done { border-color:#b8e2cd; background:#f5fcf8; color:#0d8653; }
+.kca-admission-workflow li.is-done>span { border-color:#16a467; background:#16a467; color:#fff; }
+.kca-post-decision-panel { margin-top:18px; padding-top:18px; border-top:1px solid #e8eaf0; }
+.kca-post-decision-panel h3 { margin:4px 0 8px; font-size:15px; }
+.kca-post-decision-actions { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 18px; }
+.kca-enrollment-summary { padding:16px; border:1px solid #e5e7ed; border-radius:8px; background:#fafbfc; }
+.kca-enrollment-summary dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:12px 0; }
+.kca-enrollment-summary dt { font-size:8px; color:#7a8092; text-transform:uppercase; letter-spacing:.04em; }
+.kca-enrollment-summary dd { margin:4px 0 0; font-size:10px; font-weight:700; color:#1f2937; }
+.kca-letter-main { min-width:0; }
+.kca-document-actions { display:grid; gap:10px; margin:16px 0; }
+.kca-document-details { display:grid; gap:10px; margin-top:18px; padding-top:18px; border-top:1px solid #edf0f4; }
+.kca-document-details dt { font-size:8px; color:#7a8092; text-transform:uppercase; letter-spacing:.04em; }
+.kca-document-details dd { margin:4px 0 0; font-size:10px; font-weight:700; color:#1f2937; }
 .kca-outcome { max-width:680px; min-height:520px; margin:0 auto; display:flex; flex-direction:column; align-items:center; padding:45px 55px 28px; text-align:center; }
 .kca-outcome-symbol { width:68px; height:68px; display:grid; place-items:center; margin-bottom:14px; border-radius:50%; background:#169b5e; color:#fff; font-size:35px; box-shadow:0 9px 24px rgba(22,155,94,.18); }
 .kca-outcome.is-defer .kca-outcome-symbol { background:#e89422; }.kca-outcome.is-reject .kca-outcome-symbol { background:#d72d3a; }
@@ -616,6 +641,9 @@ body:has(.page.batch-l) { overflow-x:hidden; }
   .kca-recent-row { grid-template-columns:26px 1fr auto; }.kca-recent-row time { display:none; }
   .kca-section-progress>div,.kca-cohort-cards { grid-template-columns:1fr 1fr; }
   .kca-decision-options,.mission-ai-numbers { grid-template-columns:1fr; }
+  .kca-admission-workflow { grid-template-columns:1fr; }
+  .kca-enrollment-summary dl { grid-template-columns:1fr; }
+  .kca-document-layout { grid-template-columns:1fr; }
   .kca-letter,.kca-certificate { min-height:0; padding:25px 20px; }.kca-certificate-border { min-height:560px; padding:30px 18px; }
   .kca-certificate-signatures { gap:8px; }.kca-builder,.mission-wizard { max-width:100%; overflow:hidden; }.kca-builder-steps { width:100%; max-width:100%; grid-template-columns:repeat(5,minmax(110px,1fr)); overflow-x:auto; overscroll-behavior-inline:contain; }.mission-stepper { width:100%; max-width:100%; min-width:0; grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:minmax(120px,1fr); overflow-x:auto; overscroll-behavior-inline:contain; }
   .kca-attendance-list>div { min-width:370px; grid-template-columns:28px minmax(110px,1fr) 42px; }.kca-attendance-list>div>i,.kca-attendance-list>div>small { grid-column:2/4; }

@@ -325,6 +325,7 @@ export function listAdminUsers(options: {
   search?: string;
   status?: 'active' | 'suspended';
   emailVerified?: boolean;
+  excludeAppMembers?: boolean;
 } = {}): Promise<AdminListResult<AdminUser>> {
   return listResource<AdminUser>('admin/users', {
     scope: options.scope,
@@ -335,6 +336,7 @@ export function listAdminUsers(options: {
       search: options.search,
       status: options.status,
       email_verified: options.emailVerified,
+      exclude_app_members: options.excludeAppMembers,
     },
   });
 }

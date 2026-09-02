@@ -39,6 +39,8 @@ test('KCA application ULID decision route resolves', () => {
   const id = '01JABCDEFGHJKMNPQRSTVWXYZ0';
   assert.equal(getAdminScreen(`/admin/kca/applications/${id}`)?.kind, 'detail');
   assert.ok(getAdminScreen(`/admin/kca/applications/${id}/decision`));
+  assert.equal(getAdminScreen(`/admin/kca/applications/${id}/admission-letter`)?.id, 'G-16');
+  assert.ok(isCanonicalAdminRoute(`/admin/kca/applications/${id}/admission-letter`));
 });
 
 test('KCA UI permissions accept Laravel application view', () => {
