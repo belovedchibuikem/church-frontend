@@ -51,6 +51,50 @@ function isStructuredTemplate(body: string): boolean {
   return body.length > 400 || body.includes('ADMISSION & ACCEPTANCE LETTER') || body.includes('YOUR KCA COMMITMENT');
 }
 
+function normalizeSignerValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function linesOf(block: string): string[] {
+  return block.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+function matchesSignerLine(line: string, expected: string): boolean {
+  if (!expected) return false;
+  const normalizedLine = normalizeSignerValue(line);
+  const normalizedExpected = normalizeSignerValue(expected);
+  return normalizedLine === normalizedExpected
+    || normalizedLine.startsWith(`${normalizedExpected},`)
+    || normalizedExpected.startsWith(`${normalizedLine},`);
+}
+
+function syncReferenceInBody(
+  body: string,
+  referenceCode: string | null | undefined,
+  pendingReferenceLabel: string,
+): string {
+  if (!referenceCode || referenceCode === pendingReferenceLabel) {
+    return body;
+  }
+
+  return body
+    .replace(/Ref\.?\s*No\.?\s*:\s*Pending/gi, `Ref. No.: ${referenceCode}`)
+    .replace(/\{reference_code\}/gi, referenceCode);
+}
+
+function renderSignatureImage(signatureSrc: string, key: string): ReactNode {
+  return (
+    <div className="kca-letter-signature-block kca-letter-signature-block--inline" key={key}>
+      <img
+        alt=""
+        className="kca-letter-signature-image"
+        src={signatureSrc}
+        style={{ maxHeight: 56, margin: '0.15rem 0 0.35rem' } as CSSProperties}
+      />
+    </div>
+  );
+}
+
 function renderTemplateBlocks(
   body: string,
   options?: {
@@ -62,41 +106,67 @@ function renderTemplateBlocks(
   const signatureSrc = options?.signatureSrc ?? null;
   const signerName = options?.signerName?.trim() ?? '';
   const signerTitle = options?.signerTitle?.trim() ?? '';
+  let signatureInserted = false;
 
-  return body.split('\n\n').filter(Boolean).map((block, index) => {
+  const blocks = body.split('\n\n').filter(Boolean);
+  const nodes: ReactNode[] = [];
+
+  blocks.forEach((block, index) => {
     const trimmed = block.trim();
+    const lines = linesOf(block);
     const isHeading = trimmed.length >= 8
       && trimmed === trimmed.toUpperCase()
       && !trimmed.includes(':')
       && /^[A-Z0-9 '&().-]+$/.test(trimmed);
 
     if (isHeading) {
-      return <h3 className="kca-letter-section-title" key={`${trimmed}-${index}`}>{trimmed}</h3>;
+      nodes.push(<h3 className="kca-letter-section-title" key={`${trimmed}-${index}`}>{trimmed}</h3>);
+      return;
     }
 
-    const nodes: ReactNode[] = [
+    const nameLineIndex = signerName
+      ? lines.findIndex((line) => matchesSignerLine(line, signerName))
+      : -1;
+
+    if (lines.length > 1 && nameLineIndex >= 0 && signatureSrc) {
+      lines.forEach((line, lineIndex) => {
+        nodes.push(
+          <p className="kca-letter-section-paragraph" key={`${index}-${lineIndex}`}>{line}</p>,
+        );
+        if (lineIndex === nameLineIndex) {
+          nodes.push(renderSignatureImage(signatureSrc, `signature-${index}-${lineIndex}`));
+          signatureInserted = true;
+        }
+      });
+      return;
+    }
+
+    const isSignerNameBlock = Boolean(signerName && (
+      matchesSignerLine(trimmed, signerName)
+      || lines.some((line) => matchesSignerLine(line, signerName))
+    ));
+
+    nodes.push(
       <p className="kca-letter-section-paragraph" key={`${trimmed}-${index}`}>{trimmed}</p>,
-    ];
+    );
 
-    if (
-      signatureSrc
-      && signerName !== ''
-      && trimmed === signerName
-    ) {
-      nodes.push(
-        <div className="kca-letter-signature-block kca-letter-signature-block--inline" key={`signature-${index}`}>
-          <img
-            alt=""
-            className="kca-letter-signature-image"
-            src={signatureSrc}
-            style={{ maxHeight: 56, margin: '0.15rem 0 0.35rem' } as CSSProperties}
-          />
-        </div>,
-      );
+    if (signatureSrc && isSignerNameBlock && !signatureInserted) {
+      nodes.push(renderSignatureImage(signatureSrc, `signature-${index}`));
+      signatureInserted = true;
     }
-
-    return nodes;
   });
+
+  if (signatureSrc && !signatureInserted && signerName) {
+    nodes.push(
+      <div className="kca-letter-signature-block kca-letter-signature-block--closing" key="signature-closing">
+        {renderSignatureImage(signatureSrc, 'signature-closing')}
+      </div>,
+    );
+  } else if (signatureSrc && !signatureInserted) {
+    nodes.push(renderSignatureImage(signatureSrc, 'signature-fallback'));
+  }
+
+  return nodes;
 }
 
 function ProvostSignatureBlock({
@@ -152,7 +222,7 @@ export function KcaAdmissionLetterSheet({
     ? new Date(letter.issued_at).toLocaleDateString()
     : new Date().toLocaleDateString();
   const reference = letter.reference_code ?? pendingReferenceLabel;
-  const body = letter.letter_body ?? '';
+  const body = syncReferenceInBody(letter.letter_body ?? '', letter.reference_code, pendingReferenceLabel);
   const bodyParagraphs = body.split('\n\n').filter(Boolean);
   const batchLabel = letter.batch_label ?? '';
   const structured = isStructuredTemplate(body);

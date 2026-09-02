@@ -879,7 +879,7 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
             )}
             letter={{
               applicant_name: applicant,
-              reference_code: reference === t('member.kca.pendingReference', { defaultMessage: 'Pending' }) ? null : reference,
+              reference_code: letter.reference_code,
               letter_body: letter.letter_body,
               signer_name: letter.signer_name,
               signer_title: letter.signer_title,
