@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
+import { useAdminScreenTab } from '../lib/use-admin-screen-tab';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
 
 import type { AdminScreen } from '../lib/admin-routes';
@@ -19,14 +20,18 @@ import {
   getAdminRole,
   getAdminUser,
   identityErrorMessage,
+  listAdminAccessDecisions,
   listAdminAuditEvents,
   listAdminRoles,
   listAdminSecuritySessions,
   listAdminUsers,
   listAdminWorkItems,
+  reactivateAdminUser,
   requestAdminUserPasswordReset,
+  suspendAdminUser,
   updateAdminUser,
   updateAdminWorkItem,
+  type AdminAccessDecision,
   type AdminAuditEvent,
   type AdminRole,
   type AdminUser,
@@ -496,13 +501,364 @@ function QuickActionsLive() {
   );
 }
 
+function UserDetailIdentityAside({
+  user,
+  scope,
+  onError,
+}: {
+  user: AdminUser;
+  scope: ReturnType<typeof defaultAdminScope>;
+  onError: (message: string | null) => void;
+}) {
+  return (
+    <article className="card identity-card">
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+      <p>{user.account_status}</p>
+      <div className="row-actions">
+        <Link className="ghost-button" href={`/admin/users/${user.id}/edit`}>Edit</Link>
+        <Link className="ghost-button" href={`/admin/users/${user.id}/sessions`}>Sessions</Link>
+        <button
+          type="button"
+          data-interaction-native="true"
+          onClick={() => {
+            if (window.confirm(`Send a password reset email to ${user.email}?`)) {
+              void requestAdminUserPasswordReset(user.id, scope)
+                .then(() => onError(null))
+                .catch((err) => onError(identityErrorMessage(err)));
+            }
+          }}
+        >
+          Send password reset
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function UserDetailDefinitionList({ rows }: { rows: Array<[string, string | null | undefined]> }) {
+  return (
+    <dl className="definition-list">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value?.trim() ? value : '—'}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function UserDetailTabPanel({
+  user,
+  scope,
+  tabKey,
+  onError,
+  onMessage,
+  onUserUpdated,
+}: {
+  user: AdminUser;
+  scope: ReturnType<typeof defaultAdminScope>;
+  tabKey: string;
+  onError: (message: string | null) => void;
+  onMessage: (message: string | null) => void;
+  onUserUpdated: (user: AdminUser) => void;
+}) {
+  const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [accessDecisions, setAccessDecisions] = useState<AdminAccessDecision[]>([]);
+  const [payments, setPayments] = useState<Array<Record<string, unknown>>>([]);
+  const [tabLoading, setTabLoading] = useState(false);
+  const [tabError, setTabError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTabData() {
+      if (!['overview', 'activity', 'giving', 'roles-permissions'].includes(tabKey)) {
+        setTabLoading(false);
+        return;
+      }
+      setTabLoading(true);
+      setTabError(null);
+      try {
+        if (tabKey === 'activity') {
+          const [audit, decisions] = await Promise.all([
+            listAdminAuditEvents({ scope, actorId: user.id, perPage: 25 }),
+            listAdminAccessDecisions({ scope, actorId: user.id, perPage: 25 }),
+          ]);
+          if (cancelled) return;
+          setAuditEvents(audit.data);
+          setAccessDecisions(decisions.data);
+        } else if (tabKey === 'giving' && shouldUseCatalogLiveData()) {
+          const result = await listCatalogDomain('finance.payment_intents', {
+            scope: CATALOG_GLOBAL_SCOPE,
+            search: user.email,
+            perPage: 15,
+          });
+          if (cancelled) return;
+          setPayments(result.items);
+        } else if (tabKey === 'overview') {
+          const audit = await listAdminAuditEvents({ scope, actorId: user.id, perPage: 5 });
+          if (cancelled) return;
+          setAuditEvents(audit.data);
+        }
+      } catch (err) {
+        if (!cancelled) setTabError(catalogErrorMessage(err) || identityErrorMessage(err));
+      } finally {
+        if (!cancelled) setTabLoading(false);
+      }
+    }
+    void loadTabData();
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, tabKey, user.email, user.id]);
+
+  if (tabKey === 'profile') {
+    return (
+      <article className="card details-card">
+        <h2 className="card-title">Profile</h2>
+        <UserDetailDefinitionList rows={[
+          ['Given name', user.profile?.given_name],
+          ['Middle name', user.profile?.middle_name],
+          ['Family name', user.profile?.family_name],
+          ['Preferred name', user.profile?.preferred_name],
+          ['Display name', user.name],
+          ['Email', user.email],
+        ]} />
+        <footer className="form-footer">
+          <Link className="primary-button link-button" href={`/admin/users/${user.id}/edit`}>Edit profile</Link>
+          {user.person_id ? (
+            <Link className="ghost-button link-button" href={`/admin/people/${user.person_id}`}>Open person record</Link>
+          ) : null}
+        </footer>
+      </article>
+    );
+  }
+
+  if (tabKey === 'roles-permissions') {
+    return (
+      <article className="card details-card">
+        <h2 className="card-title">Roles &amp; permissions</h2>
+        {(user.roles ?? []).length === 0 ? (
+          <p className="maps-settings-lead">No roles assigned to this user yet.</p>
+        ) : (
+          user.roles?.map((role) => (
+            <div className="card nested-card" key={role.assignment_id} style={{ marginBottom: 12 }}>
+              <div className="rank-row">
+                <span>{role.name}</span>
+                <strong><code>{role.code}</code></strong>
+              </div>
+              <p className="field-help">Assignment {role.assignment_id}{role.expires_at ? ` · expires ${formatTimestamp(role.expires_at)}` : ''}</p>
+              {(role.scopes ?? []).length === 0 ? (
+                <p className="field-help">No scope attached to this assignment.</p>
+              ) : (
+                <ul className="plain-list">
+                  {role.scopes?.map((item) => (
+                    <li key={item.id}><code>{item.type}:{item.scope_id}</code></li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))
+        )}
+        <div className="row-actions">
+          <Link href={`/admin/access/user-role-assignment?user=${encodeURIComponent(user.id)}`}>Assign roles</Link>
+          <Link href="/admin/access/scope-assignments">Manage scopes</Link>
+          <Link href="/admin/permissions">Grant permissions</Link>
+        </div>
+      </article>
+    );
+  }
+
+  if (tabKey === 'activity') {
+    return (
+      <article className="card details-card">
+        <h2 className="card-title">Activity</h2>
+        <Status error={tabError} />
+        {tabLoading ? <p className="maps-settings-lead" role="status">Loading activity…</p> : null}
+        {!tabLoading ? (
+          <>
+            <h3 className="section-title">Audit events</h3>
+            <div className="card table-card">
+              <table>
+                <thead><tr><th>When</th><th>Action</th><th>Target</th></tr></thead>
+                <tbody>
+                  {auditEvents.length === 0 ? (
+                    <tr><td colSpan={3}>No audit events recorded for this user.</td></tr>
+                  ) : auditEvents.map((row) => (
+                    <tr key={row.id}>
+                      <td>{formatTimestamp(row.occurred_at)}</td>
+                      <td><code>{row.action}</code></td>
+                      <td>{row.target_type ? `${row.target_type}:${row.target_id ?? ''}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="section-title">Access decisions</h3>
+            <div className="card table-card">
+              <table>
+                <thead><tr><th>When</th><th>Permission</th><th>Result</th></tr></thead>
+                <tbody>
+                  {accessDecisions.length === 0 ? (
+                    <tr><td colSpan={3}>No access decisions recorded for this user.</td></tr>
+                  ) : accessDecisions.map((row) => (
+                    <tr key={row.id}>
+                      <td>{formatTimestamp(row.occurred_at)}</td>
+                      <td><code>{row.permission_code ?? '—'}</code></td>
+                      <td>{row.allowed ? 'Allowed' : 'Denied'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Link className="ghost-button link-button" href="/admin/access/history">Open access history</Link>
+          </>
+        ) : null}
+      </article>
+    );
+  }
+
+  if (tabKey === 'giving') {
+    return (
+      <article className="card details-card">
+        <h2 className="card-title">Giving</h2>
+        <Status error={tabError} />
+        {tabLoading ? <p className="maps-settings-lead" role="status">Loading payment history…</p> : null}
+        {!tabLoading ? (
+          <>
+            <div className="card table-card">
+              <table>
+                <thead><tr><th>Reference</th><th>Amount</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody>
+                  {payments.length === 0 ? (
+                    <tr><td colSpan={4}>No payment intents matched this user&apos;s email yet.</td></tr>
+                  ) : payments.map((row) => (
+                    <tr key={String(row.id)}>
+                      <td>{String(row.reference ?? row.id ?? '—')}</td>
+                      <td>{String(row.amount ?? row.amount_major ?? '—')}</td>
+                      <td>{String(row.status ?? '—')}</td>
+                      <td>{formatTimestamp(typeof row.created_at === 'string' ? row.created_at : null)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Link className="ghost-button link-button" href="/admin/finance/transactions">Open finance transactions</Link>
+          </>
+        ) : null}
+      </article>
+    );
+  }
+
+  if (tabKey === 'churches') {
+    return (
+      <article className="card details-card">
+        <h2 className="card-title">Churches</h2>
+        {user.person_id ? (
+          <>
+            <p className="maps-settings-lead">Church memberships are stored on the linked person record.</p>
+            <Link className="primary-button link-button" href={`/admin/people/${user.person_id}`}>View person &amp; church links</Link>
+          </>
+        ) : (
+          <p className="maps-settings-lead">This account is not linked to a person record yet, so church memberships cannot be shown here.</p>
+        )}
+        <Link className="ghost-button link-button" href="/admin/churches">Browse churches</Link>
+      </article>
+    );
+  }
+
+  if (tabKey === 'more') {
+    const suspended = user.account_status === 'suspended';
+    return (
+      <article className="card details-card">
+        <h2 className="card-title">More actions</h2>
+        <div className="row-actions" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+          <Link href={`/admin/users/${user.id}/sessions`}>View active sessions</Link>
+          <Link href="/admin/access/impersonation">Support access (impersonation)</Link>
+          <button
+            type="button"
+            className={suspended ? 'primary-button' : 'danger-button'}
+            data-interaction-native="true"
+            onClick={() => {
+              if (suspended) {
+                if (!window.confirm(`Reactivate ${user.email}?`)) return;
+                void reactivateAdminUser(user.id, scope)
+                  .then((next) => {
+                    onUserUpdated(next);
+                    onMessage(`${user.name} reactivated.`);
+                    onError(null);
+                  })
+                  .catch((err) => onError(identityErrorMessage(err)));
+                return;
+              }
+              const reason = window.prompt('Suspension reason code (for example security.review):', 'security.review');
+              if (!reason?.trim()) return;
+              if (!window.confirm(`Suspend ${user.email}?`)) return;
+              void suspendAdminUser(user.id, reason.trim(), scope)
+                .then((next) => {
+                  onUserUpdated(next);
+                  onMessage(`${user.name} suspended.`);
+                  onError(null);
+                })
+                .catch((err) => onError(identityErrorMessage(err)));
+            }}
+          >
+            {suspended ? 'Reactivate account' : 'Suspend account'}
+          </button>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="card details-card">
+      <h2 className="card-title">Overview</h2>
+      <UserDetailDefinitionList rows={[
+        ['User ID', user.id],
+        ['Person ID', user.person_id],
+        ['Account status', user.account_status],
+        ['Email verified', user.email_verified_at ? formatTimestamp(user.email_verified_at) : 'Not verified'],
+        ['Created', formatTimestamp(user.created_at)],
+        ['Suspended', user.suspended_at ? formatTimestamp(user.suspended_at) : null],
+        ['Suspension reason', user.suspension_reason],
+        ['Roles assigned', String(user.roles?.length ?? 0)],
+      ]} />
+      <h3 className="section-title">Recent activity</h3>
+      <Status error={tabError} />
+      {tabLoading ? <p className="maps-settings-lead" role="status">Loading recent activity…</p> : null}
+      {!tabLoading && auditEvents.length === 0 ? (
+        <p className="maps-settings-lead">No recent audit events for this user.</p>
+      ) : null}
+      {!tabLoading && auditEvents.length > 0 ? (
+        <div className="card table-card">
+          <table>
+            <thead><tr><th>When</th><th>Action</th></tr></thead>
+            <tbody>
+              {auditEvents.map((row) => (
+                <tr key={row.id}>
+                  <td>{formatTimestamp(row.occurred_at)}</td>
+                  <td><code>{row.action}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function UserDetail({ screen, requestedScope }: ScopeProps) {
   const id = screen.route.split('/')[3] ?? '';
   const isEdit = screen.route.endsWith('/edit');
   const isSessions = screen.route.endsWith('/sessions');
   const scope = useMemo(() => defaultAdminScope(requestedScope), [requestedScope]);
+  const tabs = screen.tabs ?? ['Overview', 'Profile', 'Roles & Permissions', 'Activity', 'Giving', 'Churches', 'More'];
+  const { tabKey } = useAdminScreenTab(tabs);
   const [user, setUser] = useState<AdminUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ id: string; device?: string | null; status?: string | null; started_at?: string | null }>>([]);
 
   const load = useCallback(async () => {
@@ -522,7 +878,15 @@ function UserDetail({ screen, requestedScope }: ScopeProps) {
 
   useEffect(() => { void load(); }, [load]);
 
-  if (error) return <Status error={error} onRetry={() => void load()} />;
+  useEffect(() => {
+    if (!user) return;
+    const title = document.querySelector('.page-title');
+    const subtitle = document.querySelector('.page-subtitle');
+    if (title) title.textContent = user.name;
+    if (subtitle) subtitle.textContent = `${user.email} · ${user.account_status}`;
+  }, [user]);
+
+  if (error && !user) return <Status error={error} onRetry={() => void load()} />;
   if (!user) return <p className="maps-settings-lead" role="status">Loading user…</p>;
 
   if (isSessions) {
@@ -586,28 +950,16 @@ function UserDetail({ screen, requestedScope }: ScopeProps) {
 
   return (
     <div className="detail-grid">
-      <article className="card identity-card">
-        <h2>{user.name}</h2>
-        <p>{user.email}</p>
-        <p>{user.account_status}</p>
-        <div className="row-actions">
-          <Link className="ghost-button" href={`/admin/users/${user.id}/edit`}>Edit</Link>
-          <Link className="ghost-button" href={`/admin/users/${user.id}/sessions`}>Sessions</Link>
-          <button type="button" data-interaction-native="true" onClick={() => {
-            if (window.confirm(`Send a password reset email to ${user.email}?`)) {
-              void requestAdminUserPasswordReset(user.id, scope).then(() => setError(null)).catch((err) => setError(identityErrorMessage(err)));
-            }
-          }}>Send password reset</button>
-        </div>
-      </article>
-      <article className="card details-card">
-        <h2 className="card-title">Roles</h2>
-        {(user.roles ?? []).length === 0 ? <p>No roles assigned.</p> : user.roles?.map((role) => (
-          <div className="rank-row" key={role.assignment_id}><span>{role.name}</span><strong>{role.code}</strong></div>
-        ))}
-        <Link href="/admin/access/user-role-assignment">Assign roles</Link>
-      </article>
-      <Status error={error} />
+      <UserDetailIdentityAside user={user} scope={scope} onError={setError} />
+      <UserDetailTabPanel
+        user={user}
+        scope={scope}
+        tabKey={tabKey}
+        onError={setError}
+        onMessage={setMessage}
+        onUserUpdated={setUser}
+      />
+      <Status error={error} message={message} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { ADMIN_SCREEN_TAB_EVENT } from '../lib/use-admin-screen-tab';
 import type { FormEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from '@/components/locale-provider';
@@ -425,6 +425,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       const selected = button.textContent?.trim() ?? '';
       setActiveTab(selected);
       updateUrlState('tab', slug(selected));
+      window.dispatchEvent(new Event(ADMIN_SCREEN_TAB_EVENT));
       return;
     }
     if (/page \d+/i.test(label)) {

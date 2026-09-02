@@ -3,6 +3,7 @@ import test from 'node:test';
 import { getAdminScreen } from '../lib/admin-routes.ts';
 import { evaluateAccess } from '../lib/access-control.ts';
 import { isCanonicalAdminRoute } from '../lib/admin-navigation.ts';
+import { adminTabSlug, resolveAdminScreenTab } from '../lib/use-admin-screen-tab.ts';
 
 const landings = [
   '/admin',
@@ -42,10 +43,18 @@ test('dynamic user and role routes resolve', () => {
   const user = getAdminScreen('/admin/users/01JABCDEFGHJKMNPQRSTVWXYZ0');
   assert.ok(user);
   assert.equal(user.batch, 'B');
+  assert.deepEqual(user.tabs, ['Overview', 'Profile', 'Roles & Permissions', 'Activity', 'Giving', 'Churches', 'More']);
   const edit = getAdminScreen('/admin/users/01JABCDEFGHJKMNPQRSTVWXYZ0/edit');
   assert.ok(edit);
   const role = getAdminScreen('/admin/roles/01JABCDEFGHJKMNPQRSTVWXYZ0');
   assert.ok(role);
+});
+
+test('user detail tab slugs match URL query keys', () => {
+  const tabs = ['Overview', 'Profile', 'Roles & Permissions', 'Activity', 'Giving', 'Churches', 'More'];
+  assert.equal(adminTabSlug('Roles & Permissions'), 'roles-permissions');
+  assert.equal(resolveAdminScreenTab(tabs, 'profile'), 'Profile');
+  assert.equal(resolveAdminScreenTab(tabs, 'missing'), 'Overview');
 });
 
 test('administration UI permissions accept Laravel aliases', () => {
