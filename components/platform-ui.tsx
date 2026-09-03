@@ -1119,22 +1119,19 @@ export function KcaSettingsPanel() {
                   value={step.subtitle ?? ''}
                 />
               </label>
-              {step.display_type === 'content' ? (
-                <label style={{ gridColumn: '1 / -1' }}>
-                  <span>{t('admin.stepBody', { defaultMessage: 'Content' })}</span>
-                  <textarea
-                    onChange={(event) => updateOrientationStep(index, { body: event.target.value })}
-                    rows={8}
-                    value={step.body ?? ''}
-                  />
-                </label>
-              ) : (
-                <p style={{ gridColumn: '1 / -1' }}>
-                  {step.display_type === 'modules_list'
-                    ? t('admin.orientationModulesList', { defaultMessage: 'This step lists published KCA modules automatically.' })
-                    : t('admin.orientationMentorStep', { defaultMessage: 'This step shows the assigned mentor when enrollment is active.' })}
-                </p>
-              )}
+              <label style={{ gridColumn: '1 / -1' }}>
+                <span>{t('admin.stepBody', { defaultMessage: 'Content' })}</span>
+                <textarea
+                  onChange={(event) => updateOrientationStep(index, { body: event.target.value })}
+                  rows={8}
+                  value={step.body ?? ''}
+                />
+                {step.display_type === 'modules_list' ? (
+                  <small>{t('admin.orientationModulesListHelp', { defaultMessage: 'Introductory content appears above the auto-generated module list on this step.' })}</small>
+                ) : step.display_type === 'mentor' ? (
+                  <small>{t('admin.orientationMentorStepHelp', { defaultMessage: 'Introductory content appears above the assigned mentor details on this step.' })}</small>
+                ) : null}
+              </label>
             </div>
           </fieldset>
         ))}

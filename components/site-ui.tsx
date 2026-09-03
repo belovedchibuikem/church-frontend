@@ -2926,7 +2926,7 @@ function KcaOrientationMember() {
                 <strong>{stage.completed ? '✓ ' : ''}{stage.title}</strong>
                 {stage.subtitle ? ` — ${stage.subtitle}` : ''}
               </Link>
-              {stage.body && stage.display_type !== 'modules_list' ? <p>{stage.body}</p> : null}
+              {stage.body ? <p>{stage.body}</p> : null}
               {orientation?.can_complete && stageKey && !stage.completed ? (
                 <button className="ghost-button" type="button" disabled={busy} onClick={() => void markStageComplete(stageKey)}>
                   Mark stage complete
@@ -3009,7 +3009,7 @@ function KcaOrientationStageMember({ route }: { route: SiteRoute }) {
       <Link className="ghost-link" href="/account/kca/orientation">← Back to orientation</Link>
       <h3>{stage.title}</h3>
       {stage.subtitle ? <p>{stage.subtitle}</p> : null}
-      {stage.body ? <div style={{ whiteSpace: 'pre-wrap' }}>{stage.body}</div> : null}
+      {stage.body ? <div style={{ whiteSpace: 'pre-wrap', marginBottom: '1rem' }}>{stage.body}</div> : null}
       {Array.isArray(stage.modules) && stage.modules.length > 0 ? (
         <ul className="check-list">
           {stage.modules.map((module) => (
@@ -3023,6 +3023,8 @@ function KcaOrientationStageMember({ route }: { route: SiteRoute }) {
       ) : null}
       {stage.mentor ? (
         <Link className="site-button ghost-button" href="/account/kca/mentor">View mentor</Link>
+      ) : stage.display_type === 'mentor' && !stage.body ? (
+        <p>A mentor is assigned after enrollment is activated.</p>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
       {orientation?.can_complete && !stage.completed && !reviewMode ? (
