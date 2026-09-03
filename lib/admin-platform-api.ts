@@ -529,6 +529,57 @@ export async function syncKcaOrientationSteps(
   return Array.isArray(data.steps) ? data.steps : [];
 }
 
+export type KcaAttendanceRosterStudent = {
+  enrollment_id: string;
+  registration_number?: string | null;
+  student_name?: string | null;
+  cohort_name?: string | null;
+  status?: 'present' | 'absent' | 'excused' | null;
+  attendance_id?: string | null;
+};
+
+export type KcaAttendanceRoster = {
+  lesson?: { id?: string; title?: string | null; code?: string | null };
+  session_on?: string;
+  students: KcaAttendanceRosterStudent[];
+  total?: number;
+  marked?: number;
+};
+
+export async function fetchKcaAttendanceRoster(input: {
+  lessonId: string;
+  sessionOn: string;
+  cohortId?: string;
+  scope?: AdminScope;
+}): Promise<KcaAttendanceRoster> {
+  const params = new URLSearchParams({
+    lesson_id: input.lessonId,
+    session_on: input.sessionOn,
+  });
+  if (input.cohortId) params.set('cohort_id', input.cohortId);
+  return apiRequestData<KcaAttendanceRoster>(`admin/kca/attendance/roster?${params.toString()}`, {
+    method: 'GET',
+    ...withScope(input.scope ?? PLATFORM_GLOBAL_SCOPE),
+  });
+}
+
+export async function recordKcaMassAttendance(input: {
+  lessonId: string;
+  sessionOn: string;
+  records: Array<{ enrollment_id: string; status: string }>;
+  scope?: AdminScope;
+}): Promise<{ recorded?: number; updated?: number; total?: number }> {
+  return apiRequestData(`admin/kca/attendance/mass`, {
+    method: 'POST',
+    body: JSON.stringify({
+      lesson_id: input.lessonId,
+      session_on: input.sessionOn,
+      records: input.records,
+    }),
+    ...withScope(input.scope ?? PLATFORM_GLOBAL_SCOPE),
+  });
+}
+
 export type KcaAdmissionLetter = {
   id: string | null;
   application_id?: string;
@@ -560,6 +611,73 @@ export async function previewKcaRegistrationNumber(
   );
 
   return response.data.registration_number;
+}
+
+export type KcaStudentImportResult = {
+  mode: 'enroll' | 'application' | string;
+  total_rows: number;
+  imported_count: number;
+  failed_count: number;
+  imported: Array<{
+    row: number;
+    application_id: string;
+    application_status: string;
+    person_id?: string | null;
+    email?: string | null;
+    enrollment?: {
+      id: string;
+      registration_number: string;
+      cohort_id: string;
+      starts_on?: string | null;
+    } | null;
+  }>;
+  failures: Array<{
+    row: number;
+    error: string;
+    email?: string | null;
+    given_name?: string | null;
+    family_name?: string | null;
+  }>;
+};
+
+export async function downloadKcaStudentImportTemplate(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<Blob> {
+  const response = await apiRequestResponse('admin/kca/students/import-template', {
+    ...withScope(scope),
+    headers: { Accept: 'text/csv, application/json' },
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, 'Unable to download the KCA student import template.');
+  }
+  return response.blob();
+}
+
+export async function exportKcaStudentsCsv(
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<Blob> {
+  const response = await apiRequestResponse('admin/kca/students/export', {
+    ...withScope(scope),
+    headers: { Accept: 'text/csv, application/json' },
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, 'Unable to export KCA students.');
+  }
+  return response.blob();
+}
+
+export async function importKcaStudentsFile(
+  file: File,
+  mode: 'enroll' | 'application' = 'enroll',
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaStudentImportResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('mode', mode);
+  return apiRequestForm<KcaStudentImportResult>('admin/kca/students/import', formData, {
+    ...withScope(scope),
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  });
 }
 
 export async function getKcaAdmissionLetter(

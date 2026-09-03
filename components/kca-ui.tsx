@@ -18,7 +18,22 @@ import { getAdminRecordDetails, stashAdminRecords } from '../lib/admin-record-ca
 import { formatRowActionRecord, rowActionCapabilities } from '../lib/admin-row-actions';
 import { executeAdminAction, extractUlid, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { KcaAdmissionLetterSheet } from './kca-admission-letter-sheet';
-import { getKcaAdmissionLetter, fetchKcaAdmissionLetterAssetBlob, issueKcaAdmissionLetter, downloadKcaAdmissionLetterPdf, previewKcaRegistrationNumber, type KcaAdmissionLetter } from '../lib/admin-platform-api';
+import {
+  getKcaAdmissionLetter,
+  fetchKcaAdmissionLetterAssetBlob,
+  issueKcaAdmissionLetter,
+  downloadKcaAdmissionLetterPdf,
+  previewKcaRegistrationNumber,
+  fetchKcaAttendanceRoster,
+  recordKcaMassAttendance,
+  downloadKcaStudentImportTemplate,
+  exportKcaStudentsCsv,
+  importKcaStudentsFile,
+  platformErrorMessage,
+  type KcaAdmissionLetter,
+  type KcaAttendanceRosterStudent,
+  type KcaStudentImportResult,
+} from '../lib/admin-platform-api';
 import { downloadBlob } from '../lib/download-blob.ts';
 import { pathEntityId } from '../lib/site-api.ts';
 import { fieldsForEntity, normalizeDetailValues, resolveEntityKey } from '../lib/admin-form-schemas';
@@ -1966,8 +1981,12 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState(live ? 'Loading attendance…' : '');
   const [busy, setBusy] = useState(false);
+  const [lessonId, setLessonId] = useState('');
+  const [sessionOn, setSessionOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [roster, setRoster] = useState<KcaAttendanceRosterStudent[]>([]);
+  const [marks, setMarks] = useState<Record<string, string>>({});
 
-  async function load() {
+  async function loadHistory() {
     if (!live) return;
     setError(null);
     try {
@@ -1987,10 +2006,68 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
   }
 
   useEffect(() => {
-    void load();
+    void loadHistory();
   }, [live]);
 
-  async function onRecord(event: FormEvent<HTMLFormElement>) {
+  async function loadRoster() {
+    if (!lessonId || !sessionOn) {
+      setError('Choose a lesson and session date first.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await fetchKcaAttendanceRoster({ lessonId, sessionOn });
+      setRoster(data.students ?? []);
+      const next: Record<string, string> = {};
+      for (const student of data.students ?? []) {
+        next[student.enrollment_id] = student.status ?? 'present';
+      }
+      setMarks(next);
+      setMessage(`Roster loaded · ${data.total ?? 0} students · ${data.marked ?? 0} already marked`);
+    } catch (err) {
+      setRoster([]);
+      setError(err instanceof Error ? err.message : 'Unable to load attendance roster.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function markAll(status: string) {
+    setMarks((current) => {
+      const next: Record<string, string> = {};
+      for (const student of roster) next[student.enrollment_id] = status;
+      return { ...current, ...next };
+    });
+  }
+
+  async function saveMass() {
+    if (!lessonId || !sessionOn || roster.length === 0) {
+      setError('Load a roster before saving mass attendance.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await recordKcaMassAttendance({
+        lessonId,
+        sessionOn,
+        records: roster.map((student) => ({
+          enrollment_id: student.enrollment_id,
+          status: marks[student.enrollment_id] ?? 'present',
+        })),
+      });
+      setMessage(`Saved · ${result.recorded ?? 0} new · ${result.updated ?? 0} updated · ${result.total ?? roster.length} total`);
+      await loadRoster();
+      await loadHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save mass attendance.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRecordOne(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setBusy(true);
@@ -2008,7 +2085,7 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
         scope: CATALOG_GLOBAL_SCOPE,
       });
       event.currentTarget.reset();
-      await load();
+      await loadHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to record attendance.');
     } finally {
@@ -2016,21 +2093,91 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
     }
   }
 
-  const metrics = live
-    ? []
-    : (screen.metrics ?? []);
-
   return (
     <div className="kca-attendance">
-      {metrics.length ? <KcaMetrics metrics={metrics} /> : null}
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       {live ? <p className="maps-settings-lead" role="status">{message}</p> : null}
-      <form className="card settings-card" onSubmit={(event) => void onRecord(event)}>
+
+      <form className="card settings-card" onSubmit={(event) => { event.preventDefault(); void loadRoster(); }}>
         <header className="kca-form-card-header">
           <div>
-            <span className="kca-overline">Lesson attendance</span>
-            <h2 className="card-title">Record attendance</h2>
-            <p className="maps-settings-lead">Select an enrolled KCA student, the lesson taught, and the session date.</p>
+            <span className="kca-overline">Mass attendance</span>
+            <h2 className="card-title">Mark a whole class</h2>
+            <p className="maps-settings-lead">Pick the lesson and date, load every enrolled student, then mark present / absent / excused in one save.</p>
+          </div>
+        </header>
+        <div className="form-grid">
+          <label>
+            <span>Lesson *</span>
+            <EntitySearchSelect
+              name="mass_lesson_id"
+              catalog="kcaLesson"
+              required
+              placeholder="Search lesson by name"
+              value={lessonId}
+              onValueChange={(value) => setLessonId(value)}
+            />
+          </label>
+          <label>
+            <span>Session date *</span>
+            <input name="mass_session_on" type="date" required value={sessionOn} onChange={(event) => setSessionOn(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-footer" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <button className="primary-button" disabled={busy} type="submit">{busy ? 'Loading…' : 'Load students'}</button>
+          {roster.length > 0 ? (
+            <>
+              <button className="ghost-button" disabled={busy} type="button" onClick={() => markAll('present')}>Mark all present</button>
+              <button className="ghost-button" disabled={busy} type="button" onClick={() => markAll('absent')}>Mark all absent</button>
+              <button className="primary-button" disabled={busy} type="button" onClick={() => void saveMass()}>
+                {busy ? 'Saving…' : `Save attendance (${roster.length})`}
+              </button>
+            </>
+          ) : null}
+        </div>
+      </form>
+
+      {roster.length > 0 ? (
+        <article className="card kca-table-card">
+          <table className="kca-table" aria-label="Class attendance roster">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Reg. no.</th>
+                <th>Cohort</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roster.map((student) => (
+                <tr key={student.enrollment_id}>
+                  <td>{student.student_name ?? '—'}</td>
+                  <td>{student.registration_number ?? '—'}</td>
+                  <td>{student.cohort_name ?? '—'}</td>
+                  <td>
+                    <select
+                      aria-label={`Status for ${student.student_name ?? student.enrollment_id}`}
+                      value={marks[student.enrollment_id] ?? 'present'}
+                      onChange={(event) => setMarks((current) => ({ ...current, [student.enrollment_id]: event.target.value }))}
+                    >
+                      <option value="present">Present</option>
+                      <option value="absent">Absent</option>
+                      <option value="excused">Excused</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
+      ) : null}
+
+      <form className="card settings-card" onSubmit={(event) => void onRecordOne(event)}>
+        <header className="kca-form-card-header">
+          <div>
+            <span className="kca-overline">Single student</span>
+            <h2 className="card-title">Record one attendance</h2>
+            <p className="maps-settings-lead">Use this when only one student needs a quick update.</p>
           </div>
         </header>
         <div className="form-grid">
@@ -2050,6 +2197,7 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
           <button className="primary-button" disabled={busy} type="submit">{busy ? 'Saving…' : 'Record attendance'}</button>
         </div>
       </form>
+
       <article className="card kca-table-card">
         <table className="kca-table" aria-label="Attendance sessions">
           <thead><tr><th>Student</th><th>Lesson</th><th>Session</th><th>Status</th></tr></thead>
@@ -2600,6 +2748,11 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const [total, setTotal] = useState(0);
   const [message, setMessage] = useState(live ? t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }) : '');
   const [error, setError] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [importMode, setImportMode] = useState<'enroll' | 'application'>('enroll');
+  const [importResult, setImportResult] = useState<KcaStudentImportResult | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const reviewLabel = dataset === 'kca.applications' ? 'Review' : undefined;
 
   useEffect(() => {
@@ -2630,7 +2783,62 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
     return () => {
       cancelled = true;
     };
-  }, [columnKey, dataset, live, t]);
+  }, [columnKey, dataset, live, reloadToken, t]);
+
+  async function handleDownloadTemplate() {
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const blob = await downloadKcaStudentImportTemplate(CATALOG_GLOBAL_SCOPE);
+      downloadBlob(blob, 'kca-students-import-template.csv');
+      setMessage('Import template downloaded. Fill every required column, then import.');
+    } catch (err) {
+      setError(platformErrorMessage(err, 'Unable to download import template.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleExportStudents() {
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const blob = await exportKcaStudentsCsv(CATALOG_GLOBAL_SCOPE);
+      downloadBlob(blob, `kca-students-export-${new Date().toISOString().slice(0, 10)}.csv`);
+      setMessage('Enrolled students exported.');
+    } catch (err) {
+      setError(platformErrorMessage(err, 'Unable to export students.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleImportFile(file: File | null) {
+    if (!file) return;
+    setBulkBusy(true);
+    setError(null);
+    setImportResult(null);
+    try {
+      const result = await importKcaStudentsFile(file, importMode, CATALOG_GLOBAL_SCOPE);
+      setImportResult(result);
+      setMessage(
+        `Import finished · ${result.imported_count} imported · ${result.failed_count} failed of ${result.total_rows} rows`,
+      );
+      if (result.imported_count > 0) {
+        setReloadToken((value) => value + 1);
+      }
+      if (result.failed_count > 0 && result.imported_count === 0) {
+        setError(result.failures[0]?.error ?? 'Import failed for all rows.');
+      }
+    } catch (err) {
+      setError(platformErrorMessage(err, formatAdminMutationError(err) || 'Unable to import students.'));
+    } finally {
+      setBulkBusy(false);
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
+    }
+  }
 
   if (!shouldUseDesignFixtures() && !live) {
     return (
@@ -2656,11 +2864,66 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
               { label: 'On this page', value: String(rows.length) },
             ]}
           />
-          <Link className="primary-button link-button" href="/admin/kca/students/register">+ Register KCA student</Link>
+          <div className="kca-students-bulk-actions">
+            <button className="ghost-button" disabled={bulkBusy} type="button" onClick={() => void handleDownloadTemplate()}>
+              Download template
+            </button>
+            <button className="ghost-button" disabled={bulkBusy} type="button" onClick={() => void handleExportStudents()}>
+              Export students
+            </button>
+            <label className="kca-students-import-mode">
+              <span>Import mode</span>
+              <select
+                disabled={bulkBusy}
+                value={importMode}
+                onChange={(event) => setImportMode(event.target.value === 'application' ? 'application' : 'enroll')}
+              >
+                <option value="enroll">Admit &amp; enroll</option>
+                <option value="application">Application only</option>
+              </select>
+            </label>
+            <button
+              className="ghost-button"
+              disabled={bulkBusy}
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+            >
+              {bulkBusy ? 'Working…' : 'Import CSV / Excel'}
+            </button>
+            <input
+              ref={importInputRef}
+              accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              hidden
+              type="file"
+              onChange={(event) => void handleImportFile(event.target.files?.[0] ?? null)}
+            />
+            <Link className="primary-button link-button" href="/admin/kca/students/register">+ Register KCA student</Link>
+          </div>
         </div>
+      ) : null}
+      {live && screen.id === 'H-01' ? (
+        <p className="maps-settings-lead">
+          Bulk register with CSV or Excel (.xlsx). Use the template columns (church_id or church_name, recommender fields, commitments, cohort_code, starts_on). Excel opens the CSV template directly.
+        </p>
       ) : null}
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
       {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      {importResult && importResult.failures.length > 0 ? (
+        <div className="kca-import-failures" role="status">
+          <p className="maps-settings-lead">Row failures:</p>
+          <ul>
+            {importResult.failures.slice(0, 12).map((failure) => (
+              <li key={`${failure.row}-${failure.error}`}>
+                Row {failure.row}
+                {failure.email ? ` (${failure.email})` : ''}: {failure.error}
+              </li>
+            ))}
+          </ul>
+          {importResult.failures.length > 12 ? (
+            <p className="maps-settings-lead">…and {importResult.failures.length - 12} more</p>
+          ) : null}
+        </div>
+      ) : null}
       <KcaTable screen={screen} rows={rows} reviewLabel={reviewLabel} total={total || rows.length} />
     </div>
   );

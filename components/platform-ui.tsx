@@ -1090,7 +1090,7 @@ export function KcaSettingsPanel() {
           </div>
         </div>
         <h3>{t('admin.kcaOrientationProgram', { defaultMessage: 'Orientation programme' })}</h3>
-        <p>{t('admin.kcaOrientationProgramLead', { defaultMessage: 'Edit step titles and content shown to applicants and students. Slugs are fixed after creation; rename the title students see.' })}</p>
+        <p>{t('admin.kcaOrientationProgramLead', { defaultMessage: 'Edit step titles and content shown to applicants and students. Add new steps any time; slugs are fixed after creation.' })}</p>
         <div className="platform-form-grid">
           <label style={{ gridColumn: '1 / -1' }}>
             <span>{t('admin.orientationWelcome', { defaultMessage: 'Welcome message (first visit)' })}</span>
@@ -1102,9 +1102,19 @@ export function KcaSettingsPanel() {
           </label>
         </div>
         {orientationSteps.map((step, index) => (
-          <fieldset className="platform-card" key={step.id ?? step.slug} style={{ marginTop: '1rem' }}>
-            <legend>{step.slug}</legend>
+          <fieldset className="platform-card" key={step.id ?? `${step.slug}-${index}`} style={{ marginTop: '1rem' }}>
+            <legend>{step.id ? step.slug : t('admin.newOrientationStep', { defaultMessage: 'New step' })}</legend>
             <div className="platform-form-grid">
+              {!step.id ? (
+                <label>
+                  <span>{t('admin.stepSlug', { defaultMessage: 'Slug (permanent id)' })}</span>
+                  <input
+                    onChange={(event) => updateOrientationStep(index, { slug: event.target.value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') })}
+                    value={step.slug}
+                    placeholder="e.g. vision_mission"
+                  />
+                </label>
+              ) : null}
               <label>
                 <span>{t('admin.stepTitle', { defaultMessage: 'Step title' })}</span>
                 <input
@@ -1119,6 +1129,26 @@ export function KcaSettingsPanel() {
                   value={step.subtitle ?? ''}
                 />
               </label>
+              <label>
+                <span>{t('admin.stepType', { defaultMessage: 'Display type' })}</span>
+                <select
+                  onChange={(event) => updateOrientationStep(index, { display_type: event.target.value as KcaOrientationStepRecord['display_type'] })}
+                  value={step.display_type}
+                >
+                  <option value="content">Content</option>
+                  <option value="modules_list">Modules list</option>
+                  <option value="mentor">Mentor</option>
+                </select>
+              </label>
+              <label>
+                <span>{t('admin.stepSequence', { defaultMessage: 'Sequence' })}</span>
+                <input
+                  type="number"
+                  min={1}
+                  onChange={(event) => updateOrientationStep(index, { sequence: Number(event.target.value) || index + 1 })}
+                  value={step.sequence}
+                />
+              </label>
               <label style={{ gridColumn: '1 / -1' }}>
                 <span>{t('admin.stepBody', { defaultMessage: 'Content' })}</span>
                 <textarea
@@ -1130,11 +1160,47 @@ export function KcaSettingsPanel() {
                   <small>{t('admin.orientationModulesListHelp', { defaultMessage: 'Introductory content appears above the auto-generated module list on this step.' })}</small>
                 ) : step.display_type === 'mentor' ? (
                   <small>{t('admin.orientationMentorStepHelp', { defaultMessage: 'Introductory content appears above the assigned mentor details on this step.' })}</small>
-                ) : null}
+                ) : (
+                  <small>{t('admin.orientationContentHelp', { defaultMessage: 'Use blank lines between paragraphs. Keep titles short and body clear for mobile reading.' })}</small>
+                )}
               </label>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '0.75rem' }}>
+                <label className="interaction-check">
+                  <input
+                    checked={step.is_active !== false}
+                    onChange={(event) => updateOrientationStep(index, { is_active: event.target.checked })}
+                    type="checkbox"
+                  />{' '}
+                  {t('admin.stepActive', { defaultMessage: 'Active (shown to students)' })}
+                </label>
+              </div>
             </div>
           </fieldset>
         ))}
+        <div className="form-footer" style={{ marginTop: '1rem', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className="ghost-button"
+            data-interaction-native="true"
+            type="button"
+            onClick={() => {
+              const slugBase = `step_${orientationSteps.length + 1}`;
+              setOrientationSteps((current) => [
+                ...current,
+                {
+                  slug: slugBase,
+                  title: 'New orientation step',
+                  subtitle: '',
+                  body: '',
+                  display_type: 'content',
+                  sequence: current.length + 1,
+                  is_active: true,
+                },
+              ]);
+            }}
+          >
+            {t('admin.addOrientationStep', { defaultMessage: '+ Add orientation step' })}
+          </button>
+        </div>
         <footer className="form-footer kca-governance-footer">
           <button
             className="ghost-button"

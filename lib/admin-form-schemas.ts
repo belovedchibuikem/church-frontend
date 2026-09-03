@@ -67,7 +67,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'e.g. Win three generations of souls' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
       { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
-      { label: 'Type', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'soul_winning'] },
+      { label: 'Type', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'written', 'practical', 'soul_winning'] },
       { label: 'Due Date', name: 'due_at', type: 'date' },
       { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: '3,2,4', wide: true, helpText: 'Required for Type = soul_winning (e.g. 3,2,4). Status stays open until the tree is complete.' },
     ],

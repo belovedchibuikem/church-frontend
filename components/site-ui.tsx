@@ -2906,36 +2906,39 @@ function KcaOrientationMember() {
   const reviewMode = orientation?.review_mode || Boolean(orientation?.orientation_completed_at);
 
   return (
-    <section className="panel">
-      <h3>KCA Orientation</h3>
-      <p>{orientation?.welcome ?? 'Walk through each stage of orientation.'}</p>
-      {reviewMode ? <p>Revisit vision, mission, and why KCA any time from this programme.</p> : null}
+    <section className="panel kca-orientation-hub">
+      <div className="kca-orientation-hero">
+        <span className="eyebrow">KCA ORIENTATION</span>
+        <h2>Orientation Programme</h2>
+        <p>{orientation?.welcome ?? 'Walk through each stage of orientation.'}</p>
+        <p className="kca-section-lead">
+          {(orientation?.stages ?? []).filter((stage) => stage.completed).length}/{(orientation?.stages ?? []).length} stages complete
+        </p>
+      </div>
+      {reviewMode ? <p className="kca-section-lead">Revisit vision, mission, and why KCA any time from this programme.</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {message ? <p role="status">{message}</p> : null}
-      <ul className="check-list">
-        {(orientation?.stages ?? []).map((stage) => {
+      <div className="kca-orientation-stages">
+        {(orientation?.stages ?? []).map((stage, index) => {
           const stageKey = stage.key ?? '';
-          const href = stage.display_type === 'modules_list' || stageKey === 'path'
-            ? '/account/kca/modules'
-            : stage.display_type === 'mentor' || stageKey === 'mentors'
-              ? '/account/kca/mentor'
-              : `/account/kca/orientation/${stageKey}`;
+          const href = `/account/kca/orientation/${stageKey}`;
           return (
-            <li key={stage.key ?? stage.title}>
-              <Link href={href}>
-                <strong>{stage.completed ? '✓ ' : ''}{stage.title}</strong>
-                {stage.subtitle ? ` — ${stage.subtitle}` : ''}
-              </Link>
-              {stage.body ? <p>{stage.body}</p> : null}
+            <article className={`kca-orientation-stage-card${stage.completed ? ' is-complete' : ''}`} key={stage.key ?? stage.title}>
+              <div className="kca-orientation-stage-index" aria-hidden="true">{stage.completed ? '✓' : index + 1}</div>
+              <div>
+                <h3>{stage.title}</h3>
+                {stage.subtitle ? <p>{stage.subtitle}</p> : null}
+              </div>
+              <Link className="ghost-link" href={href}>Open</Link>
               {orientation?.can_complete && stageKey && !stage.completed ? (
                 <button className="ghost-button" type="button" disabled={busy} onClick={() => void markStageComplete(stageKey)}>
-                  Mark stage complete
+                  Mark complete
                 </button>
               ) : null}
-            </li>
+            </article>
           );
         })}
-      </ul>
+      </div>
       {canSubmit ? (
         <button className="site-button" type="button" disabled={busy} onClick={() => void submitOrientation()}>
           Submit orientation
@@ -3005,11 +3008,18 @@ function KcaOrientationStageMember({ route }: { route: SiteRoute }) {
   const reviewMode = orientation?.review_mode || Boolean(orientation?.orientation_completed_at);
 
   return (
-    <section className="panel">
+    <section className="panel kca-orientation-detail">
       <Link className="ghost-link" href="/account/kca/orientation">← Back to orientation</Link>
-      <h3>{stage.title}</h3>
-      {stage.subtitle ? <p>{stage.subtitle}</p> : null}
-      {stage.body ? <div style={{ whiteSpace: 'pre-wrap', marginBottom: '1rem' }}>{stage.body}</div> : null}
+      <header className="kca-orientation-detail-header">
+        <span className="eyebrow">ORIENTATION STAGE</span>
+        <h2>{stage.title}</h2>
+        {stage.subtitle ? <p className="kca-section-lead">{stage.subtitle}</p> : null}
+      </header>
+      {stage.body ? (
+        <article className="kca-reader-card">
+          <div className="kca-formatted-body">{stage.body}</div>
+        </article>
+      ) : null}
       {Array.isArray(stage.modules) && stage.modules.length > 0 ? (
         <ul className="check-list">
           {stage.modules.map((module) => (
@@ -3027,11 +3037,15 @@ function KcaOrientationStageMember({ route }: { route: SiteRoute }) {
         <p>A mentor is assigned after enrollment is activated.</p>
       ) : null}
       {error ? <p role="alert">{error}</p> : null}
-      {orientation?.can_complete && !stage.completed && !reviewMode ? (
-        <button className="site-button" type="button" disabled={busy} onClick={() => void markStageComplete()}>
-          Mark stage complete
-        </button>
-      ) : null}
+      <div className="kca-orientation-detail-actions">
+        {orientation?.can_complete && !stage.completed && !reviewMode ? (
+          <button className="site-button" type="button" disabled={busy} onClick={() => void markStageComplete()}>
+            Continue · mark complete
+          </button>
+        ) : (
+          <Link className="site-button" href="/account/kca/orientation">Continue</Link>
+        )}
+      </div>
     </section>
   );
 }
@@ -3063,24 +3077,54 @@ function KcaPracticalServiceMember() {
   if (state === 'error') return <KcaUnavailable title="KCA Practical Service" message={error ?? undefined} />;
 
   return (
-    <section className="panel">
-      <h3>KCA Practical Service</h3>
-      <p>Serve in at least two departments. Counts and hours come from your KCA assignments and attendance.</p>
-      <p>
-        {payload?.departments_count ?? 0} departments · {payload?.hours_served ?? 0} hours ·{' '}
-        {payload?.on_track ? 'On track' : 'Keep serving'}
-      </p>
-      <ul className="check-list">
-        {(payload?.departments ?? []).map((row) => (
-          <li key={String(row.id)}>
-            <Link href={row.id ? `/account/kca/assignments/${String(row.id)}` : '/account/kca/assignments'}>
-              {String(row.title ?? 'Department')} — {String(row.state ?? '')}
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <section className="panel kca-practical-panel">
+      <header className="kca-practical-header">
+        <span className="eyebrow">PRACTICAL MINISTRY</span>
+        <h2>Practical Service</h2>
+        <p className="kca-section-lead">
+          Complete practical assignments in at least two departments. Hours come from recorded lesson attendance.
+        </p>
+      </header>
+      <div className="kca-practical-summary">
+        <div>
+          <strong>{payload?.departments_count ?? 0}</strong>
+          <span>Departments</span>
+        </div>
+        <div>
+          <strong>{payload?.hours_served ?? 0}</strong>
+          <span>Hours served</span>
+        </div>
+        <div>
+          <strong>{payload?.on_track ? 'On track' : 'In progress'}</strong>
+          <span>Status</span>
+        </div>
+      </div>
+      {(payload?.departments ?? []).length === 0 ? (
+        <p className="kca-empty-copy">No practical assignments yet. When admin assigns Type = practical, they appear here.</p>
+      ) : (
+        <div className="kca-curriculum-list">
+          {(payload?.departments ?? []).map((row) => (
+            <div className="list-row rich-row" key={String(row.id)}>
+              <span className="thumb">⚙</span>
+              <div>
+                <b>{String(row.title ?? 'Practical assignment')}</b>
+                <small>
+                  {[
+                    row.module && typeof row.module === 'object' ? String((row.module as { title?: string }).title ?? '') : '',
+                    row.lesson && typeof row.lesson === 'object' ? String((row.lesson as { title?: string }).title ?? '') : '',
+                    String(row.state ?? ''),
+                  ].filter(Boolean).join(' · ')}
+                </small>
+              </div>
+              <Link className="ghost-link" href={row.id ? `/account/kca/assignments/${String(row.id)}` : '/account/kca/assignments'}>
+                Open
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
       <Link className="site-button" href="/account/kca/assignments">
-        Add another department
+        View all assignments
       </Link>
     </section>
   );
@@ -3808,6 +3852,7 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
   const [lesson, setLesson] = useState<KcaLessonDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [fontScale, setFontScale] = useState(100);
 
   useEffect(() => {
     let cancelled = false;
@@ -3906,13 +3951,22 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
       {!hasChapters || lesson?.body || lesson?.content_url ? (
         <section className="panel kca-lesson-panel">
           {hasChapters && lesson?.body ? <h3>Lesson overview</h3> : null}
+          <div className="kca-reader-toolbar" role="group" aria-label="Text size">
+            <button className="ghost-button" type="button" onClick={() => setFontScale((value) => Math.max(85, value - 10))} aria-label="Zoom out">
+              A−
+            </button>
+            <span>{fontScale}%</span>
+            <button className="ghost-button" type="button" onClick={() => setFontScale((value) => Math.min(160, value + 10))} aria-label="Zoom in">
+              A+
+            </button>
+          </div>
           {lesson?.content_url ? (
             <a className="kca-resource-link" href={lesson.content_url} rel="noreferrer" target="_blank">
               {kcaLessonTypeLabel(lesson.lesson_type) === 'Video' ? '▶ Watch lesson video' : '↗ Open linked resource'}
             </a>
           ) : null}
           {lesson?.body ? (
-            <div className="kca-lesson-content">{lesson.body}</div>
+            <div className="kca-lesson-content kca-formatted-body" style={{ fontSize: `${15 * (fontScale / 100)}px` }}>{lesson.body}</div>
           ) : !hasChapters ? (
             <p className="kca-empty-copy">This lesson has no body yet.</p>
           ) : null}
@@ -3939,6 +3993,7 @@ function KcaChapterPlayer({ route }: { route: SiteRoute }) {
   const [chapter, setChapter] = useState<KcaChapterSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [fontScale, setFontScale] = useState(100);
 
   useEffect(() => {
     let cancelled = false;
@@ -3996,12 +4051,23 @@ function KcaChapterPlayer({ route }: { route: SiteRoute }) {
         )}
       </div>
       <section className="panel kca-lesson-panel">
+        <div className="kca-reader-toolbar" role="group" aria-label="Text size">
+          <button className="ghost-button" type="button" onClick={() => setFontScale((value) => Math.max(85, value - 10))} aria-label="Zoom out">
+            A−
+          </button>
+          <span>{fontScale}%</span>
+          <button className="ghost-button" type="button" onClick={() => setFontScale((value) => Math.min(160, value + 10))} aria-label="Zoom in">
+            A+
+          </button>
+        </div>
         {chapter?.content_url ? (
           <a className="kca-resource-link" href={chapter.content_url} rel="noreferrer" target="_blank">
             ↗ Open linked resource
           </a>
         ) : null}
-        <div className="kca-lesson-content">{chapter?.body || 'This chapter has no body yet.'}</div>
+        <div className="kca-lesson-content kca-formatted-body" style={{ fontSize: `${15 * (fontScale / 100)}px` }}>
+          {chapter?.body || 'This chapter has no body yet.'}
+        </div>
         {error ? <p role="alert">{error}</p> : null}
         {done ? <p className="kca-success-copy">Chapter marked complete.</p> : null}
         <button className="site-button" type="button" disabled={busy || done} onClick={() => void onComplete()}>

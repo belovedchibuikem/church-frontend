@@ -158,6 +158,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .form-card, .settings-card { padding: 26px; }.form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px 22px; }.form-grid label { display: grid; gap: 8px; color: #454c65; font-size: 14px; font-weight: 750; }.form-grid input, .form-grid select, .token-input { width: 100%; height: 52px; border: 1px solid #dfe1e9; border-radius: 7px; padding: 0 12px; background: white; color: var(--fhc-ink); font-size: 15px; }.form-footer { display: flex; justify-content: flex-end; gap: 18px; margin-top: 28px; }.form-footer button { min-width: 180px; }
 .create-user-wizard { max-width: 920px; margin: 0 auto; }.create-user-header { margin-bottom: 8px; }.create-user-lead { margin: -8px 0 18px; font-size: 13px; line-height: 1.55; color: #6b7280; }.create-user-success .interaction-confirm-summary { margin-bottom: 18px; }.create-user-wizard .stepper { margin-inline: 0 0 28px; }.create-user-wizard .form-card { margin-top: 4px; }
 .kca-modules-panel .kca-modules-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+.kca-students-toolbar { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; flex-wrap:wrap; }
+.kca-students-bulk-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.kca-students-import-mode { display:inline-flex; align-items:center; gap:8px; color:#555d72; font-size:12px; font-weight:700; }
+.kca-students-import-mode select { height:34px; border:1px solid #e0e3eb; border-radius:5px; background:#fff; padding:0 10px; }
+.kca-import-failures { margin:0 0 16px; padding:12px 14px; border:1px solid #f0d5d5; border-radius:8px; background:#fff7f7; }
+.kca-import-failures ul { margin:8px 0 0; padding-left:18px; color:#9b1c1c; font-size:13px; }
 .kca-add-lesson-form { margin-bottom:20px; }
 .kca-add-lesson-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
 .kca-module-row-actions { flex-wrap:wrap; justify-content:flex-end; }
@@ -1851,9 +1857,95 @@ html[dir="rtl"] .site-app.surface-member .member-sidebar {
 }
 .kca-lesson-content {
   white-space: pre-wrap;
-  line-height: 1.65;
+  line-height: 1.7;
   font-size: 15px;
   color: #1a2240;
+}
+.kca-formatted-body {
+  white-space: pre-wrap;
+  line-height: 1.75;
+  color: #1a2240;
+  letter-spacing: 0.01em;
+}
+.kca-reader-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+}
+.kca-reader-card,
+.kca-orientation-stage-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px 18px;
+}
+.kca-orientation-stages {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+.kca-orientation-stage-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.kca-orientation-stage-card.is-complete {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+.kca-orientation-stage-index {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #14532d;
+  color: #fff;
+  font-weight: 700;
+}
+.kca-orientation-hero {
+  margin-bottom: 8px;
+}
+.kca-orientation-detail-header {
+  margin: 12px 0 16px;
+}
+.kca-orientation-detail-actions {
+  margin-top: 18px;
+}
+.kca-practical-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 20px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #14532d;
+  color: #fff;
+}
+.kca-practical-summary strong {
+  display: block;
+  font-size: 22px;
+  line-height: 1.2;
+}
+.kca-practical-summary span {
+  font-size: 12px;
+  opacity: 0.85;
+}
+@media (max-width: 640px) {
+  .kca-practical-summary {
+    grid-template-columns: 1fr;
+  }
+  .kca-orientation-stage-card {
+    grid-template-columns: auto 1fr;
+  }
 }
 .kca-lesson-meta {
   display: flex;

@@ -1459,7 +1459,13 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         kca_module_id: requireId(firstUlid(payload.kca_module_id, payload.module_id), 'module'),
         kca_lesson_id: requireId(firstUlid(payload.kca_lesson_id, payload.lesson_id), 'lesson'),
         title: field(payload, 'title', 'name') ?? '',
-        assignment_kind: /soul/i.test(field(payload, 'assignment_kind') ?? '') ? 'soul_winning' : 'standard',
+        assignment_kind: (() => {
+          const kind = field(payload, 'assignment_kind') ?? '';
+          if (/soul/i.test(kind)) return 'soul_winning';
+          if (/practical/i.test(kind)) return 'practical';
+          if (/written/i.test(kind)) return 'written';
+          return 'standard';
+        })(),
         soul_tree_levels: levels,
         due_at: field(payload, 'due_at', 'dueDate') || null,
       },
