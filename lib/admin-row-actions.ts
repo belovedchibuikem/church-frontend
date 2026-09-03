@@ -27,6 +27,8 @@ const DELETABLE_ROUTE_PATTERNS: RegExp[] = [
   /^\/admin\/kca\/mentors/,
   /\/content\/.*items/,
   /^\/admin\/press\/publications/,
+  /^\/admin\/events/,
+  /^\/admin\/settings\/events/,
 ];
 
 /** Routes where Laravel exposes create/update style mutations usable from Edit. */
@@ -62,6 +64,8 @@ const EDITABLE_ROUTE_PATTERNS: RegExp[] = [
   /^\/admin\/press\/publications/,
   /^\/admin\/press\/authors/,
   /^\/admin\/mission\/souls/,
+  /^\/admin\/events/,
+  /^\/admin\/settings\/events/,
 ];
 
 export function rowActionCapabilities(route: string): { canEdit: boolean; canDelete: boolean } {

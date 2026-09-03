@@ -46,7 +46,10 @@ export function EventDetailPanel({ screen }: { screen: AdminScreen }) {
   const [data, setData] = useState<EventDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URL(window.location.href).searchParams.get('edit') === '1';
+  });
 
   const refresh = async () => {
     const envelope = await apiRequest<{ data: EventDetail }>(`admin/events/${encodeURIComponent(id)}`, {
@@ -147,7 +150,16 @@ export function EventDetailPanel({ screen }: { screen: AdminScreen }) {
             capacity: data.capacity != null ? String(data.capacity) : '',
           }} />
           <footer className="form-footer">
-            <button className="platform-secondary" disabled={busy} type="button" onClick={() => setEditing(false)}>
+            <button className="platform-secondary" disabled={busy} type="button" onClick={() => {
+              setEditing(false);
+              if (typeof window !== 'undefined') {
+                const url = new URL(window.location.href);
+                if (url.searchParams.has('edit')) {
+                  url.searchParams.delete('edit');
+                  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+                }
+              }
+            }}>
               {t('common.cancel', { defaultMessage: 'Cancel' })}
             </button>
             <button className="platform-primary" disabled={busy} type="submit">

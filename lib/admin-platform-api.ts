@@ -749,6 +749,14 @@ export async function uploadPlatformGovernanceFile(
   purpose: 'kca_admission_letterhead' | 'kca_admission_signature',
   scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
 ): Promise<{ id: string }> {
+  return uploadPlatformFile(file, purpose, scope);
+}
+
+export async function uploadPlatformFile(
+  file: File,
+  purpose: string,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<{ id: string }> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('purpose', purpose);
@@ -761,7 +769,7 @@ export async function uploadPlatformGovernanceFile(
   try {
     await platformMutate('POST', `admin/platform/files/${encodeURIComponent(asset.id)}/approval`, undefined, scope);
   } catch {
-    // Asset may already be approved or approval may be handled on governance save.
+    // Asset may already be approved or approval may be handled on save.
   }
   return { id: asset.id };
 }

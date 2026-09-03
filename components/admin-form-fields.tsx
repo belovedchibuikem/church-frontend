@@ -69,6 +69,9 @@ function FieldControl({
       </select>
     );
   }
+  if (field.type === 'file') {
+    return <input name={field.name} type="file" accept={field.accept} required={required} />;
+  }
   return (
     <input
       name={field.name}

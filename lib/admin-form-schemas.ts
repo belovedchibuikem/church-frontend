@@ -1,6 +1,6 @@
 import type { catalogOptions, FormCatalogKey, LiveCatalogKey } from './form-catalogs';
 
-export type FormFieldType = 'text' | 'email' | 'date' | 'datetime-local' | 'number' | 'select' | 'search-select' | 'textarea' | 'checkbox';
+export type FormFieldType = 'text' | 'email' | 'url' | 'date' | 'datetime-local' | 'number' | 'select' | 'search-select' | 'textarea' | 'checkbox' | 'file';
 
 export type AdminFormField = {
   label: string;
@@ -13,6 +13,7 @@ export type AdminFormField = {
   required?: boolean;
   wide?: boolean;
   helpText?: string;
+  accept?: string;
 };
 
 export type AdminFormSchema = {
@@ -447,6 +448,22 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
         required: true,
         options: ['print', 'pdf', 'epub', 'audio', 'video'],
       },
+      {
+        label: 'Document file',
+        name: 'content_file',
+        type: 'file',
+        wide: true,
+        accept: '.pdf,.epub,.mp3,.mp4,.doc,.docx,application/pdf',
+        helpText: 'Upload the primary document for the selected format. Leave blank to keep the current file when editing.',
+      },
+      {
+        label: 'Document URL',
+        name: 'content_source_url',
+        type: 'url',
+        wide: true,
+        placeholder: 'https://example.com/document.pdf',
+        helpText: 'Optional. Use when the document is hosted externally instead of uploading a file.',
+      },
       { label: 'Category', name: 'category', type: 'text', placeholder: 'Spiritual Growth' },
       { label: 'Description', name: 'description', type: 'textarea', placeholder: 'Full description', wide: true },
       { label: 'Speaker / preacher', name: 'speaker', type: 'text', placeholder: 'Required for sermons' },
@@ -584,6 +601,7 @@ const routeEntityMap: Array<{ pattern: RegExp; entity: string }> = [
   { pattern: /\/admin\/mission\/souls|\/mentor-assignments/, entity: 'soul' },
   { pattern: /\/admin\/mission\/invitations/, entity: 'mission_invitation' },
   { pattern: /\/admin\/(members|users)/, entity: 'person' },
+  { pattern: /\/admin\/settings\/events/, entity: 'event' },
   { pattern: /\/admin\/events/, entity: 'event' },
   { pattern: /\/admin\/press\/translations/, entity: 'press_translation' },
   { pattern: /\/admin\/press\/authors/, entity: 'press_author' },
@@ -710,6 +728,18 @@ export function normalizeDetailValues(details: Record<string, string>): Record<s
   }
   if (normalized.due_at && normalized.due_at.includes('T')) {
     normalized.due_at = normalized.due_at.slice(0, 10);
+  }
+  for (const key of [
+    'starts_at',
+    'ends_at',
+    'registration_opens_at',
+    'registration_closes_at',
+    'published_at',
+  ]) {
+    const value = normalized[key];
+    if (value && value.includes('T')) {
+      normalized[key] = value.slice(0, 16);
+    }
   }
   return normalized;
 }

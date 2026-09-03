@@ -216,6 +216,35 @@ function pressTypeMetadata(payload: Record<string, string>): JsonObject {
   });
 }
 
+async function attachPressPublicationAssetIfNeeded(
+  publication: unknown,
+  payload: Record<string, string>,
+  scope: AdminScope,
+): Promise<void> {
+  const fileAssetId = firstUlid(payload.content_file_asset_id, payload.file_asset_id);
+  if (!fileAssetId) return;
+  const publicationId =
+    (publication && typeof publication === 'object' && 'id' in publication && typeof (publication as { id?: unknown }).id === 'string'
+      ? extractUlid(String((publication as { id: string }).id))
+      : undefined)
+    ?? firstUlid(payload.publication_id, payload.id);
+  if (!publicationId) return;
+  const format = (field(payload, 'format', 'asset_format') ?? 'pdf').toLowerCase();
+  try {
+    await mutate(
+      `admin/press/publications/${encodeURIComponent(publicationId)}/assets`,
+      {
+        file_asset_id: fileAssetId,
+        asset_format: format === 'print' ? 'pdf' : format,
+        is_required: true,
+      },
+      { scope },
+    );
+  } catch {
+    // Primary content_file_asset_id is already stored on the publication.
+  }
+}
+
 function looksLikeCode(value?: string): boolean {
   return Boolean(value && CODE_PATTERN.test(value));
 }
@@ -1681,8 +1710,8 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
 
   // --- Press ---
   if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts', '/admin/press/catalogue') && labelIs(label, /create publication|add publication|submit manuscript|save|submit/) && !route.includes('/translations')) {
-    if (!labelIs(label, /isbn|contributor|translation|transition|approv|publish/)) {
-      return mutate(
+    if (!labelIs(label, /isbn|contributor|translation|transition|approv|publish|edit|update|delete|remove|attach|asset|upload/)) {
+      const created = await mutate(
         'admin/press/publications',
         jsonBody({
           title: field(payload, 'title', 'name') ?? '',
@@ -1699,15 +1728,20 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
           as_draft: field(payload, 'as_draft') === 'true' || field(payload, 'as_draft') === 'on' ? true : undefined,
           price_minor: asInt(field(payload, 'price_minor') ?? undefined) ?? null,
           currency_code: field(payload, 'currency_code') ?? null,
+          content_file_asset_id: firstUlid(payload.content_file_asset_id) ?? null,
+          content_source_url: field(payload, 'content_source_url') || null,
           type_metadata: pressTypeMetadata(payload),
         }),
         { ...opts, idempotent: true },
       );
+      await attachPressPublicationAssetIfNeeded(created, payload, scope);
+      return created;
     }
   }
   if (routeStarts(route, '/admin/press/publications') && labelIs(label, /edit|update|save publication/) && pickRecord(ctx, 'publication_id', 'id')) {
-    return mutate(
-      `admin/press/publications/${encodeURIComponent(requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication'))}`,
+    const publicationId = requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication');
+    const updated = await mutate(
+      `admin/press/publications/${encodeURIComponent(publicationId)}`,
       jsonBody({
         title: field(payload, 'title', 'name') ?? '',
         publisher_name: field(payload, 'publisher_name') ?? 'Kingdom Press',
@@ -1718,9 +1752,27 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         summary: field(payload, 'summary') ?? null,
         category: field(payload, 'category') ?? null,
         description: field(payload, 'description') ?? null,
+        content_file_asset_id: firstUlid(payload.content_file_asset_id) ?? null,
+        content_source_url: field(payload, 'content_source_url') || null,
         type_metadata: pressTypeMetadata(payload),
       }),
       { ...opts, method: 'PUT' },
+    );
+    await attachPressPublicationAssetIfNeeded({ ...(typeof updated === 'object' && updated ? updated as Record<string, unknown> : {}), id: publicationId }, payload, scope);
+    return updated;
+  }
+  if (routeStarts(route, '/admin/press/publications') && labelIs(label, /attach asset|upload asset|add asset|attach document/)) {
+    const publicationId = requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication');
+    const fileAssetId = requireId(firstUlid(payload.file_asset_id, payload.content_file_asset_id), 'file');
+    return mutate(
+      `admin/press/publications/${encodeURIComponent(publicationId)}/assets`,
+      {
+        file_asset_id: fileAssetId,
+        asset_format: (field(payload, 'asset_format', 'format') ?? 'pdf').toLowerCase(),
+        is_required: true,
+        label: field(payload, 'label') ?? null,
+      },
+      opts,
     );
   }
   if (routeStarts(route, '/admin/press/publications') && labelIs(label, /delete/) && pickRecord(ctx, 'publication_id', 'id')) {
@@ -1846,7 +1898,12 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/events') && labelIs(label, /update event|save event|edit event/) && pickRecord(ctx, 'event_id', 'id')) {
+  if (
+    routeStarts(route, '/admin/settings/events', '/admin/events')
+    && labelIs(label, /edit|update|save/)
+    && !labelIs(label, /delete|remove|create|add|publish|unpublish|register/)
+    && pickRecord(ctx, 'event_id', 'id')
+  ) {
     const toIso = (value?: string) => {
       if (!value || value.trim() === '') return null;
       const date = new Date(value);
@@ -1870,7 +1927,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       { ...opts, method: 'PUT' },
     );
   }
-  if (routeStarts(route, '/admin/events') && labelIs(label, /publish event/) && pickRecord(ctx, 'event_id', 'id')) {
+  if (routeStarts(route, '/admin/settings/events', '/admin/events') && labelIs(label, /publish event/) && pickRecord(ctx, 'event_id', 'id')) {
     const toIso = (value?: string) => {
       if (!value || value.trim() === '') return null;
       const date = new Date(value);
@@ -1882,14 +1939,19 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       { ...opts, method: 'PUT' },
     );
   }
-  if (routeStarts(route, '/admin/events') && labelIs(label, /unpublish event/) && pickRecord(ctx, 'event_id', 'id')) {
+  if (routeStarts(route, '/admin/settings/events', '/admin/events') && labelIs(label, /unpublish event/) && pickRecord(ctx, 'event_id', 'id')) {
     return mutate(
       `admin/events/${encodeURIComponent(requireId(pickRecord(ctx, 'event_id', 'id'), 'event'))}`,
       { published_at: null },
       { ...opts, method: 'PUT' },
     );
   }
-  if (routeStarts(route, '/admin/events') && labelIs(label, /delete event/) && pickRecord(ctx, 'event_id', 'id')) {
+  if (
+    routeStarts(route, '/admin/settings/events', '/admin/events')
+    && labelIs(label, /delete/)
+    && !labelIs(label, /create|add|edit|update/)
+    && pickRecord(ctx, 'event_id', 'id')
+  ) {
     return mutate(
       `admin/events/${encodeURIComponent(requireId(pickRecord(ctx, 'event_id', 'id'), 'event'))}`,
       undefined,

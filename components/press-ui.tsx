@@ -9,6 +9,7 @@ import { fieldsForEntity } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
 import { executeAdminAction, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
 import { formatTimestamp } from '../lib/admin-identity-api';
+import { PLATFORM_GLOBAL_SCOPE, uploadPlatformFile } from '../lib/admin-platform-api';
 import { useLocale } from '@/components/locale-provider';
 
 type PressDetail = {
@@ -26,6 +27,8 @@ type PressDetail = {
   isbn?: string | null;
   author_name?: string | null;
   published_at?: string | null;
+  content_file_asset_id?: string | null;
+  content_source_url?: string | null;
   allowed_transitions?: string[];
   type_metadata?: Record<string, unknown>;
   contributors?: Array<{ id: string; person_name?: string; role?: string }>;
@@ -51,12 +54,35 @@ function publicationTypeLabel(type?: string | null): string {
   }
 }
 
+async function payloadFromPublicationForm(form: HTMLFormElement): Promise<Record<string, string>> {
+  const formData = new FormData(form);
+  const payload: Record<string, string> = {};
+  const contentFile = formData.get('content_file');
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File) continue;
+    payload[key] = String(value);
+  }
+  if (contentFile instanceof File && contentFile.size > 0) {
+    const uploaded = await uploadPlatformFile(contentFile, 'press.publication.content', PLATFORM_GLOBAL_SCOPE);
+    payload.content_file_asset_id = uploaded.id;
+  }
+  return payload;
+}
+
 export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const id = screen.route.split('/').pop() ?? '';
   const [data, setData] = useState<PressDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [assetMessage, setAssetMessage] = useState<string | null>(null);
+
+  const reload = async () => {
+    const envelope = await apiRequest<{ data: PressDetail }>(`admin/press/publications/${encodeURIComponent(id)}`, {
+      scope: CATALOG_GLOBAL_SCOPE,
+    });
+    setData(envelope.data);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -86,12 +112,40 @@ export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
         recordId: id,
         scope: CATALOG_GLOBAL_SCOPE,
       });
-      const envelope = await apiRequest<{ data: PressDetail }>(`admin/press/publications/${encodeURIComponent(id)}`, {
-        scope: CATALOG_GLOBAL_SCOPE,
-      });
-      setData(envelope.data);
+      await reload();
     } catch (err) {
       setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const attachDocument = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setAssetMessage(null);
+    try {
+      const payload = await payloadFromPublicationForm(event.currentTarget);
+      payload.publication_id = id;
+      payload.id = id;
+      if (!payload.content_file_asset_id && !payload.content_source_url) {
+        throw new Error('Choose a document file or enter a document URL.');
+      }
+      await executeAdminAction({
+        route: screen.route,
+        label: 'Edit publication',
+        payload,
+        recordId: id,
+        scope: CATALOG_GLOBAL_SCOPE,
+      });
+      await reload();
+      setAssetMessage(t('admin.publicationDocumentSaved', { defaultMessage: 'Document attached to this publication.' }));
+      event.currentTarget.reset();
+    } catch (err) {
+      setError(err instanceof Error && !(err as { status?: number }).status
+        ? err.message
+        : formatAdminMutationError(err));
     } finally {
       setBusy(false);
     }
@@ -113,6 +167,8 @@ export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
     ['Language', missing(data.language_code)],
     ['Publisher', missing(data.publisher_name)],
     ['ISBN', missing(data.isbn)],
+    ['Document file', missing(data.content_file_asset_id)],
+    ['Document URL', missing(data.content_source_url)],
     ['Published', data.published_at ? formatTimestamp(data.published_at) : 'Not provided'],
   ];
 
@@ -172,6 +228,31 @@ export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
         {(data.assets ?? []).length === 0 ? <p>Not provided</p> : (
           <ul>{data.assets?.map((row) => <li key={row.id}>{row.asset_format} v{row.version} · {row.processing_status}</li>)}</ul>
         )}
+        <form className="platform-form-grid" onSubmit={(event) => void attachDocument(event)} style={{ marginTop: 16 }}>
+          <label className="wide">
+            <span>{t('admin.field.content_file', { defaultMessage: 'Document file' })}</span>
+            <input name="content_file" type="file" accept=".pdf,.epub,.mp3,.mp4,.doc,.docx,application/pdf" />
+          </label>
+          <label className="wide">
+            <span>{t('admin.field.content_source_url', { defaultMessage: 'Document URL' })}</span>
+            <input name="content_source_url" type="url" placeholder="https://example.com/document.pdf" defaultValue={data.content_source_url ?? ''} />
+          </label>
+          <input type="hidden" name="format" value={data.format ?? 'pdf'} />
+          <input type="hidden" name="title" value={data.title} />
+          <input type="hidden" name="publisher_name" value={data.publisher_name ?? 'Kingdom Press'} />
+          <input type="hidden" name="language_code" value={data.language_code ?? 'en'} />
+          <input type="hidden" name="publication_type" value={data.publication_type ?? 'book'} />
+          <input type="hidden" name="subtitle" value={data.subtitle ?? ''} />
+          <input type="hidden" name="summary" value={data.summary ?? ''} />
+          <input type="hidden" name="category" value={data.category ?? ''} />
+          <input type="hidden" name="description" value={data.description ?? ''} />
+          {assetMessage ? <p className="maps-settings-lead" role="status">{assetMessage}</p> : null}
+          <footer className="form-footer">
+            <button className="platform-primary" disabled={busy} type="submit">
+              {busy ? t('common.saving', { defaultMessage: 'Saving…' }) : t('admin.attachDocument', { defaultMessage: 'Attach document' })}
+            </button>
+          </footer>
+        </form>
       </article>
       <article className="platform-card">
         <h3>{t('admin.reviews', { defaultMessage: 'Reviews' })}</h3>
@@ -198,14 +279,10 @@ export function PressPublicationCreateForm({ screen }: { screen: AdminScreen }) 
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const payload: Record<string, string> = {};
-    for (const [key, value] of form.entries()) {
-      payload[key] = String(value);
-    }
     setBusy(true);
     setMessage(null);
     try {
+      const payload = await payloadFromPublicationForm(event.currentTarget);
       const result = await executeAdminAction({
         route: screen.route,
         label: 'Create Publication',

@@ -10,6 +10,7 @@ import { adminFormSchemas, defaultValueForField, fieldsForEntity, normalizeDetai
 import { fieldsFromRecordDetails } from '../lib/admin-row-actions';
 import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
 import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
+import { PLATFORM_GLOBAL_SCOPE, uploadPlatformFile } from '../lib/admin-platform-api';
 
 export type ActionSurfaceMode = 'create' | 'edit' | 'assign' | 'confirm' | 'file' | 'preview' | 'help' | 'actions' | 'ai';
 
@@ -152,7 +153,8 @@ function FieldControl({ field, required, defaultValue, defaultLabel }: { field: 
     );
   }
   if (field.type === 'select') return <select name={field.name} required={required} defaultValue={defaultValue ?? ''}><option value="" disabled>{t('admin.selectOption', { defaultMessage: 'Select an option' })}</option>{field.options?.map((option) => <option value={option} key={option}>{t(optionMessageKey(option), { defaultMessage: option })}</option>)}</select>;
-  return <input name={field.name} type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : field.type === 'date' ? 'date' : 'text'} placeholder={placeholder} required={required} defaultValue={defaultValue}/>;
+  if (field.type === 'file') return <input name={field.name} type="file" accept={field.accept} required={required} />;
+  return <input name={field.name} type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : field.type === 'date' ? 'date' : 'text'} placeholder={placeholder} required={required} defaultValue={defaultValue}/>;
 }
 
 export function AdminActionSurface({ mode, label, pageTitle, permission, scope, entityKey, record, details = {}, items = [], records = [], onClose, onSubmit }: Props) {
@@ -165,10 +167,20 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const values = Object.fromEntries(Array.from(new FormData(event.currentTarget).entries()).map(([key, value]) => [key, String(value)]));
+    const formData = new FormData(event.currentTarget);
+    const values: Record<string, string> = {};
+    const contentFile = formData.get('content_file');
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) continue;
+      values[key] = String(value);
+    }
     setSubmitting(true);
     setFormError('');
     try {
+      if (contentFile instanceof File && contentFile.size > 0) {
+        const uploaded = await uploadPlatformFile(contentFile, 'press.publication.content', PLATFORM_GLOBAL_SCOPE);
+        values.content_file_asset_id = uploaded.id;
+      }
       await onSubmit(values);
     } catch (error) {
       setFormError(formatAdminMutationError(error));

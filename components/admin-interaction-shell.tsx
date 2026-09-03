@@ -405,6 +405,17 @@ export function AdminInteractionShell({ children, route, title, permission, scop
           navigate(`/admin/security/safeguarding/cases/${recordId}`);
           return;
         }
+        if (route === '/admin/events' || route === '/admin/settings/events' || route.startsWith('/admin/events/')) {
+          navigate(`/admin/events/${recordId}`);
+          return;
+        }
+      }
+      if (action === 'edit' && recordId) {
+        if (route === '/admin/events' || route === '/admin/settings/events' || route.startsWith('/admin/events/')) {
+          // Prefer the dedicated event editor (full fields + publish controls).
+          navigate(`/admin/events/${recordId}?tab=overview&edit=1`);
+          return;
+        }
       }
       if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey, details: getAdminRecordDetails(record) });
       else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey, details: getAdminRecordDetails(record) });
