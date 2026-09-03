@@ -492,6 +492,8 @@ export function catalogRecordsToRows(
         mapped[column] = get('title', 'assignment_kind', 'name');
       } else if (key.includes('lecturer') || key.includes('mentor')) {
         mapped[column] = get('lecturer_name', 'mentor_name', 'person_name');
+      } else if (key.includes('lesson')) {
+        mapped[column] = get('lesson_title', 'lessons_count', 'title', 'lesson_id');
       } else if (key.includes('specialization') || key.includes('module')) {
         mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
       } else if (key.includes('student')) {
@@ -506,8 +508,6 @@ export function catalogRecordsToRows(
         mapped[column] = get('cohort_name', 'region', 'locality');
       } else if (key.includes('translator')) {
         mapped[column] = get('translator_name', 'person_name');
-      } else if (key.includes('lesson')) {
-        mapped[column] = get('lessons_count', 'lesson_title', 'title', 'lesson_id');
       } else if (key.includes('session')) {
         mapped[column] = formatTimestamp(get('session_on') === '—' ? null : get('session_on'));
       } else if (key.includes('cohort')) {

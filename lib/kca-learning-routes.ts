@@ -142,8 +142,8 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-14', batch: 'H', route: '/admin/kca/assignments', title: 'Assignments',
-    subtitle: 'Assign module work to enrolled students. Soul-winning assignments stay open until the defined soul tree is complete.', kind: 'table', permission: 'kca.assignment.view', scope: 'assigned', nav: 'kca-assignments', action: '+ Add Assignment',
-    columns: ['Student', 'Assignment', 'Module', 'Type', 'Due Date', 'Status'],
+    subtitle: 'Assign lesson work within a module to enrolled students. Soul-winning assignments stay open until the defined soul tree is complete.', kind: 'table', permission: 'kca.assignment.view', scope: 'assigned', nav: 'kca-assignments', action: '+ Add Assignment',
+    columns: ['Student', 'Assignment', 'Module', 'Lesson', 'Type', 'Due Date', 'Status'],
     rows: [],
   },
   {

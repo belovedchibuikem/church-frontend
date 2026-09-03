@@ -62,10 +62,11 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_assignment: {
     entity: 'KCA assignment',
     fields: [
-      // Labels match Assignments table heads: Student, Assignment, Module, Type, Due Date, Status
+      // Labels match Assignments table heads: Student, Assignment, Module, Lesson, Type, Due Date
       { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', required: true, placeholder: 'Search enrolled student' },
       { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'e.g. Win three generations of souls' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
+      { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
       { label: 'Type', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'soul_winning'] },
       { label: 'Due Date', name: 'due_at', type: 'date' },
       { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: '3,2,4', wide: true, helpText: 'Required for Type = soul_winning (e.g. 3,2,4). Status stays open until the tree is complete.' },
@@ -666,11 +667,13 @@ const legacyDetailAliases: Record<string, string> = {
   Year: 'year',
   Name: 'name',
   Module: 'kca_module_id',
+  Lesson: 'kca_lesson_id',
   Student: 'kca_enrollment_id',
   Type: 'assignment_kind',
   'Due Date': 'due_at',
   enrollment_id: 'kca_enrollment_id',
   module_id: 'kca_module_id',
+  lesson_id: 'kca_lesson_id',
   kind: 'assignment_kind',
 };
 
@@ -690,6 +693,9 @@ export function normalizeDetailValues(details: Record<string, string>): Record<s
   }
   if (normalized.kca_module_id && !normalized.kca_module_id_label) {
     normalized.kca_module_id_label = details.module_title || details.Module || '';
+  }
+  if (normalized.kca_lesson_id && !normalized.kca_lesson_id_label) {
+    normalized.kca_lesson_id_label = details.lesson_title || details.Lesson || '';
   }
   if (normalized.soul_tree_spec && !normalized.soul_tree_levels) {
     try {

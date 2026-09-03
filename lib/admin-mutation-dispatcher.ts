@@ -1435,6 +1435,10 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       title: field(payload, 'title', 'name') ?? '',
       due_at: field(payload, 'due_at', 'dueDate') || null,
     };
+    const moduleId = firstUlid(payload.kca_module_id, payload.module_id);
+    const lessonId = firstUlid(payload.kca_lesson_id, payload.lesson_id);
+    if (moduleId) body.kca_module_id = moduleId;
+    if (lessonId) body.kca_lesson_id = lessonId;
     if (levels.length > 0) body.soul_tree_levels = levels;
     return mutate(
       `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}`,
@@ -1453,6 +1457,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       {
         kca_enrollment_id: requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id), 'enrollment'),
         kca_module_id: requireId(firstUlid(payload.kca_module_id, payload.module_id), 'module'),
+        kca_lesson_id: requireId(firstUlid(payload.kca_lesson_id, payload.lesson_id), 'lesson'),
         title: field(payload, 'title', 'name') ?? '',
         assignment_kind: /soul/i.test(field(payload, 'assignment_kind') ?? '') ? 'soul_winning' : 'standard',
         soul_tree_levels: levels,

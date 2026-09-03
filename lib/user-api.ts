@@ -218,6 +218,7 @@ export type KcaAssignmentSummary = {
   assignment_kind?: string | null;
   due_at?: string | null;
   module?: { id?: string; code?: string | null; title?: string | null } | null;
+  lesson?: { id?: string; code?: string | null; title?: string | null } | null;
   soul_tree?: {
     kind?: string;
     levels?: number[];

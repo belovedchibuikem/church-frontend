@@ -42,6 +42,8 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
     ['mentor_person_id', 'mentor_name'],
     ['kca_module_id', 'module_title'],
     ['module_id', 'module_title'],
+    ['kca_lesson_id', 'lesson_title'],
+    ['lesson_id', 'lesson_title'],
     ['kca_cohort_id', 'cohort_name'],
     ['year_id', 'year_name'],
     ['kca_year_id', 'year_name'],
@@ -57,6 +59,10 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
   if (details.module_id && !details.kca_module_id) {
     details.kca_module_id = details.module_id;
     if (details.module_id_label) details.kca_module_id_label = details.module_id_label;
+  }
+  if (details.lesson_id && !details.kca_lesson_id) {
+    details.kca_lesson_id = details.lesson_id;
+    if (details.lesson_id_label) details.kca_lesson_id_label = details.lesson_id_label;
   }
   if (details.enrollment_id && !details.kca_enrollment_id) {
     details.kca_enrollment_id = details.enrollment_id;

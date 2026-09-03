@@ -3526,7 +3526,7 @@ function KcaLiveAssignmentsList() {
               <div>
                 <b>{item.title}</b>
                 <small>
-                  {item.module?.title ?? 'Module'}
+                  {[item.module?.title, item.lesson?.title].filter(Boolean).join(' · ') || 'Module'}
                   {item.due_at ? ` · Due ${formatTimestamp(item.due_at)}` : ''}
                 </small>
               </div>
@@ -4156,6 +4156,10 @@ function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
     <section className="panel">
       <h2>{title}</h2>
       <p>Status: {stateLabel ?? 'assigned'}</p>
+      <p>
+        {[assignment?.module?.title, assignment?.lesson?.title].filter(Boolean).join(' · ') || 'Module / lesson'}
+        {assignment?.due_at ? ` · Due ${formatTimestamp(assignment.due_at)}` : ''}
+      </p>
       {tree ? (
         <>
           <p>
