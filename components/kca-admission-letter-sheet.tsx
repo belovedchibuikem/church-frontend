@@ -95,7 +95,7 @@ function renderSignatureImage(signatureSrc: string, key: string): ReactNode {
         alt=""
         className="kca-letter-signature-image"
         src={signatureSrc}
-        style={{ maxHeight: 56, margin: '0.15rem 0 0.35rem' } as CSSProperties}
+        style={{ maxHeight: 42, margin: '0.05rem 0 0' } as CSSProperties}
       />
     </div>
   );
@@ -175,9 +175,30 @@ function expandCondensedSection(paragraph: string): string[] | null {
   return null;
 }
 
+function polishLetterCopy(body: string): string {
+  return body
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\bInternational\s+a journey\b/gi, 'International, a journey')
+    .replace(/\bbeginning\s+success\b/gi, 'beginning. Success')
+    .replace(
+      /\bUphold Christian conduct\s+respect,\s*humility,\s*integrity,\s*discipline,\s*love\b/gi,
+      'Uphold Christian conduct: respect, humility, integrity, discipline, and love',
+    )
+    .trim();
+}
+
 function normalizeLetterBlocks(body: string): string[] {
+  const prepared = polishLetterCopy(body)
+    .replace(
+      /\n*(?=(?:YOUR(?:\s+KCA)?\s+COMMITMENT|12-SESSION\s+JOURNEY|YOUR\s+DISCIPLESHIP\s+JOURNEY|(?:YOUR\s+KCA\s+)?DECLARATION)\s*:)/gi,
+      '\n\n',
+    );
   const blocks: string[] = [];
-  for (const paragraph of body.split(/\n\n+/).map((part) => part.trim()).filter(Boolean)) {
+  for (const paragraph of prepared.split(/\n\n+/).map((part) => part.trim()).filter(Boolean)) {
     const expanded = expandCondensedSection(paragraph);
     if (expanded) {
       blocks.push(...expanded);
@@ -300,7 +321,7 @@ function ProvostSignatureBlock({
           alt=""
           className="kca-letter-signature-image"
           src={signatureSrc}
-          style={{ maxHeight: 56, margin: '0.15rem 0 0.35rem' } as CSSProperties}
+          style={{ maxHeight: 42, margin: '0.05rem 0 0' } as CSSProperties}
         />
       ) : null}
       <span>{signerTitle ?? fallbackLabel}</span>
