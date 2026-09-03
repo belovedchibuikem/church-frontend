@@ -62,8 +62,10 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_assignment: {
     entity: 'KCA assignment',
     fields: [
-      // Labels match Assignments table heads: Student, Assignment, Module, Lesson, Type, Due Date
-      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', required: true, placeholder: 'Search enrolled student' },
+      // Labels align with Assignments table; audience mirrors assessment bulk targeting
+      { label: 'Assign to', name: 'audience', type: 'select', required: true, options: ['One student', 'A cohort', 'All enrolled students'], helpText: 'Creates one assignment per matching enrolled student.' },
+      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', placeholder: 'Search enrolled student (required for One student)' },
+      { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', placeholder: 'Search cohort (required for A cohort)' },
       { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'e.g. Win three generations of souls' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
       { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },

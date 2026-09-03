@@ -274,7 +274,13 @@ function toResult(data: unknown): AdminActionResult {
 
 export function formatAdminActionSuccess(result: AdminActionResult): string {
   const parts = ['Saved'];
-  if (result.id) parts.push(`id ${result.id}`);
+  const data = result.data && typeof result.data === 'object' ? (result.data as Record<string, unknown>) : null;
+  const created = data && typeof data.created === 'number' ? data.created : null;
+  if (created !== null && created > 1) {
+    parts.push(`${created} assignments`);
+  } else if (result.id) {
+    parts.push(`id ${result.id}`);
+  }
   if (result.status) parts.push(`status ${result.status}`);
   return parts.join(' · ');
 }
@@ -1452,10 +1458,22 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       .split(/[,\s]+/)
       .map((part) => Number.parseInt(part, 10))
       .filter((n) => Number.isFinite(n) && n > 0);
+    const audienceRaw = field(payload, 'audience') ?? 'One student';
+    const audience = /all/i.test(audienceRaw)
+      ? 'all'
+      : /cohort/i.test(audienceRaw)
+        ? 'cohort'
+        : 'student';
     return mutate(
       'admin/kca/assignments',
       {
-        kca_enrollment_id: requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id), 'enrollment'),
+        audience,
+        kca_enrollment_id: audience === 'student'
+          ? requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id), 'enrollment')
+          : (firstUlid(payload.kca_enrollment_id, payload.enrollment_id) ?? null),
+        cohort_id: audience === 'cohort'
+          ? requireId(firstUlid(payload.cohort_id, payload.kca_cohort_id), 'cohort')
+          : (firstUlid(payload.cohort_id, payload.kca_cohort_id) ?? null),
         kca_module_id: requireId(firstUlid(payload.kca_module_id, payload.module_id), 'module'),
         kca_lesson_id: requireId(firstUlid(payload.kca_lesson_id, payload.lesson_id), 'lesson'),
         title: field(payload, 'title', 'name') ?? '',

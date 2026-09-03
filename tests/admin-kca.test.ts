@@ -90,9 +90,11 @@ test('KCA assignments screen resolves to live catalog', async () => {
   const fields = fieldsForEntity('kca_assignment');
   assert.deepEqual(
     fields.map((field) => field.label),
-    ['Student', 'Assignment', 'Module', 'Lesson', 'Type', 'Due Date', 'Soul tree levels'],
+    ['Assign to', 'Student', 'Cohort', 'Assignment', 'Module', 'Lesson', 'Type', 'Due Date', 'Soul tree levels'],
   );
+  assert.ok(fields.some((field) => field.name === 'audience'));
   assert.ok(fields.some((field) => field.name === 'kca_enrollment_id'));
+  assert.ok(fields.some((field) => field.name === 'cohort_id'));
   assert.ok(fields.some((field) => field.name === 'kca_module_id'));
   assert.ok(fields.some((field) => field.name === 'kca_lesson_id'));
   assert.ok(fields.some((field) => field.name === 'title'));

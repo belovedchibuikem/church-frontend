@@ -1013,7 +1013,7 @@ export function KcaSettingsPanel() {
           </label>
         </div>
         <h3>{t('admin.admissionLetterGovernance', { defaultMessage: 'Admission letter' })}</h3>
-        <p>{t('admin.admissionLetterLead', { defaultMessage: 'Configure the provost signature and letterhead used when admission letters are issued.' })}</p>
+        <p>{t('admin.admissionLetterLead', { defaultMessage: 'Configure the provost signature and full-page letter template used when admission letters are issued.' })}</p>
         <div className="platform-form-grid">
           <label>
             <span>{t('admin.admissionSignerName', { defaultMessage: 'Provost / signer name' })}</span>
@@ -1024,9 +1024,10 @@ export function KcaSettingsPanel() {
             <input defaultValue={status?.admission_signer_title ?? ''} name="admission_signer_title" />
           </label>
           <label>
-            <span>{t('admin.admissionLetterhead', { defaultMessage: 'Letterhead image' })}</span>
+            <span>{t('admin.admissionLetterhead', { defaultMessage: 'Full-page letter template' })}</span>
             <input accept="image/*" name="admission_letterhead_file" type="file" />
             {letterheadId ? <small>{letterheadId}</small> : null}
+            <small>{t('admin.admissionLetterheadHelp', { defaultMessage: 'Upload an A4/letter page image. It fills the PDF background; letter text is written on top.' })}</small>
           </label>
           <label>
             <span>{t('admin.admissionSignature', { defaultMessage: 'Provost signature (upload or draw externally)' })}</span>
