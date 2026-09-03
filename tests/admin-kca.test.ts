@@ -87,8 +87,31 @@ test('KCA assignments screen resolves to live catalog', async () => {
   assert.match(catalogApi, /route === '\/admin\/kca\/assignments'\) return 'kca\.assignments'/);
   const { resolveEntityKey, fieldsForEntity } = await import('../lib/admin-form-schemas.ts');
   assert.equal(resolveEntityKey('/admin/kca/assignments', 'H-14'), 'kca_assignment');
-  assert.ok(fieldsForEntity('kca_assignment').some((field) => field.name === 'kca_enrollment_id'));
-  assert.ok(fieldsForEntity('kca_assignment').some((field) => field.name === 'kca_module_id'));
+  const fields = fieldsForEntity('kca_assignment');
+  assert.deepEqual(
+    fields.map((field) => field.label),
+    ['Student', 'Assignment', 'Module', 'Type', 'Due Date', 'Soul tree levels'],
+  );
+  assert.ok(fields.some((field) => field.name === 'kca_enrollment_id'));
+  assert.ok(fields.some((field) => field.name === 'kca_module_id'));
+  assert.ok(fields.some((field) => field.name === 'title'));
+  assert.ok(fields.some((field) => field.name === 'assignment_kind'));
+  assert.ok(fields.some((field) => field.name === 'due_at'));
+});
+
+test('Add Assignment opens create mode with schema fields, not generic assign form', async () => {
+  const { inferActionSurfaceMode } = await import('../components/admin-action-surface.tsx');
+  assert.equal(inferActionSurfaceMode('+ Add Assignment'), 'create');
+  assert.equal(inferActionSurfaceMode('Edit Assignment'), 'edit');
+  assert.equal(inferActionSurfaceMode('Assign mentor'), 'assign');
+  assert.equal(inferActionSurfaceMode('Assign Roles to Users'), 'assign');
+  const source = await readFile(new URL('../components/admin-action-surface.tsx', import.meta.url), 'utf8');
+  assert.match(source, /schema\?\.fields \?\? \(mode === 'assign'/);
+  const rowActions = await readFile(new URL('../lib/admin-row-actions.ts', import.meta.url), 'utf8');
+  assert.match(rowActions, /\/\^\\\/admin\\\/kca\\\/assignments\//);
+  const dispatcher = await readFile(new URL('../lib/admin-mutation-dispatcher.ts', import.meta.url), 'utf8');
+  assert.match(dispatcher, /admin\/kca\/assignments\/\$\{encodeURIComponent/);
+  assert.match(dispatcher, /method: 'PATCH'/);
 });
 
 test('KCA years and assessments use dedicated form schemas', async () => {

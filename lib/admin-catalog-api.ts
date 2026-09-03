@@ -415,6 +415,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('category') || key.includes('type') || key.includes('reason')) {
         mapped[column] = humanizeCatalogToken(
           get(
+            'assignment_kind',
             'category',
             'purpose_code',
             'kind',
@@ -494,7 +495,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('specialization') || key.includes('module')) {
         mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
       } else if (key.includes('student')) {
-        mapped[column] = get('students_count', 'enrollments_count', 'student_name', 'person_name', 'enrollment_id');
+        mapped[column] = get('student_name', 'person_name', 'students_count', 'enrollments_count', 'enrollment_id');
       } else if (key.includes('venue')) {
         mapped[column] = get('venue', 'location_name', 'venue_label');
       } else if (key.includes('church')) {

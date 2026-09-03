@@ -38,9 +38,11 @@ export function inferActionSurfaceMode(label: string): ActionSurfaceMode {
   const value = label.toLowerCase();
   if (/ask.*ai|ai assistant/.test(value)) return 'ai';
   if (/download|export|print|upload|receipt|pdf/.test(value)) return 'file';
-  if (/assign|distribute/.test(value)) return 'assign';
+  // Create/edit must win before "assign" so "+ Add Assignment" / "Edit Assignment"
+  // do not open the generic assignee handoff form (the noun "assignment" contains "assign").
   if (/create|add|new|register|request access|submit manuscript|submit testimony|record assessment|record attendance/.test(value)) return 'create';
   if (/edit|update/.test(value)) return 'edit';
+  if (/assign(?!ment)|distribute/.test(value)) return 'assign';
   if (/approve|reject|defer|activate|suspend|close|delete|remove|save|submit|publish|send|notify|issue|escalate|reconcile|refund|confirm|process|decision|take action|retry|resolve|deliver|attempt|prepare|end membership|end assignment/.test(value)) return 'confirm';
   if (/view|open|details|review|report/.test(value)) return 'preview';
   return 'actions';
@@ -59,6 +61,7 @@ function fieldsFor(label: string, pageTitle: string): Field[] {
   const entity = `${label} ${pageTitle}`.toLowerCase();
   if (/lecturer/.test(entity)) return fieldsForEntity('kca_lecturer_assignment');
   if (/mentor/.test(entity) && !/assignment/.test(entity)) return fieldsForEntity('kca_mentor_assignment');
+  if (/assignment/.test(entity) && !/lecturer|mentor|role|scope|team/.test(entity)) return fieldsForEntity('kca_assignment');
   if (/member|student|leader|worker|author|user|child|convert|soul|alumni/.test(entity)) return [
     { label: 'Full name', name: 'fullName', placeholder: 'Enter full name' },
     { label: 'Email address', name: 'email', type: 'email', placeholder: 'name@example.org' },
@@ -337,18 +340,22 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
     );
   }
 
-  const fields = mode === 'assign' ? [
-    { label: 'Assign to', name: 'assignee_id', type: 'search-select' as const, catalog: 'person' as const, placeholder: 'Search people' },
-    { label: 'Due date', name: 'dueDate', type: 'date' as const },
-    { label: 'Instructions', name: 'instructions', type: 'textarea' as const, placeholder: 'Add clear handoff instructions' },
-  ] : schema?.fields ?? (mode === 'edit' || mode === 'create'
-    ? (fieldsFromRecordDetails(normalizedDetails) as AdminFormField[])
-    : fieldsFor(label, pageTitle));
+  const assignFields: AdminFormField[] = [
+    { label: 'Assign to', name: 'assignee_id', type: 'search-select', catalog: 'person', placeholder: 'Search people' },
+    { label: 'Due date', name: 'dueDate', type: 'date' },
+    { label: 'Instructions', name: 'instructions', type: 'textarea', placeholder: 'Add clear handoff instructions' },
+  ];
+  // Prefer entity schema so catalog screens (e.g. KCA Assignments) match table columns.
+  const fields = schema?.fields ?? (mode === 'assign'
+    ? assignFields
+    : (mode === 'edit' || mode === 'create'
+      ? (fieldsFromRecordDetails(normalizedDetails) as AdminFormField[])
+      : fieldsFor(label, pageTitle)));
 
   if (schema || ((mode === 'edit' || mode === 'create') && fields.length > 0)) {
     return <form className="interaction-action-form" onSubmit={save}>
       <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{record ? `${entity}: ${record}` : entity}</h3><p>{t('admin.completeFieldsBelow', { defaultMessage: 'Search by name where a person, church, year, or module is needed. The system stores the matching record ID.' })}</p></div>
-      <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' ? normalizedDetails : {}} className="interaction-form-grid" />
+      <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' || Boolean(schema) ? normalizedDetails : {}} className="interaction-form-grid" />
       {errorNote}
       {footerButtons(submitLabel)}
     </form>;

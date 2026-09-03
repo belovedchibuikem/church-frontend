@@ -62,12 +62,13 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_assignment: {
     entity: 'KCA assignment',
     fields: [
+      // Labels match Assignments table heads: Student, Assignment, Module, Type, Due Date, Status
       { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', required: true, placeholder: 'Search enrolled student' },
+      { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'e.g. Win three generations of souls' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
-      { label: 'Title', name: 'title', type: 'text', required: true, placeholder: 'e.g. Win three generations of souls' },
-      { label: 'Kind', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'soul_winning'] },
-      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: '3,2,4', helpText: 'For soul_winning: student wins 3, each of those wins 2, each of those wins 4. Assignment stays open until the tree is complete.' },
-      { label: 'Due at', name: 'due_at', type: 'date' },
+      { label: 'Type', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'soul_winning'] },
+      { label: 'Due Date', name: 'due_at', type: 'date' },
+      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: '3,2,4', wide: true, helpText: 'Required for Type = soul_winning (e.g. 3,2,4). Status stays open until the tree is complete.' },
     ],
   },
   kca_cohort: {
@@ -656,6 +657,7 @@ export function fieldsForEntity(entityKey: string): AdminFormField[] {
 const legacyDetailAliases: Record<string, string> = {
   'Module Title': 'title',
   Title: 'title',
+  Assignment: 'title',
   Code: 'code',
   Sequence: 'sequence',
   Status: 'is_active',
@@ -664,6 +666,12 @@ const legacyDetailAliases: Record<string, string> = {
   Year: 'year',
   Name: 'name',
   Module: 'kca_module_id',
+  Student: 'kca_enrollment_id',
+  Type: 'assignment_kind',
+  'Due Date': 'due_at',
+  enrollment_id: 'kca_enrollment_id',
+  module_id: 'kca_module_id',
+  kind: 'assignment_kind',
 };
 
 export function normalizeDetailValues(details: Record<string, string>): Record<string, string> {
@@ -675,6 +683,25 @@ export function normalizeDetailValues(details: Record<string, string>): Record<s
     } else {
       normalized[mapped] = value;
     }
+  }
+  // Prefer labeled search-select values when catalog rows only expose display names.
+  if (normalized.kca_enrollment_id && !normalized.kca_enrollment_id_label) {
+    normalized.kca_enrollment_id_label = details.student_name || details.person_name || details.Student || '';
+  }
+  if (normalized.kca_module_id && !normalized.kca_module_id_label) {
+    normalized.kca_module_id_label = details.module_title || details.Module || '';
+  }
+  if (normalized.soul_tree_spec && !normalized.soul_tree_levels) {
+    try {
+      const parsed = JSON.parse(normalized.soul_tree_spec) as unknown;
+      if (Array.isArray(parsed)) normalized.soul_tree_levels = parsed.join(',');
+    } catch {
+      const levels = normalized.soul_tree_spec.match(/\d+/g);
+      if (levels?.length) normalized.soul_tree_levels = levels.join(',');
+    }
+  }
+  if (normalized.due_at && normalized.due_at.includes('T')) {
+    normalized.due_at = normalized.due_at.slice(0, 10);
   }
   return normalized;
 }

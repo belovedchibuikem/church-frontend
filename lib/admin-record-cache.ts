@@ -45,17 +45,28 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
     ['kca_cohort_id', 'cohort_name'],
     ['year_id', 'year_name'],
     ['kca_year_id', 'year_name'],
-    ['kca_enrollment_id', 'enrollment_label'],
+    ['kca_enrollment_id', 'student_name'],
+    ['enrollment_id', 'student_name'],
   ];
   for (const [idKey, nameKey] of labelPairs) {
     const idValue = asText(item[idKey]);
-    const labelValue = asText(item[nameKey]);
+    const labelValue = asText(item[nameKey]) ?? asText(item.person_name);
     if (idValue) details[idKey] = idValue;
     if (labelValue) details[`${idKey}_label`] = labelValue;
   }
   if (details.module_id && !details.kca_module_id) {
     details.kca_module_id = details.module_id;
     if (details.module_id_label) details.kca_module_id_label = details.module_id_label;
+  }
+  if (details.enrollment_id && !details.kca_enrollment_id) {
+    details.kca_enrollment_id = details.enrollment_id;
+    if (details.enrollment_id_label) details.kca_enrollment_id_label = details.enrollment_id_label;
+  }
+  if (asText(item.soul_tree_levels)) {
+    details.soul_tree_levels = String(item.soul_tree_levels);
+  } else if (item.soul_tree_spec && typeof item.soul_tree_spec === 'object' && !Array.isArray(item.soul_tree_spec)) {
+    const levels = (item.soul_tree_spec as { levels?: unknown }).levels;
+    if (Array.isArray(levels)) details.soul_tree_levels = levels.map(String).join(',');
   }
 
   // Friendly preview fields.

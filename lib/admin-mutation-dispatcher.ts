@@ -1425,6 +1425,23 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
+  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /edit|update/) && !labelIs(label, /create|add|transition/)) {
+    const levelsRaw = field(payload, 'soul_tree_levels') ?? '';
+    const levels = levelsRaw
+      .split(/[,\s]+/)
+      .map((part) => Number.parseInt(part, 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const body: Record<string, unknown> = {
+      title: field(payload, 'title', 'name') ?? '',
+      due_at: field(payload, 'due_at', 'dueDate') || null,
+    };
+    if (levels.length > 0) body.soul_tree_levels = levels;
+    return mutate(
+      `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}`,
+      body,
+      { ...opts, method: 'PATCH' },
+    );
+  }
   if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /create assignment|add assignment|save assignment/)) {
     const levelsRaw = field(payload, 'soul_tree_levels') ?? '';
     const levels = levelsRaw
