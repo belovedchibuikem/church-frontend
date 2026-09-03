@@ -101,6 +101,102 @@ function renderSignatureImage(signatureSrc: string, key: string): ReactNode {
   );
 }
 
+function isSectionHeading(trimmed: string): boolean {
+  const heading = trimmed.replace(/:$/, '');
+  return heading.length >= 8
+    && heading === heading.toUpperCase()
+    && !heading.includes('\n')
+    && /^[A-Z0-9 '&().-]+$/.test(heading);
+}
+
+const JOURNEY_SESSIONS = [
+  'The Call of the King',
+  'Born into the Kingdom',
+  'Living as a Child of the King',
+  'Walking with the Holy Spirit',
+  "At the King's Feet",
+  'Becoming Like Jesus',
+  'Every Disciple Is a Servant',
+  "The Church: God's Family on Mission",
+  'Holiness in a Compromised World',
+  'Sharing the Gospel',
+  'Kingdom Influence',
+  'Becoming a Kingdom Change Agent',
+] as const;
+
+const COMMITMENT_ITEM_STARTS = [
+  'Attend at least',
+  'Actively participate',
+  'Complete all',
+  'Serve in at least',
+  'Engage with',
+  'Uphold Christian',
+] as const;
+
+function splitByStarts(text: string, starts: readonly string[]): string[] {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+  const pattern = new RegExp(`(?=${starts.map((start) => start.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'i');
+  return normalized
+    .split(pattern)
+    .map((part) => part.replace(/^[•\-\s]+/, '').trim())
+    .filter(Boolean);
+}
+
+function formatCommitmentLines(text: string): string[] {
+  const items = splitByStarts(text, COMMITMENT_ITEM_STARTS);
+  return (items.length ? items : [text.trim()]).map((item) => `• ${item}`);
+}
+
+function formatJourneyLines(text: string): string[] {
+  const items = splitByStarts(text, JOURNEY_SESSIONS);
+  if (items.length >= 4) return items.map((item) => `• ${item}`);
+  const fromLines = linesOf(text);
+  if (fromLines.length >= 4) return fromLines.map((item) => (item.startsWith('•') ? item : `• ${item}`));
+  return [text.trim()].filter(Boolean).map((item) => (item.startsWith('•') ? item : `• ${item}`));
+}
+
+function expandCondensedSection(paragraph: string): string[] | null {
+  const commitment = paragraph.match(/^(YOUR\s+KCA\s+COMMITMENT|YOUR\s+COMMITMENT)\s*:\s*(.+)$/is);
+  if (commitment) return ['YOUR COMMITMENT', formatCommitmentLines(commitment[2]).join('\n')];
+
+  const journey = paragraph.match(/^(YOUR\s+DISCIPLESHIP\s+JOURNEY|12-SESSION\s+JOURNEY)\s*:\s*(.+)$/is);
+  if (journey) return ['12-SESSION JOURNEY', formatJourneyLines(journey[2]).join('\n')];
+
+  const declaration = paragraph.match(/^(YOUR\s+KCA\s+DECLARATION|DECLARATION)\s*:\s*(.+)$/is);
+  if (declaration) {
+    const lines = declaration[2]
+      .split(/(?<=[.!?])\s+|(?=\bI AM A KINGDOM CHANGE AGENT\b)/i)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return ['DECLARATION', lines.join('\n')];
+  }
+
+  return null;
+}
+
+function normalizeLetterBlocks(body: string): string[] {
+  const blocks: string[] = [];
+  for (const paragraph of body.split(/\n\n+/).map((part) => part.trim()).filter(Boolean)) {
+    const expanded = expandCondensedSection(paragraph);
+    if (expanded) {
+      blocks.push(...expanded);
+      continue;
+    }
+    const lower = paragraph.toLowerCase();
+    if (!paragraph.includes('\n') && lower.includes('attend at least') && lower.includes('actively participate')) {
+      blocks.push('YOUR COMMITMENT', formatCommitmentLines(paragraph).join('\n'));
+      continue;
+    }
+    if (!paragraph.includes('\n') && paragraph.includes('The Call of the King') && paragraph.includes('Becoming a Kingdom Change Agent')) {
+      blocks.push('12-SESSION JOURNEY', formatJourneyLines(paragraph).join('\n'));
+      continue;
+    }
+    blocks.push(paragraph);
+  }
+  return blocks;
+}
+
 function renderTemplateBlocks(
   body: string,
   options?: {
@@ -114,19 +210,29 @@ function renderTemplateBlocks(
   const signerTitle = options?.signerTitle?.trim() ?? '';
   let signatureInserted = false;
 
-  const blocks = body.split('\n\n').filter(Boolean);
+  const blocks = normalizeLetterBlocks(body);
   const nodes: ReactNode[] = [];
 
   blocks.forEach((block, index) => {
     const trimmed = block.trim();
     const lines = linesOf(block);
-    const isHeading = trimmed.length >= 8
-      && trimmed === trimmed.toUpperCase()
-      && !trimmed.includes(':')
-      && /^[A-Z0-9 '&().-]+$/.test(trimmed);
+    const heading = trimmed.replace(/:$/, '');
 
-    if (isHeading) {
-      nodes.push(<h3 className="kca-letter-section-title" key={`${trimmed}-${index}`}>{trimmed}</h3>);
+    if (isSectionHeading(trimmed)) {
+      nodes.push(<h3 className="kca-letter-section-title" key={`${heading}-${index}`}>{heading}</h3>);
+      return;
+    }
+
+    const bulletLines = lines.filter((line) => /^(?:•|-|\d+\.)\s+/.test(line));
+    if (bulletLines.length >= 2 && bulletLines.length === lines.length) {
+      const isJourney = trimmed.includes('The Call of the King') && trimmed.includes('Becoming a Kingdom Change Agent');
+      nodes.push(
+        <ul className={`kca-letter-list${isJourney ? ' kca-letter-list--journey' : ''}`} key={`list-${index}`}>
+          {lines.map((line, lineIndex) => (
+            <li key={`${index}-${lineIndex}`}>{line.replace(/^(?:•|-|\d+\.)\s+/, '')}</li>
+          ))}
+        </ul>,
+      );
       return;
     }
 
