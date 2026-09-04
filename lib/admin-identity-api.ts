@@ -240,12 +240,14 @@ function buildQuery(
   const search = new URLSearchParams();
   if (params) {
     for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== '') search.set(key, String(value));
+      if (value === undefined || value === '') continue;
+      search.set(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
     }
   }
   if (filter) {
     for (const [key, value] of Object.entries(filter)) {
-      if (value !== undefined && value !== '') search.set(`filter[${key}]`, String(value));
+      if (value === undefined || value === '') continue;
+      search.set(`filter[${key}]`, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
     }
   }
   const qs = search.toString();
