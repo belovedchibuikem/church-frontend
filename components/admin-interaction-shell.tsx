@@ -22,6 +22,7 @@ import { fetchAdminKcaAssignment } from '../lib/admin-catalog-api';
 import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
 import { sanitizeAdminScopeToken } from '../lib/admin-scope';
+import { signOutAdminSession } from '../lib/auth-api';
 
 type Overlay =
   | {
@@ -478,6 +479,11 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       openModule(button.dataset.adminModule);
       return;
     }
+    if (button.dataset.adminIntent === 'logout') {
+      event.preventDefault();
+      void signOutAdminSession();
+      return;
+    }
     if (button.dataset.adminIntent === 'profile-menu') {
       event.preventDefault();
       window.location.assign('/admin/profile');
@@ -681,7 +687,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         <header><div><span>Family House Connect</span><h2 id="interaction-title">{overlay.title}</h2></div><button type="button" aria-label="Close" data-interaction-native="true" onClick={closeOverlay}>×</button></header>
         <p id="interaction-description">{overlay.description}</p>
         {overlay.type === 'drawer' && overlay.mode === 'filters' && <div className="interaction-filter-form"><label>Status<select defaultValue="all"><option value="all">All statuses</option><option value="active">Active</option><option value="pending">Pending</option></select></label><label>Date range<select defaultValue="month"><option value="month">This month</option><option value="quarter">This quarter</option><option value="year">This year</option></select></label><label>Sort<select defaultValue="recent"><option value="recent">Most recent</option><option value="name">Name</option><option value="status">Status</option></select></label><footer><button type="button">Reset Filters</button><button className="primary-button" type="button">Apply Filters</button></footer></div>}
-        {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/profile'); }}>Open Admin Profile</button><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
+        {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/profile'); }}>Open Admin Profile</button><button type="button" data-interaction-native="true" data-admin-intent="logout" onClick={() => { void signOutAdminSession(); }}>Logout</button></div>}
         {overlay.mode === 'modules' && <div className="interaction-module-grid">{adminModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
         {overlay.mode === 'modules' && <div className="interaction-directory-link"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/screens'); }}>Preview-only screen directory</button></div>}
         {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={overlay.details ?? details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 

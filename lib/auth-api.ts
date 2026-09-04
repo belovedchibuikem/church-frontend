@@ -259,6 +259,22 @@ export async function logoutBrowserUser(): Promise<void> {
   await ensureCsrfCookieShared(true).catch(() => undefined);
 }
 
+export function adminPostLogoutHref(): string {
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('chatgpt.site')) {
+    return '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin';
+  }
+  return '/admin/login';
+}
+
+/** Ends the browser session and sends the operator to admin sign-in. */
+export async function signOutAdminSession(onCleared?: () => void): Promise<void> {
+  if (isAuthApiConfigured()) {
+    await logoutBrowserUser().catch(() => undefined);
+  }
+  onCleared?.();
+  window.location.assign(adminPostLogoutHref());
+}
+
 export async function sendEmailVerificationNotification(): Promise<void> {
   await authRequest<{ verification_request_accepted: boolean }>('auth/email/verification-notification', {
     method: 'POST',
