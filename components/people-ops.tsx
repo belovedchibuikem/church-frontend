@@ -18,7 +18,6 @@ import {
   getPerson,
   listConverts,
   listCounsellingCases,
-  listDisciples,
   listFirstTimers,
   listFollowUpTasks,
   listLeaders,
@@ -41,6 +40,7 @@ import {
 import { EntitySearchSelect } from './entity-search-select';
 import { fetchUserCapabilities } from '../lib/user-api';
 import { ChurchSettingsPanel } from './church-settings-panel';
+import { RolePanel } from './church-ops';
 
 type ScopeProps = { screen: AdminScreen; requestedScope?: string };
 
@@ -326,16 +326,17 @@ function Person360({ screen, requestedScope }: ScopeProps) {
 }
 
 function SimpleQueue({
-  title, loader, columns, children,
+  title, loader, columns, children, requestedScope,
 }: {
   title: string;
   loader: (scope: AdminScope) => Promise<{ items: Array<Record<string, unknown>> }>;
   columns: string[];
   children?: (row: Record<string, unknown>, reload: () => void) => ReactNode;
+  requestedScope?: string;
 }) {
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
   const [error, setError] = useState<string | null>(null);
-  const scope = useScope();
+  const scope = useScope(requestedScope);
   const load = useCallback(async () => {
     setError(null);
     try { setItems((await loader(scope)).items); } catch (err) { setItems([]); setError(operationsErrorMessage(err, `Unable to load ${title}.`)); }
@@ -408,12 +409,6 @@ function FollowUpPanel({ requestedScope }: { requestedScope?: string }) {
   );
 }
 
-function RoleQueue({ list, title }: { title: string; list: typeof listLeaders }) {
-  const scope = useScope();
-  const loader = useCallback((next: AdminScope) => list({ scope: next, perPage: 50 }), [list]);
-  return <SimpleQueue title={title} loader={loader} columns={['person_name', 'church_name', 'title', 'status', '']} />;
-}
-
 export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
   const route = screen.route;
   const scope = useScope(requestedScope);
@@ -435,7 +430,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           </div>
           <button className="primary-button" type="submit">Register first timer</button>
         </form>
-        <SimpleQueue title="First timers" loader={(next) => listFirstTimers({ scope: next, perPage: 50 })} columns={['person_name', 'church_name', 'registered_at', '']} />
+        <SimpleQueue title="First timers" requestedScope={requestedScope} loader={(next) => listFirstTimers({ scope: next, perPage: 50 })} columns={['person_name', 'church_name', 'registered_at', '']} />
       </>
     );
   }
@@ -457,15 +452,21 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           </div>
           <button className="primary-button" type="submit">Record conversion</button>
         </form>
-        <SimpleQueue title="Converts" loader={(next) => listConverts({ scope: next, perPage: 50 })} columns={['person_name', 'church_name', 'converted_at', 'status', '']} />
+        <SimpleQueue title="Converts" requestedScope={requestedScope} loader={(next) => listConverts({ scope: next, perPage: 50 })} columns={['person_name', 'church_name', 'converted_at', 'status', '']} />
       </>
     );
   }
-  if (route.includes('/disciples') || route.includes('/journeys/membership')) return <RoleQueue title="Disciples" list={listDisciples} />;
-  if (route.includes('/journeys/worker') || route === '/admin/people/workers') return <RoleQueue title="Workers" list={listWorkers} />;
-  if (route.includes('/journeys/leadership') || route === '/admin/people/leaders') return <RoleQueue title="Leaders" list={listLeaders} />;
+  if (route.includes('/disciples') || route.includes('/journeys/membership')) {
+    return <RolePanel screen={screen} requestedScope={requestedScope} roleType="disciple" />;
+  }
+  if (route.includes('/journeys/worker') || route === '/admin/people/workers') {
+    return <RolePanel screen={screen} requestedScope={requestedScope} roleType="worker" />;
+  }
+  if (route.includes('/journeys/leadership') || route === '/admin/people/leaders') {
+    return <RolePanel screen={screen} requestedScope={requestedScope} roleType="leader" />;
+  }
   if (route === '/admin/people/ministry-history') {
-    return <SimpleQueue title="History" loader={async (next) => {
+    return <SimpleQueue title="History" requestedScope={requestedScope} loader={async (next) => {
       const [members, workers, leaders] = await Promise.all([listFirstTimers({ scope: next, perPage: 25 }), listWorkers({ scope: next, perPage: 25 }), listLeaders({ scope: next, perPage: 25 })]);
       return { items: [...members.items, ...workers.items, ...leaders.items] as Array<Record<string, unknown>> };
     }} columns={['person_name', 'church_name', 'status', '']} />;
@@ -487,7 +488,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           </div>
           <button className="primary-button" type="submit">Submit</button>
         </form>
-        <SimpleQueue title="Prayer requests" loader={(next) => listPrayerRequests({ scope: next, perPage: 50 })} columns={['subject', 'person_name', 'status', '']} >
+        <SimpleQueue title="Prayer requests" requestedScope={requestedScope} loader={(next) => listPrayerRequests({ scope: next, perPage: 50 })} columns={['subject', 'person_name', 'status', '']} >
           {(row, reload) => (
             <>
               <form
@@ -527,7 +528,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           </div>
           <button className="primary-button" type="submit">Submit need</button>
         </form>
-        <SimpleQueue title="Needs" loader={(next) => listPastoralNeeds({ scope: next, perPage: 50 })} columns={['category', 'person_name', 'status', '']} >
+        <SimpleQueue title="Needs" requestedScope={requestedScope} loader={(next) => listPastoralNeeds({ scope: next, perPage: 50 })} columns={['category', 'person_name', 'status', '']} >
           {(row, reload) => <button type="button" className="ghost-button" onClick={() => void transitionPastoralNeed(String(row.id), 'approved', scope).then(reload)}>Approve</button>}
         </SimpleQueue>
       </>
@@ -536,7 +537,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
   if (route.startsWith('/admin/people/counselling')) {
     const caseId = route.match(/\/counselling\/([0-7][0-9A-HJKMNP-TV-Z]{25})/i)?.[1];
     if (caseId) return <CounsellingDetail id={caseId} scope={scope} />;
-    return <SimpleQueue title="Counselling cases" loader={(next) => listCounsellingCases({ scope: next, perPage: 50 })} columns={['id', 'case_type', 'client_label', 'status', '']} >
+    return <SimpleQueue title="Counselling cases" requestedScope={requestedScope} loader={(next) => listCounsellingCases({ scope: next, perPage: 50 })} columns={['id', 'case_type', 'client_label', 'status', '']} >
       {(row) => <Link className="table-action" href={`/admin/people/counselling/${row.id}`}>Open</Link>}
     </SimpleQueue>;
   }
@@ -561,7 +562,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           </div>
           <button className="primary-button" type="submit">Submit</button>
         </form>
-        <SimpleQueue title="Testimonies" loader={(next) => listTestimonies({ scope: next, perPage: 50 })} columns={['title', 'person_name', 'status', '']} />
+        <SimpleQueue title="Testimonies" requestedScope={requestedScope} loader={(next) => listTestimonies({ scope: next, perPage: 50 })} columns={['title', 'person_name', 'status', '']} />
       </>
     );
   }
@@ -586,7 +587,7 @@ export function PeopleScreenContent({ screen, requestedScope }: ScopeProps) {
           </div>
           <button className="danger-button" type="submit">Escalate now</button>
         </form>
-        <SimpleQueue title="Safeguarding incidents" loader={(next) => listSafeguardingIncidents({ scope: next, perPage: 50 })} columns={['reference_code', 'concern_type', 'severity', 'status', '']} />
+        <SimpleQueue title="Safeguarding incidents" requestedScope={requestedScope} loader={(next) => listSafeguardingIncidents({ scope: next, perPage: 50 })} columns={['reference_code', 'concern_type', 'severity', 'status', '']} />
       </>
     );
   }

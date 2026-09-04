@@ -457,7 +457,7 @@ function ChurchDetail({ screen, requestedScope }: ScopeProps) {
   );
 }
 
-function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType: 'leader' | 'worker' | 'disciple' }) {
+export function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType: 'leader' | 'worker' | 'disciple' }) {
   const scope = useScope(requestedScope);
   const churchId = churchIdFromRoute(screen.route);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
@@ -543,7 +543,13 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
         <p className="maps-settings-lead">
           Active leaders: {activeLeaderCount}/{MAX_ACTIVE_CHURCH_LEADERS}. Appointing a leader also ensures church membership.
         </p>
-      ) : null}
+      ) : (
+        <p className="maps-settings-lead">
+          {roleType === 'worker'
+            ? 'This list is empty until you assign someone. Search an existing person and church, give them a ministry title (for example Usher or Choir), then choose Assign worker.'
+            : 'This list is empty until you assign someone. Search an existing person and church, enter a title, then choose Assign disciple.'}
+        </p>
+      )}
       <form className="card settings-card" onSubmit={(event) => void onCreate(event)}>
         <div className="form-grid">
           {!churchId ? <label><span>Church *</span><ChurchPicker name="church_id" required /></label> : null}
@@ -583,7 +589,7 @@ function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { roleType
           ) : null}
         </div>
         <div className="form-footer">
-          <button className="primary-button" disabled={busy || leaderCapReached} type="submit">
+          <button className="primary-button" data-interaction-native="true" disabled={busy || leaderCapReached} type="submit">
             {roleType === 'leader' ? 'Appoint leader' : `Assign ${roleType}`}
           </button>
         </div>
