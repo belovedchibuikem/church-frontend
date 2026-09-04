@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import type { Metric } from '../lib/admin-routes';
+import { evaluateAccess } from '../lib/access-control';
+import { useAdminAccess } from '../lib/admin-access-context';
+import { getAdminScreen, type Metric } from '../lib/admin-routes';
 import {
   dashboardMetricLinks,
   dashboardNavItems,
@@ -109,9 +111,16 @@ export function LinkedMetricCards({
 }
 
 export function DashboardModuleGrid({ currentHref }: { currentHref: string }) {
+  const { access, requestedScope } = useAdminAccess();
+  const items = dashboardNavItems.filter((item) => {
+    if (access.permissions.includes('*')) return true;
+    const screen = getAdminScreen(item.href);
+    if (!screen) return false;
+    return evaluateAccess(screen, access, requestedScope).allowed;
+  });
   return (
     <nav className="dashboard-module-grid" aria-label="Ministry dashboards">
-      {dashboardNavItems.map((item) => (
+      {items.map((item) => (
         <Link
           key={item.href}
           href={item.href}
@@ -127,7 +136,13 @@ export function DashboardModuleGrid({ currentHref }: { currentHref: string }) {
 }
 
 export function DashboardQuickLinks({ screenId, className = 'card compact-list' }: { screenId: string; className?: string }) {
-  const actions = dashboardQuickActions[screenId] ?? [];
+  const { access, requestedScope } = useAdminAccess();
+  const actions = (dashboardQuickActions[screenId] ?? []).filter((action) => {
+    if (access.permissions.includes('*')) return true;
+    const screen = getAdminScreen(action.href);
+    if (!screen) return false;
+    return evaluateAccess(screen, access, requestedScope).allowed;
+  });
   if (actions.length === 0) return null;
   return (
     <article className={className}>

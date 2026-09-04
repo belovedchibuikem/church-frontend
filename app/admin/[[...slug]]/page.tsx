@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { AdminScreenIndex, AdminScreenView } from '../../../components/admin-ui';
-import { evaluateAccess, resolveAdminGuestLoginRedirect } from '../../../lib/access-control';
+import { churchTenantHomePath, evaluateAccess, resolveAdminGuestLoginRedirect } from '../../../lib/access-control';
 import { getAdminScreen, normalizeAdminRoute } from '../../../lib/admin-routes';
 import { getServerAccessContext } from '../../../lib/server-access';
 
@@ -33,6 +33,12 @@ export default async function AdminPage({
 
   const requestedScope = query.scope
     ?? (context.scopes.includes('global') || screen.scope === 'global' ? 'global' : (context.scopes[0] ?? 'global'));
+  if (route === '/admin') {
+    const churchHome = churchTenantHomePath(context);
+    if (churchHome) {
+      redirect(`${churchHome}?scope=${encodeURIComponent(requestedScope)}`);
+    }
+  }
   const decision = evaluateAccess(screen, context, requestedScope);
   const guestLogin = resolveAdminGuestLoginRedirect({
     authenticated: context.authenticated,
@@ -44,5 +50,5 @@ export default async function AdminPage({
   });
   if (guestLogin) redirect(guestLogin);
 
-  return <AdminScreenView screen={screen} decision={decision} requestedScope={requestedScope} returnTo={query.returnTo} />;
+  return <AdminScreenView screen={screen} decision={decision} requestedScope={requestedScope} returnTo={query.returnTo} accessContext={context} />;
 }

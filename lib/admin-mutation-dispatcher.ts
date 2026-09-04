@@ -117,6 +117,12 @@ const KCA_APPLICATION_STATES = new Set([
   'revoked',
 ]);
 
+function kcaAssignmentTransitionStatus(payload: Record<string, string>, fallback: string): string {
+  const raw = (field(payload, 'status') ?? fallback).trim().toLowerCase();
+  if (raw === 'published' || raw === 'publised' || raw === 'publish') return 'assigned';
+  return field(payload, 'status') ?? fallback;
+}
+
 function kcaApplicationStatus(payload: Record<string, string>): string | undefined {
   const status = field(payload, 'status')?.toLowerCase();
   return status && KCA_APPLICATION_STATES.has(status) ? status : undefined;
@@ -134,8 +140,8 @@ export function extractUlid(value?: string | null): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (ULID_PATTERN.test(trimmed)) return trimmed;
-  const match = trimmed.match(/[0-7][0-9A-HJKMNP-TV-Z]{25}/i);
-  return match?.[0];
+  const matches = trimmed.match(/[0-7][0-9A-HJKMNP-TV-Z]{25}/gi);
+  return matches?.at(-1);
 }
 
 function firstUlid(...values: Array<string | null | undefined>): string | undefined {
@@ -1460,7 +1466,24 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       opts,
     );
   }
-  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /edit|update/) && !labelIs(label, /create|add|transition/)) {
+  if (
+    routeStarts(route, '/admin/kca/assignments') &&
+    (labelIs(label, /publish assignment|transition assignment/) || field(payload, '__action') === 'publish_assignment')
+  ) {
+    return mutate(
+      `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}/transitions`,
+      { status: kcaAssignmentTransitionStatus(payload, 'assigned') },
+      opts,
+    );
+  }
+  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /delete|remove/) && !labelIs(label, /create|add/)) {
+    return mutate(
+      `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /edit|update/) && !labelIs(label, /create|add|transition|publish/)) {
     const levelsRaw = field(payload, 'soul_tree_levels') ?? '';
     const levels = levelsRaw
       .split(/[,\s]+/)
@@ -1475,6 +1498,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
     if (moduleId) body.kca_module_id = moduleId;
     if (lessonId) body.kca_lesson_id = lessonId;
     if (levels.length > 0) body.soul_tree_levels = levels;
+    const kind = field(payload, 'assignment_kind');
+    if (kind) {
+      body.assignment_kind = /soul/i.test(kind)
+        ? 'soul_winning'
+        : /practical/i.test(kind)
+          ? 'practical'
+          : /written/i.test(kind)
+            ? 'written'
+            : 'standard';
+    }
     return mutate(
       `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}`,
       body,
@@ -1515,6 +1548,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         })(),
         soul_tree_levels: levels,
         due_at: field(payload, 'due_at', 'dueDate') || null,
+        as_draft: field(payload, 'as_draft') === 'true' || field(payload, 'as_draft') === 'on',
       },
       opts,
     );
@@ -1669,7 +1703,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   if (routeStarts(route, '/admin/kca') && labelIs(label, /transition assignment/)) {
     return mutate(
       `admin/kca/assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'assignment'))}/transitions`,
-      { status: field(payload, 'status') ?? 'submitted' },
+      { status: kcaAssignmentTransitionStatus(payload, 'submitted') },
       opts,
     );
   }

@@ -18,6 +18,7 @@ import {
   isAdmissionLetterIssueAction,
 } from '../lib/admin-mutation-dispatcher';
 import { getAdminRecordDetails } from '../lib/admin-record-cache';
+import { fetchAdminKcaAssignment } from '../lib/admin-catalog-api';
 import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
 
@@ -416,6 +417,21 @@ export function AdminInteractionShell({ children, route, title, permission, scop
           navigate(`/admin/events/${recordId}?tab=overview&edit=1`);
           return;
         }
+      }
+      if ((action === 'view' || action === 'edit' || action === 'delete') && recordId && (route === '/admin/kca/assignments' || route.startsWith('/admin/kca/assignments/'))) {
+        void (async () => {
+          let details = getAdminRecordDetails(record);
+          try {
+            details = await fetchAdminKcaAssignment(recordId);
+          } catch {
+            details = getAdminRecordDetails(record);
+          }
+          const mode = action === 'view' ? 'preview' : action === 'edit' ? 'edit' : 'confirm';
+          const titleKey = action === 'view' ? 'admin.viewRecord' : action === 'edit' ? 'admin.editRecord' : 'admin.deleteRecord';
+          const defaultTitle = action === 'view' ? 'View {record}' : action === 'edit' ? 'Edit {record}' : 'Delete {record}';
+          openAction(t(titleKey, { defaultMessage: defaultTitle, vars: { record } }), mode, { record, entityKey, details });
+        })();
+        return;
       }
       if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey, details: getAdminRecordDetails(record) });
       else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey, details: getAdminRecordDetails(record) });

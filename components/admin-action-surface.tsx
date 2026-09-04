@@ -6,7 +6,7 @@ import { useLocale } from '@/components/locale-provider';
 import { AdminFormFields } from './admin-form-fields';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
-import { adminFormSchemas, defaultValueForField, fieldsForEntity, normalizeDetailValues, type AdminFormField } from '../lib/admin-form-schemas';
+import { defaultValueForField, fieldsForEntity, normalizeDetailValues, schemaForAction, type AdminFormField } from '../lib/admin-form-schemas';
 import { fieldsFromRecordDetails } from '../lib/admin-row-actions';
 import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
 import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
@@ -159,7 +159,7 @@ function FieldControl({ field, required, defaultValue, defaultLabel }: { field: 
 
 export function AdminActionSurface({ mode, label, pageTitle, permission, scope, entityKey, record, details = {}, items = [], records = [], onClose, onSubmit }: Props) {
   const { t } = useLocale();
-  const schema = entityKey ? adminFormSchemas[entityKey] : undefined;
+  const schema = schemaForAction(entityKey, mode);
   const entity = schema?.entity ?? entityName(label, pageTitle);
   const normalizedDetails = normalizeDetailValues(details);
   const [submitting, setSubmitting] = useState(false);
@@ -288,6 +288,29 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
               }}
             >
               {t('admin.pinPageShortcut', { defaultMessage: 'Pin page shortcut' })}
+            </button>
+          ) : null}
+          {mode === 'preview' && entityKey === 'kca_assignment' && /draft/i.test(normalizedDetails.status || normalizedDetails.state || '') ? (
+            <button
+              className="primary-button"
+              type="button"
+              data-interaction-native="true"
+              disabled={submitting}
+              onClick={() => {
+                void (async () => {
+                  setSubmitting(true);
+                  setFormError('');
+                  try {
+                    await onSubmit({ __action: 'publish_assignment', status: 'assigned' });
+                  } catch (error) {
+                    setFormError(formatAdminMutationError(error));
+                  } finally {
+                    setSubmitting(false);
+                  }
+                })();
+              }}
+            >
+              {submitting ? t('admin.submitting', { defaultMessage: 'Submitting…' }) : t('admin.publishAssignment', { defaultMessage: 'Publish assignment' })}
             </button>
           ) : null}
           <button type="button" data-interaction-native="true" onClick={onClose}>{closeLabel}</button>

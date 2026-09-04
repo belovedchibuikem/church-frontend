@@ -49,6 +49,7 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
     ['kca_year_id', 'year_name'],
     ['kca_enrollment_id', 'student_name'],
     ['enrollment_id', 'student_name'],
+    ['cohort_id', 'cohort_name'],
   ];
   for (const [idKey, nameKey] of labelPairs) {
     const idValue = asText(item[idKey]);
@@ -119,9 +120,13 @@ export function getAdminRecordDetails(recordOrId?: string | null): Record<string
   if (!recordOrId) return undefined;
   const trimmed = recordOrId.trim();
   if (ULID_PATTERN.test(trimmed)) return recordCache.get(trimmed);
-  const match = trimmed.match(/[0-7][0-9A-HJKMNP-TV-Z]{25}/i);
-  if (!match) return undefined;
-  return recordCache.get(match[0]);
+  const matches = trimmed.match(/[0-7][0-9A-HJKMNP-TV-Z]{25}/gi);
+  if (!matches?.length) return undefined;
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const details = recordCache.get(matches[index]);
+    if (details) return details;
+  }
+  return undefined;
 }
 
 export function clearAdminRecordCache(): void {

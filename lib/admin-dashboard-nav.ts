@@ -39,7 +39,7 @@ export const dashboardQuickActions: Record<string, DashboardQuickAction[]> = {
     { label: 'Add Member', href: '/admin/church/members' },
     { label: 'First Timers', href: '/admin/church/first-timers' },
     { label: 'Church Reports', href: '/admin/church/reports' },
-    { label: 'Churches', href: '/admin/churches' },
+    { label: 'Finance', href: '/admin/church/finance' },
   ],
   'F-17': [
     { label: 'Directory', href: '/admin/people' },
@@ -222,6 +222,7 @@ export const dashboardMetricLinks: Record<string, Record<string, string>> = {
     'Small Groups': '/admin/church/small-groups',
     Evangelism: '/admin/church/evangelism',
     'Attendance (Avg)': '/admin/church/attendance',
+    Giving: '/admin/church/finance',
   },
   'F-17': {
     'Total People': '/admin/people',

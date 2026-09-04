@@ -63,16 +63,42 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_assignment: {
     entity: 'KCA assignment',
     fields: [
-      // Labels align with Assignments table; audience mirrors assessment bulk targeting
-      { label: 'Assign to', name: 'audience', type: 'select', required: true, options: ['One student', 'A cohort', 'All enrolled students'], helpText: 'Creates one assignment per matching enrolled student.' },
+      { label: 'Assign to', name: 'audience', type: 'select', required: true, options: ['One student', 'A cohort', 'All enrolled students'], helpText: 'Creates one assignment per matching enrolled student. Uncheck Save as draft to assign immediately.' },
       { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', placeholder: 'Search enrolled student (required for One student)' },
       { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', placeholder: 'Search cohort (required for A cohort)' },
-      { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'e.g. Win three generations of souls' },
+      { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'Assignment title' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
       { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
       { label: 'Type', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'written', 'practical', 'soul_winning'] },
       { label: 'Due Date', name: 'due_at', type: 'date' },
-      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: '3,2,4', wide: true, helpText: 'Required for Type = soul_winning (e.g. 3,2,4). Status stays open until the tree is complete.' },
+      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: 'Levels for soul-winning', wide: true, helpText: 'Required for Type = soul_winning. Status stays open until the tree is complete.' },
+      { label: 'Save as draft', name: 'as_draft', type: 'checkbox', helpText: 'Draft assignments are hidden from students until you publish them.' },
+    ],
+  },
+  kca_assignment_view: {
+    entity: 'KCA assignment',
+    fields: [
+      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment' },
+      { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort' },
+      { label: 'Assignment', name: 'title', type: 'text' },
+      { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule' },
+      { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson' },
+      { label: 'Type', name: 'assignment_kind', type: 'select', options: ['standard', 'written', 'practical', 'soul_winning'] },
+      { label: 'Due Date', name: 'due_at', type: 'date' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', wide: true },
+    ],
+  },
+  kca_assignment_edit: {
+    entity: 'KCA assignment',
+    fields: [
+      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', placeholder: 'Enrolled student' },
+      { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'Assignment title' },
+      { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
+      { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
+      { label: 'Type', name: 'assignment_kind', type: 'select', options: ['standard', 'written', 'practical', 'soul_winning'] },
+      { label: 'Due Date', name: 'due_at', type: 'date' },
+      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: 'Levels for soul-winning', wide: true, helpText: 'Required for Type = soul_winning.' },
     ],
   },
   kca_cohort: {
@@ -670,6 +696,16 @@ export function resolveEntityKey(route: string, screenId?: string): string | und
   return routeEntityMap.find(({ pattern }) => pattern.test(route))?.entity;
 }
 
+/** View/edit overlays reuse the create entity key; assignments use stored-column schemas. */
+export function schemaForAction(entityKey: string | undefined, mode: string): AdminFormSchema | undefined {
+  if (!entityKey) return undefined;
+  if (entityKey === 'kca_assignment') {
+    if (mode === 'edit') return adminFormSchemas.kca_assignment_edit;
+    if (mode === 'preview' || mode === 'actions') return adminFormSchemas.kca_assignment_view;
+  }
+  return adminFormSchemas[entityKey];
+}
+
 export function fieldsForEntity(entityKey: string): AdminFormField[] {
   return adminFormSchemas[entityKey]?.fields ?? [];
 }
@@ -695,6 +731,7 @@ const legacyDetailAliases: Record<string, string> = {
   module_id: 'kca_module_id',
   lesson_id: 'kca_lesson_id',
   kind: 'assignment_kind',
+  state: 'status',
 };
 
 export function normalizeDetailValues(details: Record<string, string>): Record<string, string> {
@@ -716,6 +753,12 @@ export function normalizeDetailValues(details: Record<string, string>): Record<s
   }
   if (normalized.kca_lesson_id && !normalized.kca_lesson_id_label) {
     normalized.kca_lesson_id_label = details.lesson_title || details.Lesson || '';
+  }
+  if (normalized.cohort_id && !normalized.cohort_id_label) {
+    normalized.cohort_id_label = details.cohort_name || details.Cohort || '';
+  }
+  if (!normalized.status && (details.state || details.Status)) {
+    normalized.status = details.state || details.Status || '';
   }
   if (normalized.soul_tree_spec && !normalized.soul_tree_levels) {
     try {

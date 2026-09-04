@@ -2,6 +2,7 @@ import { ApiError, apiRequest, resolveApiBaseUrl } from './api-client';
 import type { ApiAdminScope, ApiSuccessEnvelope, JsonObject } from './api-types';
 import type { SearchSelectOption } from '../components/search-select';
 import { formatTimestamp } from './admin-identity-api';
+import { mapOpsRecordToFormDetails, stashAdminRecordDetails } from './admin-record-cache';
 
 export type AdminScope = ApiAdminScope;
 
@@ -176,6 +177,21 @@ export async function listCatalogDomain<T = Record<string, unknown>>(
     };
   } catch (error) {
     throw toCatalogError(error, 'Unable to load domain catalog.');
+  }
+}
+
+export async function fetchAdminKcaAssignment(id: string, scope: AdminScope = CATALOG_GLOBAL_SCOPE): Promise<Record<string, string>> {
+  try {
+    const envelope = await apiRequest<ApiSuccessEnvelope<Record<string, unknown>>>(
+      `admin/kca/assignments/${encodeURIComponent(id)}`,
+      { method: 'GET', scope },
+    );
+    const item = (envelope.data ?? {}) as Record<string, unknown>;
+    const details = mapOpsRecordToFormDetails(item);
+    stashAdminRecordDetails(id, details);
+    return details;
+  } catch (error) {
+    throw toCatalogError(error, 'Unable to load assignment.');
   }
 }
 
@@ -497,7 +513,7 @@ export function catalogRecordsToRows(
       } else if (key.includes('specialization') || key.includes('module')) {
         mapped[column] = get('module_title', 'module_code', 'title', 'specialization');
       } else if (key.includes('student')) {
-        mapped[column] = get('student_name', 'person_name', 'students_count', 'enrollments_count', 'enrollment_id');
+        mapped[column] = get('student_name', 'person_name', 'registration_number', 'students_count', 'enrollments_count');
       } else if (key.includes('venue')) {
         mapped[column] = get('venue', 'location_name', 'venue_label');
       } else if (key.includes('church')) {

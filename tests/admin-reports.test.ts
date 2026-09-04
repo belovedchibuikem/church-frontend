@@ -45,7 +45,7 @@ const expectedModules: Record<string, string> = {
 };
 
 const aliasCases: Array<{ route: string; permission: string }> = [
-  { route: '/admin/reports', permission: 'church.churches.view' },
+  { route: '/admin/reports', permission: 'reporting.alert_rules.view' },
   { route: '/admin/reports/churches', permission: 'church.churches.view' },
   { route: '/admin/reports/home-churches', permission: 'church.home_churches.view' },
   { route: '/admin/reports/membership', permission: 'church.churches.view' },

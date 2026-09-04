@@ -12,6 +12,7 @@ import {
   endMembership,
   getChurch,
   listAttendance,
+  listChurchGiving,
   listChurchGroups,
   listHomeChurches,
   listChurches,
@@ -25,6 +26,7 @@ import {
   listWorkers,
   mutateMinistryRecord,
   operationsErrorMessage,
+  recordChurchGiving,
   registerFirstTimer,
   startMembership,
   updateChurch,
@@ -208,7 +210,7 @@ function ChurchesTable({ requestedScope }: { requestedScope?: string }) {
     <>
       <div className="table-toolbar">
         <label className="search-box"><span>⌕</span><input aria-label="Search churches" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
-        <button type="button" className="primary-button">+ Add Church</button>
+        {scope.type !== 'church' ? <Link className="primary-button link-button" href="/admin/churches/new">+ Add Church</Link> : null}
       </div>
       <StatusLine error={error} onRetry={() => void load()} />
       <div className="card table-card">
@@ -1144,13 +1146,125 @@ function ReportsPanel({ screen, requestedScope }: ScopeProps) {
   );
 }
 
-function FinancePanel({ screen: _screen }: ScopeProps) {
+function FinancePanel({ screen, requestedScope }: ScopeProps) {
+  const scope = useScope(requestedScope);
+  const churchId = churchIdFromRoute(screen.route);
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [churches, setChurches] = useState<ChurchRecord[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [giving, churchPage] = await Promise.all([
+        listChurchGiving({ scope, perPage: 50, filter: churchId ? { church_id: churchId } : undefined }),
+        churchId ? Promise.resolve({ items: [] as ChurchRecord[] }) : listChurches({ scope, perPage: 25 }),
+      ]);
+      setItems(giving.items);
+      if (!churchId) setChurches(churchPage.items);
+    } catch (err) {
+      setItems([]);
+      setError(operationsErrorMessage(err, 'Unable to load church giving.'));
+    }
+  }, [churchId, scope]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function onRecord(event: FormEvent<HTMLFormElement>) {
+    const formEl = readSubmitForm(event);
+    const form = new FormData(formEl);
+    const amount = Number(form.get('amount'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await recordChurchGiving({
+        church_id: churchId || String(form.get('church_id')),
+        person_id: String(form.get('person_id')),
+        amount_minor: Math.round(amount * 100),
+        currency: String(form.get('currency') || 'NGN'),
+        purpose_code: String(form.get('purpose_code') || 'offering'),
+        idempotency_key: `church-giving-${crypto.randomUUID()}`,
+        channel: String(form.get('channel') || 'church_ledger'),
+      }, scope);
+      formEl.reset();
+      setMessage('Giving recorded for this church.');
+      await load();
+    } catch (err) {
+      setError(operationsErrorMessage(err, 'Unable to record giving for this church.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
-      <article className="card settings-card">
-        <p>Church giving, receipts and reconciliation live in the canonical Finance module. This screen does not keep a second ledger.</p>
-        <Link className="primary-button link-button" href="/admin/finance">Open Finance</Link>
-      </article>
+      <StatusLine error={error} message={message} onRetry={() => void load()} />
+      <form className="card settings-card" onSubmit={(event) => void onRecord(event)}>
+        <p className="maps-settings-lead">Record tithes, offerings, and other gifts for members of this church. Amounts are stored on the shared giving ledger and stay scoped to the church you administer.</p>
+        <div className="form-grid">
+          {!churchId ? (
+            <label>
+              <span>Church *</span>
+              {churches.length > 0 ? (
+                <select name="church_id" required defaultValue={churches[0]?.id}>
+                  {churches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+                </select>
+              ) : <ChurchPicker name="church_id" required />}
+            </label>
+          ) : null}
+          <label><span>Member *</span><PersonPicker name="person_id" required /></label>
+          <label><span>Amount *</span><input name="amount" type="number" min="1" step="0.01" required /></label>
+          <label><span>Currency</span>
+            <select name="currency" defaultValue="NGN">
+              <option value="NGN">NGN</option>
+              <option value="USD">USD</option>
+              <option value="GBP">GBP</option>
+              <option value="GHS">GHS</option>
+            </select>
+          </label>
+          <label><span>Purpose *</span>
+            <select name="purpose_code" defaultValue="offering">
+              <option value="tithe">Tithe</option>
+              <option value="offering">Offering</option>
+              <option value="missions">Missions</option>
+              <option value="projects">Projects</option>
+              <option value="donation">Donation</option>
+            </select>
+          </label>
+          <label><span>Channel</span>
+            <select name="channel" defaultValue="church_ledger">
+              <option value="church_ledger">Church record</option>
+              <option value="cash">Cash</option>
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="pos">POS</option>
+            </select>
+          </label>
+        </div>
+        <div className="form-footer"><button className="primary-button" disabled={busy} type="submit">Record giving</button></div>
+      </form>
+      <div className="card table-card">
+        <table>
+          <thead><tr><th>Date</th><th>Donor</th><th>Purpose</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody>
+            {items.length === 0 ? <tr><td colSpan={5}>No giving recorded in this church yet.</td></tr> : items.map((row) => (
+              <tr key={String(row.id)}>
+                <td>{row.occurred_at ? new Date(String(row.occurred_at)).toLocaleDateString() : '—'}</td>
+                <td>{String(row.donor_name ?? row.payer_name ?? '—')}</td>
+                <td>{String(row.category ?? row.purpose_code ?? '—')}</td>
+                <td>{String(row.amount ?? '—')}</td>
+                <td>{String(row.status ?? '—')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

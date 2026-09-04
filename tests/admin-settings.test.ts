@@ -35,7 +35,7 @@ const landings = [
 const aliasCases: Array<{ route: string; permission: string }> = [
   { route: '/admin/settings/platform', permission: 'platform.configuration.view' },
   { route: '/admin/settings/branding', permission: 'platform.configuration.manage' },
-  { route: '/admin/settings/church', permission: 'church.churches.manage' },
+  { route: '/admin/settings/church', permission: 'platform.configuration.view' },
   { route: '/admin/settings/home-church-rules', permission: 'church.home_churches.view' },
   { route: '/admin/settings/kca', permission: 'kca.governance.view' },
   { route: '/admin/settings/payments', permission: 'platform.payments.view' },

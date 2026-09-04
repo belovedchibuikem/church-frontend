@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   accessContextFromCapabilities,
+  churchTenantHomePath,
   designFixtureAccessContext,
   emptyAccessContext,
   evaluateAccess,
@@ -126,6 +127,22 @@ test('member self-service capabilities do not open the admin console', () => {
   });
   assert.equal(member.permissions.includes('*'), false);
   assert.deepEqual(evaluateAccess(dashboard, member), { allowed: false, reason: 'permission-denied' });
+});
+
+test('church-tenant administrators do not receive a platform wildcard', () => {
+  const churchId = '01JABCDEFGHJKMNPQRSTVWXYZ0';
+  const live = accessContextFromCapabilities({
+    permissions: ['church.churches.view', 'church.churches.manage', 'church.finance.view'],
+    scopes: [{ type: 'church', key: churchId }],
+  });
+  assert.equal(live.permissions.includes('*'), false);
+  assert.equal(churchTenantHomePath(live), '/admin/church/dashboard');
+  assert.deepEqual(
+    evaluateAccess(getAdminScreen('/admin/church/dashboard')!, live, `church:${churchId}`),
+    { allowed: true },
+  );
+  assert.equal(evaluateAccess(getAdminScreen('/admin/kca')!, live, `church:${churchId}`).allowed, false);
+  assert.equal(evaluateAccess(getAdminScreen('/admin/finance')!, live, `church:${churchId}`).allowed, false);
 });
 
 test('public routes are available without a session', () => {

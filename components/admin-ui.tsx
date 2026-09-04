@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { hasAdministratorCapabilities, type AccessDecision } from '../lib/access-control';
+import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, type AccessContext, type AccessDecision } from '../lib/access-control';
+import { AdminAccessProvider, useAdminAccess } from '../lib/admin-access-context';
 import {
   challengeMfa,
   formatAuthError,
@@ -13,7 +14,7 @@ import {
   logoutBrowserUser,
 } from '../lib/auth-api';
 import { fetchUserCapabilities, type CapabilitySnapshot } from '../lib/user-api';
-import { adminScreens, type AdminScreen, type Metric } from '../lib/admin-routes';
+import { adminScreens, getAdminScreen, type AdminScreen, type Metric } from '../lib/admin-routes';
 import {
   AdminIdentityApiError,
   type AdminAccessDecision,
@@ -416,17 +417,35 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
   ] },
 ];
 
+function navItemAllowed(href: string, access: AccessContext, requestedScope: string): boolean {
+  if (access.permissions.includes('*')) return true;
+  const screen = getAdminScreen(href);
+  if (!screen) return false;
+  return evaluateAccess(screen, access, requestedScope).allowed;
+}
+
 function Brand({ dark = true }: { dark?: boolean }) {
   return <AppBrand variant="admin" dark={dark} />;
 }
 
 function Sidebar({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
-  const allItems = enterpriseNavGroups.flatMap((group) => group.items);
+  const { access, requestedScope } = useAdminAccess();
+  const groups = useMemo(
+    () =>
+      enterpriseNavGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => navItemAllowed(item.href, access, requestedScope)),
+        }))
+        .filter((group) => group.items.length > 0),
+    [access, requestedScope],
+  );
+  const allItems = groups.flatMap((group) => group.items);
   const exact = allItems.filter((item) => item.href === screen.route);
   const prefix = allItems.filter((item) => item.href !== '/admin' && screen.route.startsWith(`${item.href}/`)).sort((left, right) => right.href.length - left.href.length);
   const activeHref = (exact[0] ?? prefix[0])?.href;
-  return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label={t('admin.enterpriseNavAria', { defaultMessage: 'Enterprise administration navigation' })}>{enterpriseNavGroups.map((group) => {
+  return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label={t('admin.enterpriseNavAria', { defaultMessage: 'Enterprise administration navigation' })}>{groups.map((group) => {
     const groupActive = group.items.some((item) => item.href === activeHref);
     const groupLabel = adminChrome(t, group.label);
     return <details className={`enterprise-nav-group ${groupActive ? 'active' : ''}`} data-nav-group={group.id} data-nav-active={groupActive ? 'true' : 'false'} open={groupActive} key={group.id}>
@@ -4027,7 +4046,8 @@ function ScreenContent({ screen, requestedScope }: { screen: AdminScreen; reques
   }
 }
 
-export function AdminScreenView({ screen, decision, requestedScope, returnTo }: { screen: AdminScreen; decision: AccessDecision; requestedScope: string; returnTo?: string }) {
+export function AdminScreenView({ screen, decision, requestedScope, returnTo, accessContext }: { screen: AdminScreen; decision: AccessDecision; requestedScope: string; returnTo?: string; accessContext?: AccessContext }) {
+  const access = accessContext ?? emptyAccessContext();
   const breadcrumbs = getAdminBreadcrumbs(screen);
   const interactionProps = { route: screen.route, title: screen.title, permission: screen.permission, scope: requestedScope, screenKind: screen.kind, returnTo, tabs: screen.tabs, routes: getInteractionRouteMap(screen), records: screen.rows?.map((row) => Object.values(row).join(' · ')), details: screen.details, items: screen.items };
   if(screen.kind==='login'||screen.kind==='mfa') return <AuthView screen={screen} returnTo={returnTo}/>;
@@ -4036,7 +4056,7 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo }: 
     || /^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route);
   const rendererNeedsAction = new Set(['G-03']).has(screen.id);
   const rendererOwnsAction = new Set(['G-01','G-16','G-17','H-01','H-11','H-13','H-17','H-20','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
-  return <AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell>;
+  return <AdminAccessProvider value={{ access, requestedScope }}><AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell></AdminAccessProvider>;
 }
 
 const batchNames = {

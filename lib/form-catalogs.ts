@@ -6,6 +6,7 @@ import {
   type CatalogDomainKey,
 } from './admin-catalog-api';
 import {
+  defaultOpsScope,
   designFixturesEnabled,
   listChurches,
   listCrusades,
@@ -194,6 +195,9 @@ export async function loadFormCatalogPage(
   const perPage = Math.min(50, Math.max(5, filters.perPage ?? 20));
   const signal = filters.signal;
   const empty = (): FormCatalogPage => ({ items: [], page, hasMore: false, total: 0 });
+  const scope = defaultOpsScope(
+    typeof window === 'undefined' ? undefined : new URLSearchParams(window.location.search).get('scope') ?? undefined,
+  );
 
   const domainKey =
     (FORM_TO_DOMAIN_CATALOG[catalog as string] as CatalogDomainKey | undefined) ??
@@ -211,7 +215,7 @@ export async function loadFormCatalogPage(
 
   if (shouldUseOperationsLiveData()) {
     if (catalog === 'church') {
-      const result = await listChurches({ search: query || undefined, perPage, page, signal });
+      const result = await listChurches({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,
@@ -224,7 +228,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'homeChurch') {
-      const result = await listHomeChurches({ search: query || undefined, perPage, page, signal });
+      const result = await listHomeChurches({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,
@@ -237,7 +241,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'person') {
-      const result = await listPeopleDirectory({ search: query || undefined, perPage, page, signal });
+      const result = await listPeopleDirectory({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: String(item.id ?? ''),
@@ -250,7 +254,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'firstTimer') {
-      const result = await listFirstTimers({ search: query || undefined, perPage, page, signal });
+      const result = await listFirstTimers({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,
@@ -263,7 +267,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'crusade') {
-      const result = await listCrusades({ search: query || undefined, perPage, page, signal });
+      const result = await listCrusades({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,
@@ -276,7 +280,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'missionTeamAssignment') {
-      const result = await listTeamAssignments({ search: query || undefined, perPage, page, signal });
+      const result = await listTeamAssignments({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,
@@ -289,7 +293,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'soul') {
-      const result = await listSouls({ search: query || undefined, perPage, page, signal });
+      const result = await listSouls({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,
@@ -302,7 +306,7 @@ export async function loadFormCatalogPage(
       };
     }
     if (catalog === 'homeChurchApplication') {
-      const result = await listHomeChurchApplications({ search: query || undefined, perPage, page, signal });
+      const result = await listHomeChurchApplications({ search: query || undefined, perPage, page, signal, scope });
       return {
         items: result.items.map((item) => ({
           value: item.id,

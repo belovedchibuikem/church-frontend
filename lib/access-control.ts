@@ -44,6 +44,23 @@ export function formatCapabilityScope(scope: CapabilityScope): string[] {
   return type === 'global' ? ['global', token] : [token];
 }
 
+export function hasGlobalPlatformScope(scopes: CapabilityScope[] | string[]): boolean {
+  if (scopes.length === 0) return false;
+  if (typeof scopes[0] === 'string') {
+    return scopes.includes('global') || scopes.includes('global:platform');
+  }
+  return scopes.some((scope) => scope.type === 'global');
+}
+
+/** Church-tenant admins land on church operations instead of the global console. */
+export function churchTenantHomePath(context: AccessContext): string | null {
+  if (!context.authenticated) return null;
+  if (hasGlobalPlatformScope(context.scopes)) return null;
+  if (!context.scopes.some((scope) => scope.startsWith('church:'))) return null;
+  if (!context.permissions.includes('church.churches.view') && !context.permissions.includes('*')) return null;
+  return '/admin/church/dashboard';
+}
+
 /** Build AccessContext from GET /user/me success + GET /user/capabilities snapshot. */
 export function accessContextFromCapabilities(
   snapshot: { permissions: string[]; scopes: CapabilityScope[] },
@@ -52,9 +69,14 @@ export function accessContextFromCapabilities(
   const scopes = Array.from(new Set(snapshot.scopes.flatMap((scope) => formatCapabilityScope(scope))));
   const permissions = [...snapshot.permissions];
   // Live Laravel bundles use API codes (platform.configuration.manage, …) while the
-  // admin screen catalog still uses UI codes (admin.dashboard.view, …). Administrators
-  // must reach the console; Laravel APIs remain the real authorization gate.
-  if (hasAdministratorCapabilities(snapshot) && !permissions.includes('*')) {
+  // admin screen catalog still uses UI codes (admin.dashboard.view, …). Platform
+  // administrators keep a UI wildcard; church-tenant admins keep real permission codes
+  // so they only see the church they are scoped to. Laravel APIs remain the real gate.
+  if (
+    hasAdministratorCapabilities(snapshot)
+    && hasGlobalPlatformScope(snapshot.scopes ?? [])
+    && !permissions.includes('*')
+  ) {
     permissions.unshift('*');
   }
   return {
@@ -112,8 +134,8 @@ export function evaluateAccess(screen: AdminScreen, context: AccessContext, requ
 
 const SETTINGS_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'settings.platform.manage': ['platform.configuration.view', 'platform.configuration.manage'],
-  'settings.ministry.manage': ['church.follow_up.view', 'church.churches.view'],
-  'settings.church.manage': ['church.churches.manage', 'platform.configuration.manage', 'platform.configuration.view'],
+  'settings.ministry.manage': ['platform.configuration.view', 'platform.configuration.manage'],
+  'settings.church.manage': ['platform.configuration.manage', 'platform.configuration.view'],
   'settings.home-church-rules.manage': ['church.home_churches.view', 'church.home_church_applications.review'],
   'settings.kca.manage': ['kca.governance.view', 'kca.governance.manage'],
   'settings.mission.manage': ['mission.crusades.view'],
@@ -142,14 +164,14 @@ const GEOGRAPHY_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'organization.location.view': ['organization.locations.view'],
   'organization.scope.assign': ['identity.scopes.assign'],
   'organization.settings.update': ['platform.configuration.manage'],
-  'organization.organizations.view': ['church.churches.view'],
+  'organization.organizations.view': ['organization.countries.view', 'organization.units.view'],
   'church.hierarchy.view': ['church.churches.view'],
   'home_church.hierarchy.view': ['church.home_churches.view'],
   'reports.territory.view': ['organization.units.view', 'organization.countries.view'],
 };
 
 const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
-  'admin.dashboard.view': ['identity.users.view', 'platform.configuration.view', 'security.audit.view'],
+  'admin.dashboard.view': ['identity.users.view', 'platform.configuration.view', 'security.audit.view', 'church.churches.view'],
   'organization.view': ['organization.countries.view'],
   'home_church.dashboard.view': ['church.home_churches.view'],
   'home_church.application.view': ['church.home_church_applications.review'],
@@ -186,7 +208,7 @@ const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'church.small_group.view': ['church.churches.view'],
   'church.evangelism.view': ['church.churches.view'],
   'church.report.view': ['church.churches.view'],
-  'church.finance.view': ['church.churches.view', 'finance.payment_intents.view'],
+  'church.finance.view': ['church.finance.view', 'church.churches.view', 'finance.payment_intents.view'],
   'church.settings.update': ['church.churches.manage', 'platform.configuration.manage'],
   'kca.dashboard.view': ['kca.enrollments.view', 'kca.applications.view'],
   'kca.application.view': ['kca.applications.view'],
@@ -264,7 +286,7 @@ const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'communications.whatsapp.send': ['communications.broadcasts.prepare'],
   'communications.push.send': ['communications.broadcasts.prepare'],
   'communications.in-app.send': ['communications.broadcasts.prepare'],
-  'reports.global.view': ['reporting.alert_rules.view', 'church.churches.view', 'organization.countries.view', 'church.home_churches.view'],
+  'reports.global.view': ['reporting.alert_rules.view', 'organization.countries.view'],
   'reports.churches.view': ['church.churches.view'],
   'reports.home-churches.view': ['church.home_churches.view'],
   'reports.membership.view': ['church.churches.view'],
@@ -277,7 +299,7 @@ const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'reports.finance.view': ['finance.payment_intents.view'],
   'reports.countries.view': ['organization.countries.view'],
   'reports.territories.view': ['organization.units.view', 'organization.countries.view'],
-  'reports.trends.view': ['reporting.alert_rules.view', 'church.churches.view', 'organization.countries.view', 'church.home_churches.view'],
+  'reports.trends.view': ['reporting.alert_rules.view', 'organization.countries.view'],
   'reports.pastoral-ai.view': ['platform.advisory.request', 'reporting.alert_rules.view', 'church.churches.view'],
   'reports.press-ai.view': ['platform.advisory.request', 'press.publications.view'],
   'security.dashboard.view': ['security.audit.view', 'security.access_decisions.view'],

@@ -818,6 +818,18 @@ export function listAnnouncements(params: ListQuery = {}): Promise<OpsListResult
   return opsGetList('admin/church/announcements', params);
 }
 
+export function listChurchGiving(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
+  return opsGetList('admin/church/giving-transactions', params);
+}
+
+export function recordChurchGiving(
+  input: JsonObject,
+  scope?: AdminScope,
+  idempotencyKey?: string,
+): Promise<Record<string, unknown>> {
+  return opsMutate('admin/church/giving-records', 'POST', input, { scope, idempotencyKey });
+}
+
 export function listSafeguardingIncidents(params: ListQuery = {}): Promise<OpsListResult<Record<string, unknown>>> {
   return opsGetList('admin/safeguarding/incidents', params);
 }

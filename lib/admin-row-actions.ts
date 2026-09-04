@@ -25,6 +25,7 @@ const DELETABLE_ROUTE_PATTERNS: RegExp[] = [
   /\/attendance/,
   /^\/admin\/kca\/lecturers/,
   /^\/admin\/kca\/mentors/,
+  /^\/admin\/kca\/assignments/,
   /\/content\/.*items/,
   /^\/admin\/press\/publications/,
   /^\/admin\/events/,

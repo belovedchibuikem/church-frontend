@@ -85,12 +85,12 @@ test('KCA assignments screen resolves to live catalog', async () => {
   const catalogApi = await readFile(new URL('../lib/admin-catalog-api.ts', import.meta.url), 'utf8');
   assert.match(catalogApi, /'kca\.assignments': 'kca\/assignments'/);
   assert.match(catalogApi, /route === '\/admin\/kca\/assignments'\) return 'kca\.assignments'/);
-  const { resolveEntityKey, fieldsForEntity } = await import('../lib/admin-form-schemas.ts');
+  const { resolveEntityKey, fieldsForEntity, schemaForAction } = await import('../lib/admin-form-schemas.ts');
   assert.equal(resolveEntityKey('/admin/kca/assignments', 'H-14'), 'kca_assignment');
   const fields = fieldsForEntity('kca_assignment');
   assert.deepEqual(
     fields.map((field) => field.label),
-    ['Assign to', 'Student', 'Cohort', 'Assignment', 'Module', 'Lesson', 'Type', 'Due Date', 'Soul tree levels'],
+    ['Assign to', 'Student', 'Cohort', 'Assignment', 'Module', 'Lesson', 'Type', 'Due Date', 'Soul tree levels', 'Save as draft'],
   );
   assert.ok(fields.some((field) => field.name === 'audience'));
   assert.ok(fields.some((field) => field.name === 'kca_enrollment_id'));
@@ -98,23 +98,44 @@ test('KCA assignments screen resolves to live catalog', async () => {
   assert.ok(fields.some((field) => field.name === 'kca_module_id'));
   assert.ok(fields.some((field) => field.name === 'kca_lesson_id'));
   assert.ok(fields.some((field) => field.name === 'title'));
+  assert.equal(fields.find((field) => field.name === 'title')?.placeholder, 'Assignment title');
   assert.ok(fields.some((field) => field.name === 'assignment_kind'));
   assert.ok(fields.some((field) => field.name === 'due_at'));
+  assert.ok(fields.some((field) => field.name === 'as_draft'));
+  const viewFields = schemaForAction('kca_assignment', 'preview')?.fields ?? [];
+  assert.ok(viewFields.some((field) => field.name === 'status'));
+  assert.ok(!viewFields.some((field) => field.name === 'audience'));
+  const editFields = schemaForAction('kca_assignment', 'edit')?.fields ?? [];
+  assert.ok(!editFields.some((field) => field.name === 'audience'));
+  assert.ok(editFields.some((field) => field.name === 'title'));
+  const { extractUlid } = await import('../lib/admin-mutation-dispatcher.ts');
+  assert.equal(
+    extractUlid('01m1hnghvrayhckw700d5377z8 01m1mr4jqbvjpf241ctwhmydnh'),
+    '01m1mr4jqbvjpf241ctwhmydnh',
+  );
+  const source = await readFile(new URL('../components/admin-action-surface.tsx', import.meta.url), 'utf8');
+  assert.match(source, /publish_assignment/);
+  const dispatcher = await readFile(new URL('../lib/admin-mutation-dispatcher.ts', import.meta.url), 'utf8');
+  assert.match(dispatcher, /as_draft/);
+  assert.match(dispatcher, /publish_assignment/);
 });
 
 test('Add Assignment opens create mode with schema fields, not generic assign form', async () => {
-  const { inferActionSurfaceMode } = await import('../components/admin-action-surface.tsx');
-  assert.equal(inferActionSurfaceMode('+ Add Assignment'), 'create');
-  assert.equal(inferActionSurfaceMode('Edit Assignment'), 'edit');
-  assert.equal(inferActionSurfaceMode('Assign mentor'), 'assign');
-  assert.equal(inferActionSurfaceMode('Assign Roles to Users'), 'assign');
   const source = await readFile(new URL('../components/admin-action-surface.tsx', import.meta.url), 'utf8');
+  assert.match(source, /Create\/edit must win before "assign"/);
+  assert.match(source, /\/create\|add\|new\|register/);
+  assert.match(source, /assign\(\?!ment\)/);
   assert.match(source, /schema\?\.fields \?\? \(mode === 'assign'/);
   const rowActions = await readFile(new URL('../lib/admin-row-actions.ts', import.meta.url), 'utf8');
   assert.match(rowActions, /\/\^\\\/admin\\\/kca\\\/assignments\//);
   const dispatcher = await readFile(new URL('../lib/admin-mutation-dispatcher.ts', import.meta.url), 'utf8');
   assert.match(dispatcher, /admin\/kca\/assignments\/\$\{encodeURIComponent/);
   assert.match(dispatcher, /method: 'PATCH'/);
+  assert.match(dispatcher, /method: 'DELETE'/);
+  const shell = await readFile(new URL('../components/admin-interaction-shell.tsx', import.meta.url), 'utf8');
+  assert.match(shell, /fetchAdminKcaAssignment/);
+  const catalogApi = await readFile(new URL('../lib/admin-catalog-api.ts', import.meta.url), 'utf8');
+  assert.match(catalogApi, /export async function fetchAdminKcaAssignment/);
 });
 
 test('KCA years and assessments use dedicated form schemas', async () => {
