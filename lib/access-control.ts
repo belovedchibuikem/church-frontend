@@ -325,6 +325,7 @@ const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
 
 const ADMINISTRATION_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'organization.scope.select': ['organization.countries.view', 'identity.scopes.view', 'identity.users.view'],
+  'member.self.manage': ['identity.users.view', 'identity.users.manage'],
   'admin.command.use': ['platform.search.query', 'identity.users.view'],
   'approval.queue.view': ['church.home_churches.view', 'reporting.alert_occurrences.view', 'identity.users.view'],
   'alerts.view': ['reporting.alert_occurrences.view'],

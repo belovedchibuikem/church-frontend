@@ -2646,15 +2646,22 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
   if (error) return <div className="card empty-state" role="alert">{error}</div>;
   if (!user) return <div className="card empty-state" role="status">{t('admin.loadingProfile', { defaultMessage: 'Loading your profile…' })}</div>;
 
-  const legalName = [user.profile.given_name, user.profile.middle_name, user.profile.family_name]
+  const legalName = [
+    user.profile?.given_name,
+    user.profile?.middle_name,
+    user.profile?.family_name,
+  ]
     .filter((part): part is string => Boolean(part?.trim()))
     .join(' ');
-  const name = user.profile.preferred_name?.trim() || legalName || user.email;
+  const name = user.profile?.preferred_name?.trim() || legalName || user.email;
   const status = user.account_status ?? 'unknown';
+  const roleNames = Array.isArray(user.roles)
+    ? user.roles.map((role) => (typeof role === 'string' ? role : '')).filter(Boolean)
+    : [];
   const details: Record<string, string> = {
     [t('admin.fullName', { defaultMessage: 'Full Name' })]: name,
     [t('auth.emailAddress', { defaultMessage: 'Email Address' })]: user.email,
-    [t('admin.role', { defaultMessage: 'Role' })]: user.roles?.join(', ') || t('admin.noRoleAssigned', { defaultMessage: 'No role assigned' }),
+    [t('admin.role', { defaultMessage: 'Role' })]: roleNames.join(', ') || t('admin.noRoleAssigned', { defaultMessage: 'No role assigned' }),
     [t('account.timezone', { defaultMessage: 'Timezone' })]: user.preferences?.timezone || t('common.notProvided', { defaultMessage: 'Not provided' }),
     [t('common.language', { defaultMessage: 'Language' })]: user.preferences?.locale || t('common.notProvided', { defaultMessage: 'Not provided' }),
     [t('admin.accountStatus', { defaultMessage: 'Account Status' })]: status,
@@ -2716,7 +2723,26 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
         <p>{t('admin.lastActive', { defaultMessage: 'Last Active' })}<br /><b>{formatProfileDate(user.last_active_at)}</b></p>
         <p>{t('admin.memberSince', { defaultMessage: 'Member Since' })}<br /><b>{formatProfileDate(user.member_since)}</b></p>
       </article>
-      <Link href="/account/profile" className="primary-button profile-save">{t('admin.updateProfile', { defaultMessage: 'Update Profile' })}</Link>
+      <button
+        type="button"
+        className="primary-button profile-save"
+        data-interaction-native="true"
+        onClick={() => { window.location.assign('/account/profile'); }}
+      >
+        {t('admin.updateProfile', { defaultMessage: 'Update Profile' })}
+      </button>
+      <button
+        type="button"
+        className="ghost-button profile-save"
+        data-interaction-native="true"
+        onClick={() => {
+          window.location.href = window.location.hostname.endsWith('chatgpt.site')
+            ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin'
+            : '/admin/login';
+        }}
+      >
+        {t('admin.logoutSecurely', { defaultMessage: 'Logout securely' })}
+      </button>
     </div>
   );
 }

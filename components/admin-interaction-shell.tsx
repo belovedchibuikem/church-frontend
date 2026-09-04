@@ -190,7 +190,16 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     rootRef.current?.querySelector('[data-admin-intent="module-launcher"]')?.setAttribute('aria-expanded', String(overlay?.mode === 'modules'));
     rootRef.current?.querySelector('[data-admin-intent="toggle-navigation"]')?.setAttribute('aria-expanded', String(navigationOpen));
     const background = rootRef.current?.querySelector<HTMLElement>('.admin-shell');
-    if (background) background.inert = Boolean(overlay);
+    if (background) {
+      if (overlay && background.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      try {
+        background.inert = Boolean(overlay);
+      } catch {
+        background.setAttribute('aria-hidden', overlay ? 'true' : 'false');
+      }
+    }
     if (overlay && !overlayWasOpen.current) {
       lastFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       window.setTimeout(() => rootRef.current?.querySelector<HTMLElement>('.interaction-overlay input, .interaction-overlay select, .interaction-overlay textarea, .interaction-overlay button')?.focus(), 0);
@@ -471,7 +480,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
     }
     if (button.dataset.adminIntent === 'profile-menu') {
       event.preventDefault();
-      setOverlay({ type: 'drawer', mode: 'profile', title: t('admin.adminAccount', { defaultMessage: 'Admin account' }), description: t('admin.adminAccountDescription', { defaultMessage: 'Manage your profile or securely end the current hosted session.' }) });
+      window.location.assign('/admin/profile');
       return;
     }
     if (button.closest('[role="tablist"], .tabs, .kca-entity-tabs, .mission-tabs, .platform-tabs')) {
@@ -672,9 +681,9 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         <header><div><span>Family House Connect</span><h2 id="interaction-title">{overlay.title}</h2></div><button type="button" aria-label="Close" data-interaction-native="true" onClick={closeOverlay}>×</button></header>
         <p id="interaction-description">{overlay.description}</p>
         {overlay.type === 'drawer' && overlay.mode === 'filters' && <div className="interaction-filter-form"><label>Status<select defaultValue="all"><option value="all">All statuses</option><option value="active">Active</option><option value="pending">Pending</option></select></label><label>Date range<select defaultValue="month"><option value="month">This month</option><option value="quarter">This quarter</option><option value="year">This year</option></select></label><label>Sort<select defaultValue="recent"><option value="recent">Most recent</option><option value="name">Name</option><option value="status">Status</option></select></label><footer><button type="button">Reset Filters</button><button className="primary-button" type="button">Apply Filters</button></footer></div>}
-        {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><Link href="/admin/profile" onClick={(event) => { event.preventDefault(); closeOverlay(); navigate('/admin/profile', false); }}>Open Admin Profile</Link><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
+        {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/profile'); }}>Open Admin Profile</button><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
         {overlay.mode === 'modules' && <div className="interaction-module-grid">{adminModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
-        {overlay.mode === 'modules' && <div className="interaction-directory-link"><Link href="/admin/screens">Preview-only screen directory</Link></div>}
+        {overlay.mode === 'modules' && <div className="interaction-directory-link"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/screens'); }}>Preview-only screen directory</button></div>}
         {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={overlay.details ?? details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 
       </section>
     </div>}
