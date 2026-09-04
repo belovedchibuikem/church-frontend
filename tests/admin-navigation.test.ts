@@ -67,6 +67,7 @@ test('specific action mappings cannot be overwritten by unrelated descendant for
   assert.equal(getInteractionRouteMap(reviewQueue)['view review queue'], '/admin/kca/review-queue');
   assert.equal(getInteractionRouteMap(exportApplications).export, undefined);
   assert.equal(getInteractionRouteMap(addChurch)['add church'], undefined);
+  assert.equal(getInteractionRouteMap(reviewQueue)['open admin profile'], '/admin/profile');
 });
 
 test('multi-screen workflows advance to the next canonical screen', () => {

@@ -21,6 +21,7 @@ import { getAdminRecordDetails } from '../lib/admin-record-cache';
 import { fetchAdminKcaAssignment } from '../lib/admin-catalog-api';
 import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
+import { sanitizeAdminScopeToken } from '../lib/admin-scope';
 
 type Overlay =
   | {
@@ -210,8 +211,13 @@ export function AdminInteractionShell({ children, route, title, permission, scop
   const navigate = (destination: string, preserveReturn = true) => {
     const next = new URL(destination, window.location.origin);
     const current = new URL(window.location.href);
-    const selectedScope = current.searchParams.get('scope') ?? window.localStorage.getItem('fhc-admin-scope');
-    if (selectedScope && !next.searchParams.has('scope') && !/\/admin\/(login|mfa)/.test(next.pathname)) next.searchParams.set('scope', selectedScope);
+    const skipScopeCopy = next.pathname === '/admin/profile' || next.pathname === '/admin/login' || next.pathname === '/admin/mfa';
+    const selectedScope = skipScopeCopy
+      ? undefined
+      : sanitizeAdminScopeToken(current.searchParams.get('scope') ?? window.localStorage.getItem('fhc-admin-scope'));
+    if (selectedScope && !next.searchParams.has('scope') && !/\/admin\/(login|mfa|profile)/.test(next.pathname)) {
+      next.searchParams.set('scope', selectedScope);
+    }
     const sourceModule = getAdminModuleForRoute(current.pathname);
     const destinationModule = getAdminModuleForRoute(next.pathname);
     if (preserveReturn && sourceModule.id !== destinationModule.id && isRestorableAdminRoute(current.pathname) && !next.searchParams.has('returnTo')) {
@@ -355,11 +361,16 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         return;
       }
       const url = new URL(anchor.href, window.location.origin);
-      const selectedScope = url.searchParams.get('scope');
+      const selectedScope = sanitizeAdminScopeToken(url.searchParams.get('scope'));
       if (selectedScope) window.localStorage.setItem('fhc-admin-scope', selectedScope);
+      else if (url.searchParams.has('scope')) window.localStorage.removeItem('fhc-admin-scope');
       if (url.origin === window.location.origin && url.pathname.startsWith('/admin')) {
         event.preventDefault();
         setNavigationOpen(false);
+        if (url.pathname === '/admin/profile') {
+          navigate('/admin/profile', false);
+          return;
+        }
         navigate(`${url.pathname}${url.search}${url.hash}`);
       }
       return;
@@ -661,7 +672,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         <header><div><span>Family House Connect</span><h2 id="interaction-title">{overlay.title}</h2></div><button type="button" aria-label="Close" data-interaction-native="true" onClick={closeOverlay}>×</button></header>
         <p id="interaction-description">{overlay.description}</p>
         {overlay.type === 'drawer' && overlay.mode === 'filters' && <div className="interaction-filter-form"><label>Status<select defaultValue="all"><option value="all">All statuses</option><option value="active">Active</option><option value="pending">Pending</option></select></label><label>Date range<select defaultValue="month"><option value="month">This month</option><option value="quarter">This quarter</option><option value="year">This year</option></select></label><label>Sort<select defaultValue="recent"><option value="recent">Most recent</option><option value="name">Name</option><option value="status">Status</option></select></label><footer><button type="button">Reset Filters</button><button className="primary-button" type="button">Apply Filters</button></footer></div>}
-        {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><Link href="/admin/profile">Open Admin Profile</Link><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
+        {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><Link href="/admin/profile" onClick={(event) => { event.preventDefault(); closeOverlay(); navigate('/admin/profile', false); }}>Open Admin Profile</Link><button type="button" data-interaction-native="true" onClick={() => { window.location.href = window.location.hostname.endsWith('chatgpt.site') ? '/signout-with-chatgpt?return_to=%2Fadmin%2Flogin' : '/admin/login'; }}>Logout securely</button></div>}
         {overlay.mode === 'modules' && <div className="interaction-module-grid">{adminModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
         {overlay.mode === 'modules' && <div className="interaction-directory-link"><Link href="/admin/screens">Preview-only screen directory</Link></div>}
         {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={overlay.details ?? details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 

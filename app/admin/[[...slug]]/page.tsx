@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AdminScreenIndex, AdminScreenView } from '../../../components/admin-ui';
 import { churchTenantHomePath, evaluateAccess, resolveAdminGuestLoginRedirect } from '../../../lib/access-control';
 import { getAdminScreen, normalizeAdminRoute } from '../../../lib/admin-routes';
+import { sanitizeAdminScopeToken } from '../../../lib/admin-scope';
 import { getServerAccessContext } from '../../../lib/server-access';
 
 export const dynamic = 'force-dynamic';
@@ -31,8 +32,10 @@ export default async function AdminPage({
   const screen = getAdminScreen(route);
   if (!screen) notFound();
 
-  const requestedScope = query.scope
-    ?? (context.scopes.includes('global') || screen.scope === 'global' ? 'global' : (context.scopes[0] ?? 'global'));
+  const requestedScope = sanitizeAdminScopeToken(query.scope)
+    ?? (context.scopes.includes('global') || screen.scope === 'global' || screen.scope === 'self'
+      ? 'global'
+      : (sanitizeAdminScopeToken(context.scopes[0]) ?? 'global'));
   if (route === '/admin') {
     const churchHome = churchTenantHomePath(context);
     if (churchHome) {

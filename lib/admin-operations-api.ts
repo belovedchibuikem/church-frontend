@@ -1,4 +1,5 @@
 import { ApiError, apiRequest, resolveApiBaseUrl } from './api-client.ts';
+import { sanitizeAdminScopeToken } from './admin-scope.ts';
 import type { ApiAdminScope, ApiSuccessEnvelope, JsonObject } from './api-types.ts';
 
 export type AdminScope = ApiAdminScope;
@@ -322,10 +323,11 @@ export function shouldUseOperationsLiveData(): boolean {
 }
 
 export function defaultOpsScope(requestedScope?: string): AdminScope {
-  if (!requestedScope || requestedScope === 'global' || requestedScope === 'assigned') {
+  const token = sanitizeAdminScopeToken(requestedScope);
+  if (!token || token === 'global' || token === 'assigned' || token === 'self') {
     return GLOBAL_ADMIN_SCOPE;
   }
-  const [type, ...rest] = requestedScope.split(':');
+  const [type, ...rest] = token.split(':');
   const id = rest.join(':');
   // Fixture/UI labels like "country:nigeria" are not API scope keys — only ULIDs (or global).
   if (type && id && (type === 'global' || /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(id))) {

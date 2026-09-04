@@ -17,6 +17,8 @@ const actionDestinations: Record<string, string> = {
   'create announcement': '/admin/communications/announcements/create',
   'compose broadcast': '/admin/communications/broadcasts/create',
   'manage users': '/admin/users',
+  'open admin profile': '/admin/profile',
+  'admin profile': '/admin/profile',
   'system settings': '/admin/settings/platform',
   'view analytics': '/admin/reports',
   'view all reports': '/admin/reports',

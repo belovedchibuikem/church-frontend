@@ -765,7 +765,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
               const role = user.roles?.[0]?.name ?? user.roles?.[0]?.code ?? '—';
               return (
                 <tr key={user.id}>
-                  <td><span className="mini-avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>{user.name}</td>
+                  <td><span className="mini-avatar">{(user.name ?? '').split(' ').map((part) => part[0]).filter(Boolean).slice(0, 2).join('') || '—'}</span>{user.name || '—'}</td>
                   <td>{user.email}</td>
                   {suspendedOnly ? (
                     <>
@@ -2687,7 +2687,7 @@ function ProfileView({ screen }: { screen: AdminScreen }) {
               <li key={role.code}>
                 <strong>{role.name}</strong>
                 <span>{role.code}</span>
-                {role.scopes.length > 0 ? (
+                {role.scopes?.length ? (
                   <p>{role.scopes.map((scope) => `${scope.type}:${scope.key}`).join(', ')}</p>
                 ) : (
                   <p>{t('admin.globalScope', { defaultMessage: 'Global scope' })}</p>

@@ -1,5 +1,6 @@
 import { ApiError, apiRequest, apiRequestResponse } from './api-client.ts';
 import { resolveApiV1BaseUrl } from './api-config.ts';
+import { sanitizeAdminScopeToken } from './admin-scope.ts';
 import type { ApiAdminScope, ApiSuccessEnvelope, JsonObject } from './api-types.ts';
 
 export type AdminScopeHeaders = ApiAdminScope;
@@ -224,10 +225,11 @@ export function shouldUseIdentityLiveData(): boolean {
 }
 
 export function defaultAdminScope(requestedScope?: string): AdminScopeHeaders {
-  if (!requestedScope || requestedScope === 'global' || requestedScope === 'assigned') {
+  const token = sanitizeAdminScopeToken(requestedScope);
+  if (!token || token === 'global' || token === 'assigned' || token === 'self') {
     return DEFAULT_SCOPE;
   }
-  const [type, ...rest] = requestedScope.split(':');
+  const [type, ...rest] = token.split(':');
   const id = rest.join(':');
   if (type && id) return { type, id };
   return DEFAULT_SCOPE;

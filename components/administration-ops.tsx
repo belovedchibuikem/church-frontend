@@ -39,6 +39,7 @@ import {
 } from '../lib/admin-identity-api';
 import { listCatalogDomain, catalogErrorMessage, shouldUseCatalogLiveData, CATALOG_GLOBAL_SCOPE } from '../lib/admin-catalog-api';
 import { listCountriesPage, organizationErrorMessage } from '../lib/admin-organization-api';
+import { sanitizeAdminScopeToken } from '../lib/admin-scope';
 import { apiRequest } from '../lib/api-client';
 import { fetchUserCapabilities, fetchUserNotifications, markAllUserNotificationsRead, markUserNotificationRead, type UserNotification } from '../lib/user-api';
 import { platformErrorMessage, queryPlatformSearch, type PlatformSearchHit, PLATFORM_GLOBAL_SCOPE } from '../lib/admin-platform-api';
@@ -106,7 +107,10 @@ function ScopePicker({ requestedScope }: { requestedScope?: string }) {
             href={`/admin/scope?scope=${encodeURIComponent(scope.token)}`}
             className="card scope-card"
             key={scope.token}
-            onClick={() => { window.localStorage.setItem('fhc-admin-scope', scope.token); }}
+            onClick={() => {
+              const token = sanitizeAdminScopeToken(scope.token);
+              if (token) window.localStorage.setItem('fhc-admin-scope', token);
+            }}
           >
             <span className="scope-icon">◉</span>
             <strong>{scope.label}</strong>
