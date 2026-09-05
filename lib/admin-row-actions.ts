@@ -6,7 +6,7 @@ import type { AdminFormField } from './admin-form-schemas';
 import { resolveEntityKey } from './admin-form-schemas';
 import { catalogForIdField, labelForIdField, placeholderForIdField } from './id-field-catalog';
 
-const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i;
+const ULID = /\b[0-7][0-9A-HJKMNP-TV-Z]{25}\b/i;
 
 /** Routes where Laravel exposes a real DELETE (or delete-like) mutation. */
 const DELETABLE_ROUTE_PATTERNS: RegExp[] = [
@@ -26,6 +26,7 @@ const DELETABLE_ROUTE_PATTERNS: RegExp[] = [
   /^\/admin\/kca\/lecturers/,
   /^\/admin\/kca\/mentors/,
   /^\/admin\/kca\/assignments/,
+  /^\/admin\/kca\/students(?!\/register)/,
   /\/content\/.*items/,
   /^\/admin\/press\/publications/,
   /^\/admin\/events/,
@@ -43,6 +44,7 @@ const EDITABLE_ROUTE_PATTERNS: RegExp[] = [
   /^\/admin\/kca\/lecturers/,
   /^\/admin\/kca\/mentors/,
   /^\/admin\/kca\/assignments/,
+  /^\/admin\/kca\/students(?!\/register)/,
   // Edit opens the admission decision workflow (POST …/transitions), not a generic PATCH.
   /^\/admin\/kca\/applications/,
   /^\/admin\/kca\/review-queue/,
@@ -87,6 +89,18 @@ export function formatRowActionRecord(displayName: string | undefined, id: strin
     return name ? `${name} ${recordId}` : recordId;
   }
   return name || 'record';
+}
+
+/** Visible name for View/Edit/Delete titles — never concatenate the global ULID. */
+export function displayRowActionRecord(displayName: string | undefined, id: string | undefined): string {
+  const name = (displayName ?? '').trim().replace(ULID, '').trim();
+  if (name) return name;
+  const recordId = (id ?? '').trim();
+  return recordId && ULID.test(recordId) ? 'record' : (recordId || 'record');
+}
+
+export function stripRecordUlid(record: string | undefined): string {
+  return (record ?? '').replace(ULID, '').trim() || record || 'record';
 }
 
 /** Build editable field list from cached record details when no schema exists. */

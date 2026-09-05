@@ -449,6 +449,10 @@ export function catalogRecordsToRows(
         mapped[column] = get('language_code', 'language');
       } else if (key === 'id') {
         mapped[column] = get('registration_number', 'code', 'id');
+      } else if (key === 'email') {
+        mapped[column] = get('email');
+      } else if (key === 'phone') {
+        mapped[column] = get('phone');
       } else if (
         key.includes('submitted') ||
         key.includes('received') ||

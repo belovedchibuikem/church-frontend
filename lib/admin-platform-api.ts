@@ -584,6 +584,7 @@ export type KcaAdmissionLetter = {
   id: string | null;
   application_id?: string;
   reference_code: string | null;
+  registration_number?: string | null;
   applicant_name: string;
   church_name?: string | null;
   batch_label?: string | null;
@@ -598,6 +599,47 @@ export type KcaAdmissionLetter = {
   applicant_accepted_at?: string | null;
   applicant_signature_name?: string | null;
   requires_guardian_confirmation?: boolean;
+};
+
+export type KcaEnrollmentActivitySnapshot = {
+  curriculum?: {
+    percent?: number;
+    lessons_total?: number;
+    lessons_completed?: number;
+    modules_total?: number;
+    modules_completed?: number;
+  };
+  assignments?: {
+    open?: number;
+    items?: Array<{ state?: string }>;
+  };
+  attendance_recorded?: number;
+};
+
+export type KcaEnrollmentProfile = {
+  id: string;
+  application_id?: string | null;
+  person_id?: string | null;
+  person_name?: string | null;
+  given_name?: string | null;
+  family_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  registration_number?: string | null;
+  year_id?: string | null;
+  year_name?: string | null;
+  cohort_id?: string | null;
+  cohort_name?: string | null;
+  mentor_name?: string | null;
+  status?: string | null;
+  starts_on?: string | null;
+  application_data?: Record<string, unknown> | null;
+  registration?: Record<string, string> | null;
+  registration_sections?: Array<{
+    title: string;
+    fields: Array<{ key: string; label: string; value: string }>;
+  }> | null;
+  activity?: KcaEnrollmentActivitySnapshot | null;
 };
 
 export async function previewKcaRegistrationNumber(
@@ -766,6 +808,16 @@ export async function getKcaAdmissionLetter(
 ): Promise<KcaAdmissionLetter> {
   return (await platformGet<KcaAdmissionLetter>(
     `admin/kca/applications/${encodeURIComponent(applicationId)}/admission-letter`,
+    scope,
+  )).data;
+}
+
+export async function getKcaEnrollmentProfile(
+  enrollmentId: string,
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaEnrollmentProfile> {
+  return (await platformGet<KcaEnrollmentProfile>(
+    `admin/kca/enrollments/${encodeURIComponent(enrollmentId)}`,
     scope,
   )).data;
 }

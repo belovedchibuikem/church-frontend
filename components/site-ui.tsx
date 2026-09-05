@@ -93,6 +93,9 @@ import {
   createUserMessageConversation,
   createUserNeed,
   createUserPrayer,
+  createUserTestimony,
+  fetchUserTestimony,
+  updateUserTestimony,
   DATA_SUBJECT_REQUEST_TYPES,
   displayNameFromUser,
   downloadPressPublication,
@@ -354,6 +357,7 @@ const memberItemKeys: Record<string, string> = {
   '/bible': 'member.bible',
   '/account/prayer-requests': 'member.prayer',
   '/account/need-requests': 'member.needs',
+  '/account/testimonies': 'member.testimonies',
   '/account/giving': 'member.giving',
   '/account/mission/invitations': 'member.mission',
   '/account/messages': 'member.messages',
@@ -411,9 +415,12 @@ function Header({ path }: { path: string }) {
         </Link>
         <LocaleSwitcher />
         {!ready && !fixtures ? null : signedIn ? (
-          <Link className="avatar" href="/account" aria-label={`${user ? displayNameFromUser(user) : t('nav.account', { defaultMessage: 'Account' })}`}>
-            {initials}
-          </Link>
+          <>
+            <Link className="avatar" href="/account" aria-label={`${user ? displayNameFromUser(user) : t('nav.account', { defaultMessage: 'Account' })}`}>
+              {initials}
+            </Link>
+            <MemberLogoutButton className="header-logout" />
+          </>
         ) : (
           <>
             <Link className="site-button secondary small" href="/register">
@@ -1262,7 +1269,7 @@ function FindChurchLanding({ route }: { route: SiteRoute }) {
   );
 }
 
-function KcaGate() {
+function KcaGate({ autoRedirect = false }: { autoRedirect?: boolean }) {
   const router = useRouter();
   const [state, setState] = useState<'loading' | 'guest' | 'ready'>('loading');
   const [access, setAccess] = useState<KcaAccess | null>(null);
@@ -1273,7 +1280,7 @@ function KcaGate() {
       .then((data) => {
         if (cancelled) return;
         setAccess(data);
-        if (data.destination && data.destination !== 'overview') {
+        if (autoRedirect && data.destination && data.destination !== 'overview') {
           const href = kcaHrefForDestination(data.destination);
           if (href !== '/kca' && href !== '/kca/gate') {
             router.replace(href);
@@ -1288,7 +1295,7 @@ function KcaGate() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [autoRedirect, router]);
 
   if (state === 'loading') return <p className="panel">Resolving your KCA status…</p>;
 
@@ -2079,6 +2086,7 @@ function FormScreen({ route }: { route: SiteRoute }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftSummary, setDraftSummary] = useState<Record<string, string>>({});
+  const [testimonyDraft, setTestimonyDraft] = useState<{ title?: string; body?: string }>({});
   const fields = formFieldsForRoute(route.path);
   const isAuth = route.surface === 'auth';
   const isHomeChurchStep = route.path.includes('/start-home-church/apply');
@@ -2095,9 +2103,31 @@ function FormScreen({ route }: { route: SiteRoute }) {
   const isJoinChurch = route.path.includes('/join-church');
   const isAccountPrayer = route.path.includes('/account/prayer-requests');
   const isAccountNeed = route.path.includes('/account/need-requests');
+  const isAccountTestimony = route.path.includes('/account/testimonies');
+  const testimonyId = isAccountTestimony ? (pathEntityId(route.path) ?? '') : '';
+  const renderedFields = isAccountTestimony
+    ? fields.map((field) => {
+        if (field.name === 'title' && testimonyDraft.title !== undefined) return { ...field, value: testimonyDraft.title };
+        if (field.name === 'body' && testimonyDraft.body !== undefined) return { ...field, value: testimonyDraft.body };
+        return field;
+      })
+    : fields;
   const isPublicPrayer = route.path === '/prayer' || route.path.startsWith('/prayer/');
   const isContact = route.path === '/contact' || route.path.endsWith('/contact');
   const isHomeChurchStart = route.path === '/start-home-church';
+
+  useEffect(() => {
+    if (!testimonyId || !ULID_RE.test(testimonyId)) return;
+    let cancelled = false;
+    void fetchUserTestimony(testimonyId)
+      .then((row) => {
+        if (!cancelled) setTestimonyDraft({ title: row.title ?? '', body: row.body ?? '' });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [testimonyId]);
 
   useEffect(() => {
     if (isHomeChurchReview) setDraftSummary(readHomeChurchDraft());
@@ -2443,6 +2473,30 @@ function FormScreen({ route }: { route: SiteRoute }) {
       return;
     }
 
+    if (isAccountTestimony) {
+      const title = (values.title ?? '').trim();
+      const body = (values.body ?? values.notes ?? '').trim();
+      if (!title || !body) {
+        setError('Title and testimony details are required.');
+        return;
+      }
+      setBusy(true);
+      try {
+        if (testimonyId && ULID_RE.test(testimonyId)) {
+          await updateUserTestimony(testimonyId, { title, body });
+        } else {
+          await createUserTestimony({ title, body });
+        }
+        setDone(true);
+        window.setTimeout(() => router.push(flowNext[route.path] ?? '/account/testimonies'), 450);
+      } catch (err) {
+        setError(formatUserApiError(err, 'Unable to save your testimony.'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     if (isContact) {
       // No public contact inbox API — do not fake success when fixtures are off.
       if (designFixturesEnabled()) {
@@ -2608,8 +2662,8 @@ function FormScreen({ route }: { route: SiteRoute }) {
         </div>
       ) : null}
       <div className="form-grid">
-        {fields.map((field) => (
-          <Field key={field.name} field={field} />
+        {renderedFields.map((field) => (
+          <Field key={`${field.name}-${field.value ?? ''}`} field={field} />
         ))}
       </div>
       {isHomeChurchMeeting ? <HomeChurchScheduleFields /> : null}
@@ -6571,11 +6625,11 @@ function PressLandingExtras() {
   return (
     <>
       <div className="section-heading">
-        <h3>Devotionals</h3>
-        <Link href="/press/devotionals">Open devotionals and Study Manuals</Link>
+        <h3>Publications</h3>
+        <Link href="/press/publications">Browse all titles</Link>
       </div>
-      <p className="muted">Daily devotionals and Study Manuals share this shelf. Each title shows its type.</p>
-      <DataStatus state={pressState} emptyLabel="No publications yet." />
+      <p className="muted">Books, sermons, devotionals, and Study Manuals from Kingdom Press. Each title shows its type.</p>
+      <DataStatus state={pressState} emptyLabel="No published titles yet. Browse devotionals and Study Manuals, or check back after a publication is released." />
       {pressState.status === 'ready' ? <CardGrid cards={pressState.items} /> : null}
     </>
   );
@@ -6612,8 +6666,33 @@ function KcaGateLanding({ route }: { route: SiteRoute }) {
   const cms = useCmsPageMeta('kca');
   return (
     <>
-      <Hero route={route} imageUrl={cms.imageUrl} title={cms.title} subtitle={cms.summary} />
-      <KcaGate />
+      <Hero route={route} imageUrl={cms.imageUrl} title={route.title} subtitle={cms.summary ?? route.subtitle} />
+      <KcaGate autoRedirect={route.path === '/kca/gate'} />
+    </>
+  );
+}
+
+function KcaWhyLanding({ route }: { route: SiteRoute }) {
+  const cms = useCmsPageMeta('kca');
+  const reasons = [
+    { title: 'Biblical Training', body: 'Build a strong foundation in Scripture and doctrine.', href: '/kca/enrol', icon: '📖' },
+    { title: 'Practical Ministry', body: 'Serve with skill in real ministry environments.', href: '/kca/enrol', icon: '🛠' },
+    { title: 'Kingdom Impact', body: 'Lead change in church, community, and nations.', href: '/kca/enrol', icon: '⚡' },
+    { title: 'Mentored Formation', body: 'Walk with pastors and lecturers who help you finish well.', href: '/kca/enrol', icon: '🤝' },
+  ];
+  return (
+    <>
+      <Hero route={route} imageUrl={cms.imageUrl} title={route.title} subtitle={cms.summary ?? route.subtitle} />
+      <div className="section-heading">
+        <h3>Why join Kingdom Citizens Academy?</h3>
+      </div>
+      <CardGrid cards={reasons} columns={2} />
+      <BannerCta
+        title="Begin your application"
+        body="Enrol in Kingdom Citizens Academy and start the journey of formation."
+        action="Apply Now"
+        href="/kca/enrol"
+      />
     </>
   );
 }
@@ -6627,18 +6706,23 @@ function Landing({ route }: { route: SiteRoute }) {
   if (route.path === '/search') return <SearchLanding />;
   if (route.path === '/find-church') return <FindChurchLanding route={route} />;
   if (route.path === '/kca' || route.path === '/kca/gate') return <KcaGateLanding route={route} />;
+  if (route.path === '/kca/why') return <KcaWhyLanding route={route} />;
   if (route.path === '/prayer') return <PrayerLanding route={route} />;
   return <SectionHeroLanding route={route} />;
 }
 
 function SectionHeroLanding({ route }: { route: SiteRoute }) {
   const cms = useCmsPageMeta(cmsSlugForRoute(route));
+  const cmsTitle = route.section === 'KCA' ? null : cms.title;
   return (
     <>
-      <Hero route={route} imageUrl={cms.imageUrl} title={cms.title} subtitle={cms.summary} />
+      <Hero route={route} imageUrl={cms.imageUrl} title={cmsTitle} subtitle={cms.summary} />
       <Metrics />
       {route.section === 'Press' ? (
-        <PressLandingExtras />
+        <div className="card-stack">
+          <SectionLandingCards section={route.section} />
+          <PressLandingExtras />
+        </div>
       ) : route.section === 'Events' ? (
         <EventsLandingExtras />
       ) : route.section === 'Church' ? (

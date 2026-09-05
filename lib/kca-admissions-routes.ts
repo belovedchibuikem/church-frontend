@@ -49,7 +49,7 @@ export const kcaAdmissionsScreens: AdminScreen[] = [
     subtitle: 'Manage KCA admission applications.', kind: 'table',
     permission: 'kca.application.view', scope: 'assigned', nav: 'kca-applications', action: 'Export',
     tabs: ['All Status', 'All Batches', 'All Regions'],
-    columns: ['Applicant', 'Church', 'Batch', 'Submitted', 'Status'], rows: applicationRows,
+    columns: ['Applicant', 'Email', 'Phone', 'Church', 'Batch', 'Submitted', 'Status'], rows: applicationRows,
   },
   {
     id: 'G-03', batch: 'G', route: '/admin/kca/applications/samuel-david', title: 'Samuel David',

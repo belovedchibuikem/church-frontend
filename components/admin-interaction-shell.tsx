@@ -18,6 +18,7 @@ import {
   isAdmissionLetterIssueAction,
 } from '../lib/admin-mutation-dispatcher';
 import { getAdminRecordDetails } from '../lib/admin-record-cache';
+import { stripRecordUlid } from '../lib/admin-row-actions';
 import { fetchAdminKcaAssignment } from '../lib/admin-catalog-api';
 import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizard-step';
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
@@ -406,6 +407,7 @@ export function AdminInteractionShell({ children, route, title, permission, scop
       event.preventDefault();
       const record = button.dataset.record ?? '';
       const recordId = extractUlid(record);
+      const recordLabel = stripRecordUlid(record);
       const entityKey = button.dataset.entity ?? resolveEntityKey(route);
       const action = button.dataset.adminAction;
       if ((action === 'view' || action === 'edit') && recordId) {
@@ -415,6 +417,10 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         }
       }
       if (action === 'view' && recordId) {
+        if (route === '/admin/kca/students' || (route.startsWith('/admin/kca/students/') && !route.includes('/register'))) {
+          navigate(`/admin/kca/students/${recordId}`);
+          return;
+        }
         if (route.includes('/home-churches/applications')) {
           navigate(`/admin/home-churches/applications/${recordId}/decision`);
           return;
@@ -450,13 +456,13 @@ export function AdminInteractionShell({ children, route, title, permission, scop
           const mode = action === 'view' ? 'preview' : action === 'edit' ? 'edit' : 'confirm';
           const titleKey = action === 'view' ? 'admin.viewRecord' : action === 'edit' ? 'admin.editRecord' : 'admin.deleteRecord';
           const defaultTitle = action === 'view' ? 'View {record}' : action === 'edit' ? 'Edit {record}' : 'Delete {record}';
-          openAction(t(titleKey, { defaultMessage: defaultTitle, vars: { record } }), mode, { record, entityKey, details });
+          openAction(t(titleKey, { defaultMessage: defaultTitle, vars: { record: stripRecordUlid(record) } }), mode, { record, entityKey, details });
         })();
         return;
       }
-      if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record } }), 'preview', { record, entityKey, details: getAdminRecordDetails(record) });
-      else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record } }), 'edit', { record, entityKey, details: getAdminRecordDetails(record) });
-      else if (action === 'delete') openAction(t('admin.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record } }), 'confirm', { record, entityKey, details: getAdminRecordDetails(record) });
+      if (action === 'view') openAction(t('admin.viewRecord', { defaultMessage: 'View {record}', vars: { record: recordLabel } }), 'preview', { record, entityKey, details: getAdminRecordDetails(record) });
+      else if (action === 'edit') openAction(t('admin.editRecord', { defaultMessage: 'Edit {record}', vars: { record: recordLabel } }), 'edit', { record, entityKey, details: getAdminRecordDetails(record) });
+      else if (action === 'delete') openAction(t('admin.deleteRecord', { defaultMessage: 'Delete {record}', vars: { record: recordLabel } }), 'confirm', { record, entityKey, details: getAdminRecordDetails(record) });
       return;
     }
 

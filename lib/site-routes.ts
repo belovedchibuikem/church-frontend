@@ -185,12 +185,12 @@ export const siteRoutes: SiteRoute[] = [
   ...make('Giving', 'member', 'form', [['/account/giving/recurring', 'Recurring Giving', 'Start Recurring Giving']]),
   ...make('Giving', 'workflow', 'success', [['/give/receipt', 'Thank You for Your Generosity!', 'View Giving History']]),
   ...make('KCA', 'public', 'landing', [
-    ['/kca', 'Kingdom Change Agents', 'Apply Now'],
+    ['/kca', 'Kingdom Citizens Academy', 'Apply Now'],
     ['/kca/gate', 'Enter KCA', 'Enroll Now'],
     ['/kca/why', 'Why Join KCA?', 'Start Application'],
   ]),
   ...make('KCA', 'workflow', 'form', [
-    ['/kca/enrol', 'Kingdom Change Agents', 'Enroll Now'],
+    ['/kca/enrol', 'Kingdom Citizens Academy', 'Enroll Now'],
     ['/kca/apply/church', 'Church Information', 'Save & Continue'],
     ['/kca/apply/walk-with-christ', 'Walk with Christ', 'Save & Continue'],
     ['/kca/apply/why-join', 'Why Do You Want to Join KCA?', 'Save & Continue'],
@@ -276,7 +276,10 @@ export const siteRoutes: SiteRoute[] = [
   ]),
   ...make('Online', 'workflow', 'success', [['/online-church/welcome', 'Welcome Home!', 'Connect With Us']]),
   ...make('Press', 'public', 'landing', [['/press', 'Family House Press', 'Explore Library']]),
-  ...make('Press', 'public', 'listing', [['/press/devotionals', 'Devotionals', 'Read']]),
+  ...make('Press', 'public', 'listing', [
+    ['/press/publications', 'Publications', 'Read'],
+    ['/press/devotionals', 'Devotionals', 'Read'],
+  ]),
   ...make('Press', 'public', 'detail', [
     ['/press/kingdom-leadership', 'Kingdom Leadership', 'Read Now'],
     ['/press/walking-in-purpose', 'Walking in Purpose', 'Read Now'],
@@ -325,6 +328,19 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
       return { path, title: `Event ${suffix}`, action: 'Continue', subtitle: subtitles.Events, surface: 'workflow', kind: 'form', section: 'Events' };
     }
     return { path, title: 'Event Details', action: 'Register Now', subtitle: subtitles.Events, surface: 'public', kind: 'detail', section: 'Events' };
+  }
+
+  const testimonyMatch = path.match(/^\/account\/testimonies\/([0-9A-HJKMNP-TV-Z]{26})$/i);
+  if (testimonyMatch) {
+    return {
+      path,
+      title: 'Edit Testimony',
+      action: 'Save Testimony',
+      subtitle: subtitles.Church,
+      surface: 'member',
+      kind: 'form',
+      section: 'Church',
+    };
   }
 
   const pressMatch = path.match(/^\/press\/([0-9A-HJKMNP-TV-Z]{26})$/i);
@@ -454,6 +470,7 @@ export const memberNavGroups = [
     items: [
       { href: '/account/prayer-requests', label: 'Prayer', icon: '🙏' },
       { href: '/account/need-requests', label: 'Needs', icon: '🛟' },
+      { href: '/account/testimonies', label: 'Testimonies', icon: '✦' },
     ],
   },
   {

@@ -26,6 +26,8 @@ import {
   fetchUserPaymentIntents,
   fetchUserPaymentTransactions,
   fetchUserPrayers,
+  fetchUserTestimonies,
+  deleteUserTestimony,
   formatMoneyMinor,
   formatUserApiError,
   joinUserGroup,
@@ -44,6 +46,7 @@ import {
   type UserPaymentIntent,
   type UserPaymentTransaction,
   type UserPrayer,
+  type UserTestimony,
 } from '@/lib/user-api';
 
 type TranslateFn = ReturnType<typeof useLocale>['t'];
@@ -521,8 +524,8 @@ export function LiveJourneyPage({ route }: { route: SiteRoute }) {
       href: kcaEnrolled ? '/account/kca' : '/kca/enrol',
       detail: kcaEnrolled
         ? t('member.modulesProgress', {
-            defaultMessage: '{progress}/{total} modules',
-            vars: { progress: kca?.modules_with_progress ?? 0, total: kca?.modules_total ?? 0 },
+            defaultMessage: '{progress}/{total} lessons',
+            vars: { progress: kca?.lessons_completed ?? 0, total: kca?.lessons_total ?? 0 },
           })
         : t('member.notEnrolled', { defaultMessage: 'Not enrolled' }),
     },
@@ -841,8 +844,8 @@ export function LiveMinistriesPage({ route }: { route: SiteRoute }) {
           <p>
             {kca?.enrolled
               ? t('member.kcaEnrolled', {
-                  defaultMessage: 'Enrolled · {progress}/{total} modules with activity.',
-                  vars: { progress: kca.modules_with_progress ?? 0, total: kca.modules_total ?? 0 },
+                  defaultMessage: 'Enrolled · {progress}/{total} lessons completed.',
+                  vars: { progress: kca.lessons_completed ?? 0, total: kca.lessons_total ?? 0 },
                 })
               : t('member.notEnrolledKca', { defaultMessage: 'Not enrolled in KCA yet.' })}
           </p>
@@ -881,9 +884,9 @@ export function LiveSpiritualGrowthPage({ route }: { route: SiteRoute }) {
     };
   }, [t]);
 
-  const total = kca?.modules_total ?? 0;
-  const progress = kca?.modules_with_progress ?? 0;
-  const pct = total > 0 ? Math.round((progress / total) * 100) : 0;
+  const total = kca?.lessons_total ?? kca?.modules_total ?? 0;
+  const progress = kca?.lessons_completed ?? 0;
+  const pct = kca?.curriculum_percent ?? (total > 0 ? Math.round((progress / total) * 100) : 0);
 
   return (
     <>
@@ -905,7 +908,7 @@ export function LiveSpiritualGrowthPage({ route }: { route: SiteRoute }) {
         </i>
         <small>
           {t('member.modulesWithActivity', {
-            defaultMessage: '{progress}/{total} modules with activity',
+            defaultMessage: '{progress}/{total} lessons completed',
             vars: { progress, total },
           })}
         </small>
@@ -987,20 +990,104 @@ export function LiveAttendancePage({ route }: { route: SiteRoute }) {
 
 export function LiveTestimoniesPage({ route }: { route: SiteRoute }) {
   const { t } = useLocale();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<UserTestimony[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const reload = () => {
+    setLoading(true);
+    return fetchUserTestimonies()
+      .then((items) => {
+        setRows(items);
+        setError(null);
+      })
+      .catch((err) => {
+        setError(formatUserApiError(err, t('member.unableToLoadTestimonies', { defaultMessage: 'Unable to load testimonies.' })));
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchUserTestimonies()
+      .then((items) => {
+        if (!cancelled) {
+          setRows(items);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(formatUserApiError(err, t('member.unableToLoadTestimonies', { defaultMessage: 'Unable to load testimonies.' })));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
+
+  const remove = async (id: string) => {
+    if (!window.confirm(t('member.deleteTestimonyConfirm', { defaultMessage: 'Delete this pending testimony?' }))) return;
+    setBusyId(id);
+    setError(null);
+    try {
+      await deleteUserTestimony(id);
+      await reload();
+    } catch (err) {
+      setError(formatUserApiError(err, t('member.unableToDeleteTestimony', { defaultMessage: 'Unable to delete this testimony.' })));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <>
       <MemberHero
-        action={{ href: '/account/prayer-requests/new', label: t('member.sharePrayer', { defaultMessage: 'Share a prayer' }) }}
-        body={t('member.testimoniesBody', { defaultMessage: 'Testimony publishing is not on the member API yet. Prayer requests and messages are the live ways to share what God is doing.' })}
+        action={{ href: '/account/testimonies/new', label: t('member.shareTestimony', { defaultMessage: 'Share a testimony' }) }}
+        body={t('member.testimoniesBody', { defaultMessage: 'Share what God is doing. New stories stay pending until a pastor publishes them.' })}
         eyebrow={t('member.testimoniesEyebrow', { defaultMessage: 'TESTIMONIES' })}
         title={route.title}
       />
-      <MemberEmpty
-        action={t('member.openMessages', { defaultMessage: 'Open messages' })}
-        body={t('member.testimoniesEmptyBody', { defaultMessage: 'When a testimony endpoint ships, your published stories will load here from the database. Until then, write to pastoral care from Messages or Prayer.' })}
-        href="/account/messages"
-        title={t('member.noTestimonyApi', { defaultMessage: 'No testimony API yet' })}
-      />
+      {loading ? <p className="maps-settings-lead">{t('common.loading', { defaultMessage: 'Loading…' })}</p> : null}
+      {error ? <p className="maps-settings-lead" role="alert">{error}</p> : null}
+      {!loading && !error && rows.length === 0 ? (
+        <MemberEmpty
+          action={t('member.shareTestimony', { defaultMessage: 'Share a testimony' })}
+          body={t('member.testimoniesEmptyBody', { defaultMessage: 'You have not shared a testimony yet. Write what the Lord has done and submit it for pastoral review.' })}
+          href="/account/testimonies/new"
+          title={t('member.noTestimoniesYet', { defaultMessage: 'No testimonies yet' })}
+        />
+      ) : null}
+      {rows.length > 0 ? (
+        <section className="panel table-panel">
+          {rows.map((row, index) => {
+            const id = String(row.id ?? '');
+            const pending = (row.status ?? 'pending').toLowerCase() === 'pending';
+            return (
+              <div className="list-row" key={id || String(index)}>
+                <span className="thumb">✦</span>
+                <div>
+                  <b>{row.title ?? t('member.testimony', { defaultMessage: 'Testimony' })}</b>
+                  <small>{row.body ?? ''}</small>
+                </div>
+                <MemberStatus toneFrom={String(row.status ?? 'pending')}>
+                  {String(row.status ?? 'pending')}
+                </MemberStatus>
+                {pending && id ? (
+                  <div className="row-actions">
+                    <Link className="ghost-link" href={`/account/testimonies/${id}`}>{t('common.edit', { defaultMessage: 'Edit' })}</Link>
+                    <button className="ghost-link" disabled={busyId === id} type="button" onClick={() => void remove(id)}>
+                      {t('common.delete', { defaultMessage: 'Delete' })}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
     </>
   );
 }

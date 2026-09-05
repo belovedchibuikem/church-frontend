@@ -456,6 +456,10 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Category', name: 'category', type: 'select', options: ['Healing', 'Family', 'Provision', 'Guidance', 'Education', 'Other'], value: 'Provision', wide: true },
     { label: 'Need Summary', name: 'summary', type: 'textarea', value: 'I need pastoral support for a practical family need this month.', wide: true },
   ];
+  if (path.includes('/account/testimonies')) return [
+    { label: 'Title', name: 'title', value: '', wide: true },
+    { label: 'Testimony', name: 'body', type: 'textarea', value: '', wide: true },
+  ];
   if (path.includes('/prayer')) return [
     { label: 'Full Name', name: 'fullName', value: 'John Chinedu Doe' },
     { label: 'Email Address', name: 'email', type: 'email', value: 'john.doe@email.com' },

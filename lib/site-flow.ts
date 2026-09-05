@@ -87,7 +87,7 @@ export const heroPrimaryHref = (path: string, section: string, action?: string):
   if (path === '/mission') return '/mission/crusades/invite';
   if (path === '/mission/impact') return '/mission/crusades';
   if (path === '/mission/partners/loveworld-outreach') return '/mission/support';
-  if (path === '/press') return '/press/kingdom-leadership';
+  if (path === '/press') return '/press/publications';
   if (path === '/church') return '/find-church';
   if (path === '/find-church') return '/find-church/results';
   if (path === '/online-church') return '/online-church/live';

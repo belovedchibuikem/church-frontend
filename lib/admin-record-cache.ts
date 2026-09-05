@@ -76,6 +76,15 @@ export function mapOpsRecordToFormDetails(item: Record<string, unknown>): Record
     if (Array.isArray(levels)) details.soul_tree_levels = levels.map(String).join(',');
   }
 
+  const applicationData = item.application_data;
+  if (applicationData && typeof applicationData === 'object' && !Array.isArray(applicationData)) {
+    for (const [key, value] of Object.entries(applicationData as Record<string, unknown>)) {
+      if (details[key]) continue;
+      const text = asText(value);
+      if (text !== undefined) details[key] = text;
+    }
+  }
+
   // Friendly preview fields.
   if (asText(item.name)) details.Name = String(item.name);
   if (asText(item.location_name)) details.Location = String(item.location_name);

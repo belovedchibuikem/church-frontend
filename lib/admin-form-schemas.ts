@@ -2,6 +2,11 @@ import type { catalogOptions, FormCatalogKey, LiveCatalogKey } from './form-cata
 
 export type FormFieldType = 'text' | 'email' | 'url' | 'date' | 'datetime-local' | 'number' | 'select' | 'search-select' | 'textarea' | 'checkbox' | 'file';
 
+export type AdminFormFieldVisibleWhen = {
+  field: string;
+  values: string[];
+};
+
 export type AdminFormField = {
   label: string;
   name: string;
@@ -14,6 +19,8 @@ export type AdminFormField = {
   wide?: boolean;
   helpText?: string;
   accept?: string;
+  /** When set, the field is shown and required only if another field matches one of the values. */
+  visibleWhen?: AdminFormFieldVisibleWhen;
 };
 
 export type AdminFormSchema = {
@@ -165,6 +172,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     fields: [
       { label: 'Lecturer', name: 'lecturer_person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search lecturer person' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
+      { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
       { label: 'Cohort', name: 'kca_cohort_id', type: 'search-select', catalog: 'kcaCohort', required: true, placeholder: 'Search cohort' },
       { label: 'Starts at', name: 'starts_at', type: 'date', required: true },
       { label: 'Ends at', name: 'ends_at', type: 'date' },
@@ -269,7 +277,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Church', name: 'church_id', type: 'search-select', catalog: 'church', required: true, placeholder: 'Search church' },
       { label: 'Person', name: 'person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search person' },
       { label: 'Role type', name: 'role_type', type: 'select', options: ['worker', 'leader', 'disciple'], required: true },
-      { label: 'Title', name: 'title', type: 'select', options: ['Senior Pastor', 'Associate Pastor', 'Assistant Pastor', 'Elder', 'Deacon', 'Church Administrator', 'Ministry Head'], required: true },
+      { label: 'Title', name: 'title', type: 'select', options: ['Senior Pastor', 'Resident Pastor', 'Associate Pastor', 'Assistant Pastor', 'Minister', 'Evangelist', 'Prophet', 'Elder', 'Deacon', 'Deaconess', 'President', 'Church Administrator', 'Ministry Head'], required: true },
       { label: 'Status', name: 'status', type: 'select', options: ['active', 'training', 'inactive'] },
       { label: 'Started at', name: 'started_at', type: 'date' },
     ],
@@ -358,10 +366,52 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_enrollment: {
     entity: 'KCA enrollment',
     fields: [
-      { label: 'Admitted application', name: 'application_id', type: 'search-select', catalog: 'kcaApplication', required: true, placeholder: 'Search accepted application' },
+      { label: 'Given name', name: 'given_name', type: 'text', placeholder: 'First name' },
+      { label: 'Family name', name: 'family_name', type: 'text', placeholder: 'Last name' },
+      { label: 'Email address', name: 'email', type: 'email', placeholder: 'name@example.org' },
+      { label: 'Phone number', name: 'phone', type: 'text', placeholder: '+234' },
+      { label: 'Admitted application', name: 'application_id', type: 'search-select', catalog: 'kcaApplication', placeholder: 'Linked application' },
       { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', required: true, placeholder: 'Search cohort' },
-      { label: 'Registration number', name: 'registration_number', type: 'text', placeholder: 'Auto-assigned on enroll', helpText: 'Generated automatically when enrollment is submitted.' },
+      { label: 'Registration number', name: 'registration_number', type: 'text', placeholder: 'KCA-2026-00001' },
       { label: 'Starts on', name: 'starts_on', type: 'date', required: true },
+    ],
+  },
+  kca_enrollment_view: {
+    entity: 'KCA student',
+    fields: [
+      { label: 'Full name', name: 'person_name', type: 'text' },
+      { label: 'Email address', name: 'email', type: 'email' },
+      { label: 'Phone number', name: 'phone', type: 'text' },
+      { label: 'Registration number', name: 'registration_number', type: 'text' },
+      { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort' },
+      { label: 'KCA year', name: 'year_name', type: 'text' },
+      { label: 'Starts on', name: 'starts_on', type: 'date' },
+      { label: 'Status', name: 'status', type: 'text' },
+      { label: 'Full name (application)', name: 'fullName', type: 'text' },
+      { label: 'Sponsoring church', name: 'church_name', type: 'text' },
+      { label: 'Home church', name: 'home_church_name', type: 'text' },
+      { label: 'Pastor / leader', name: 'pastor_name', type: 'text' },
+      { label: 'Years walking with Christ', name: 'years', type: 'text' },
+      { label: 'Baptised?', name: 'baptised', type: 'text' },
+      { label: 'Walk with Christ', name: 'story', type: 'textarea', wide: true },
+      { label: 'Why join KCA', name: 'why', type: 'textarea', wide: true },
+      { label: 'Primary interest', name: 'interest', type: 'text' },
+      { label: 'Secondary interest', name: 'interest2', type: 'text' },
+      { label: 'Attendance commitment', name: 'attendance_commitment', type: 'text' },
+      { label: 'Conduct commitment', name: 'conduct_commitment', type: 'text' },
+      { label: 'Communication commitment', name: 'communication_commitment', type: 'text' },
+      { label: 'Declaration signature', name: 'declaration_signature', type: 'text' },
+      { label: 'Declaration date', name: 'declaration_date', type: 'text' },
+      { label: 'Information is true and complete', name: 'declaration_confirmed', type: 'text' },
+      { label: 'Guardian / parent full name', name: 'guardian_name', type: 'text' },
+      { label: 'Relationship to applicant', name: 'guardian_relationship', type: 'text' },
+      { label: 'Guardian phone number', name: 'guardian_phone', type: 'text' },
+      { label: 'Guardian email address', name: 'guardian_email', type: 'email' },
+      { label: 'Guardian consent provided', name: 'guardian_consent', type: 'text' },
+      { label: 'Recommender full name', name: 'recommender_name', type: 'text' },
+      { label: 'Position / ministry role', name: 'recommender_position', type: 'text' },
+      { label: 'Recommender phone number', name: 'recommender_phone', type: 'text' },
+      { label: 'Recommender email address', name: 'recommender_email', type: 'email' },
     ],
   },
   kca_alumni: {
@@ -493,10 +543,40 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       },
       { label: 'Category', name: 'category', type: 'text', placeholder: 'Spiritual Growth' },
       { label: 'Description', name: 'description', type: 'textarea', placeholder: 'Full description', wide: true },
-      { label: 'Speaker / preacher', name: 'speaker', type: 'text', placeholder: 'Required for sermons' },
-      { label: 'Preached date', name: 'preached_date', type: 'date' },
-      { label: 'Reflection / body', name: 'reflection', type: 'textarea', placeholder: 'Required for devotionals', wide: true },
-      { label: 'Passage', name: 'passage', type: 'text', placeholder: 'Required for study manuals' },
+      {
+        label: 'Speaker / preacher',
+        name: 'speaker',
+        type: 'text',
+        required: true,
+        placeholder: 'Required for sermons',
+        helpText: 'Required when the publication type is Sermon.',
+        visibleWhen: { field: 'publication_type', values: ['sermon'] },
+      },
+      {
+        label: 'Preached date',
+        name: 'preached_date',
+        type: 'date',
+        visibleWhen: { field: 'publication_type', values: ['sermon'] },
+      },
+      {
+        label: 'Reflection / body',
+        name: 'reflection',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Required for devotionals',
+        wide: true,
+        helpText: 'Required when the publication type is Devotional.',
+        visibleWhen: { field: 'publication_type', values: ['devotional'] },
+      },
+      {
+        label: 'Scripture passage',
+        name: 'passage',
+        type: 'text',
+        required: true,
+        placeholder: 'e.g. Romans 8:1-39',
+        helpText: 'Required for study manuals. Name the primary passage this manual covers.',
+        visibleWhen: { field: 'publication_type', values: ['bible_study'] },
+      },
       { label: 'Edition', name: 'edition', type: 'text', placeholder: '1st' },
       { label: 'Publication date', name: 'publication_date', type: 'date' },
       { label: 'Save as draft', name: 'as_draft', type: 'checkbox' },
@@ -658,6 +738,7 @@ const screenEntityMap: Record<string, string> = {
   'H-04': 'kca_year',
   'H-17': 'kca_assessment',
   'H-20': 'kca_alumni',
+  'H-01': 'kca_enrollment',
   'H-01b': 'kca_application',
   'H-05': 'kca_mentor_assignment',
   'H-07': 'kca_lecturer_assignment',
@@ -704,11 +785,20 @@ export function schemaForAction(entityKey: string | undefined, mode: string): Ad
     if (mode === 'edit') return adminFormSchemas.kca_assignment_edit;
     if (mode === 'preview' || mode === 'actions') return adminFormSchemas.kca_assignment_view;
   }
+  if (entityKey === 'kca_enrollment' && (mode === 'preview' || mode === 'actions')) {
+    return adminFormSchemas.kca_enrollment_view;
+  }
   return adminFormSchemas[entityKey];
 }
 
 export function fieldsForEntity(entityKey: string): AdminFormField[] {
   return adminFormSchemas[entityKey]?.fields ?? [];
+}
+
+export function isAdminFieldVisible(field: AdminFormField, values: Record<string, string>): boolean {
+  if (!field.visibleWhen) return true;
+  const current = values[field.visibleWhen.field] ?? '';
+  return field.visibleWhen.values.includes(current);
 }
 
 /** Map legacy display labels to DB column names for edit defaults. */

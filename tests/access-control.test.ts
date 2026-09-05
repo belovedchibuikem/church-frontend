@@ -262,3 +262,22 @@ for (const { id, screen, permission, lowerPrivilege } of highRiskRoutes) {
     );
   });
 }
+
+test('KCA lecturer permissions unlock attendance, evidence review, and assessments', () => {
+  const lecturerPermissions = [
+    'kca.enrollments.view',
+    'kca.applications.view',
+    'kca.attendance.record',
+    'kca.evidence.view',
+    'kca.evidence.review',
+    'kca.assessments.view',
+    'kca.assessments.record',
+    'kca.assignments.transition',
+  ];
+  const lecturer = context({ permissions: lecturerPermissions, scopes: ['global'] });
+  assert.equal(evaluateAccess(getAdminScreen('/admin/kca/attendance')!, lecturer).allowed, true);
+  assert.equal(evaluateAccess(getAdminScreen('/admin/kca/evidence-reviews')!, lecturer).allowed, true);
+  assert.equal(evaluateAccess(getAdminScreen('/admin/kca/assessments/final')!, lecturer).allowed, true);
+  assert.equal(evaluateAccess(getAdminScreen('/admin/kca/students')!, lecturer).allowed, true);
+  assert.equal(evaluateAccess(getAdminScreen('/admin/kca/modules/new')!, lecturer).allowed, false);
+});

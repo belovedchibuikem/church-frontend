@@ -324,6 +324,23 @@ export type CreatePastoralNeedInput = {
   summary: string;
 };
 
+export type UserTestimony = {
+  id?: string;
+  public_id?: string;
+  title?: string | null;
+  body?: string | null;
+  status?: string | null;
+  submitted_at?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type CreateTestimonyInput = {
+  title: string;
+  body: string;
+};
+
 export type CreateMessageConversationInput = {
   participant_person_ids: string[];
   first_message: string;
@@ -646,6 +663,63 @@ export async function createUserNeed(input: CreatePastoralNeedInput): Promise<Us
     }),
   });
   return { ...need, id: need.id ?? need.public_id };
+}
+
+/** GET /user/testimonies */
+export async function fetchUserTestimonies(): Promise<UserTestimony[]> {
+  const data = await apiRequestData<unknown>('user/testimonies', {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return asList<UserTestimony>(data).map((item) => ({
+    ...item,
+    id: item.id ?? item.public_id,
+  }));
+}
+
+/** GET /user/testimonies/{id} */
+export async function fetchUserTestimony(id: string): Promise<UserTestimony> {
+  const testimony = await apiRequestData<UserTestimony>(`user/testimonies/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    headers: await serverSessionHeaders(),
+  });
+  return { ...testimony, id: testimony.id ?? testimony.public_id };
+}
+
+/** POST /user/testimonies */
+export async function createUserTestimony(input: CreateTestimonyInput): Promise<UserTestimony> {
+  const headers = new Headers(await serverSessionHeaders());
+  const testimony = await apiRequestData<UserTestimony>('user/testimonies', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body,
+    }),
+  });
+  return { ...testimony, id: testimony.id ?? testimony.public_id };
+}
+
+/** PUT /user/testimonies/{id} */
+export async function updateUserTestimony(id: string, input: CreateTestimonyInput): Promise<UserTestimony> {
+  const headers = new Headers(await serverSessionHeaders());
+  const testimony = await apiRequestData<UserTestimony>(`user/testimonies/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body,
+    }),
+  });
+  return { ...testimony, id: testimony.id ?? testimony.public_id };
+}
+
+/** DELETE /user/testimonies/{id} */
+export async function deleteUserTestimony(id: string): Promise<void> {
+  await apiRequestData(`user/testimonies/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: await serverSessionHeaders(),
+  });
 }
 
 /** GET /user/messages/conversations */

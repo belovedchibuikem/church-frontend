@@ -215,11 +215,24 @@ function jsonBody(entries: Record<string, JsonValue | undefined>): JsonObject {
 
 function pressTypeMetadata(payload: Record<string, string>): JsonObject {
   return jsonBody({
-    speaker: field(payload, 'speaker', 'preacher'),
+    speaker: field(payload, 'speaker', 'preacher', 'speaker_name'),
     preached_date: field(payload, 'preached_date'),
-    reflection: field(payload, 'reflection', 'body'),
-    passage: field(payload, 'passage'),
+    reflection: field(payload, 'reflection', 'body', 'content'),
+    passage: field(payload, 'passage', 'scripture', 'session_passage'),
   });
+}
+
+function assertPressTypeRequirements(payload: Record<string, string>): void {
+  const type = (field(payload, 'publication_type', 'type') ?? 'book').toLowerCase().replace(/\s+/g, '_');
+  if (type === 'sermon' && !field(payload, 'speaker', 'preacher', 'speaker_name')) {
+    throw new Error('Sermons require a speaker or preacher name.');
+  }
+  if (type === 'devotional' && !field(payload, 'reflection', 'body', 'content')) {
+    throw new Error('Devotionals require a reflection or body.');
+  }
+  if (type === 'bible_study' && !field(payload, 'passage', 'scripture', 'session_passage')) {
+    throw new Error('Study manuals require a scripture passage.');
+  }
 }
 
 async function attachPressPublicationAssetIfNeeded(
@@ -741,6 +754,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       {
         lecturer_person_id: requireId(firstUlid(payload.lecturer_person_id, payload.person_id), 'lecturer'),
         kca_module_id: requireId(firstUlid(payload.kca_module_id, payload.module_id), 'module'),
+        kca_lesson_id: requireId(firstUlid(payload.kca_lesson_id, payload.lesson_id), 'lesson'),
         kca_cohort_id: requireId(firstUlid(payload.kca_cohort_id, payload.cohort_id), 'cohort'),
         starts_at: field(payload, 'starts_at', 'startDate') ?? new Date().toISOString(),
         ends_at: field(payload, 'ends_at', 'endDate') ?? null,
@@ -754,6 +768,10 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       {
         starts_at: field(payload, 'starts_at', 'startDate') ?? new Date().toISOString(),
         ends_at: field(payload, 'ends_at', 'endDate') ?? null,
+        kca_module_id: firstUlid(payload.kca_module_id, payload.module_id) ?? undefined,
+        kca_lesson_id: firstUlid(payload.kca_lesson_id, payload.lesson_id) ?? undefined,
+        kca_cohort_id: firstUlid(payload.kca_cohort_id, payload.cohort_id) ?? undefined,
+        lecturer_person_id: firstUlid(payload.lecturer_person_id, payload.person_id) ?? undefined,
       },
       { ...opts, method: 'PATCH' },
     );
@@ -761,6 +779,29 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   if (routeStarts(route, '/admin/kca/lecturers') && labelIs(label, /delete|remove/)) {
     return mutate(
       `admin/kca/lecturer-assignments/${encodeURIComponent(requireId(pickRecord(ctx, 'assignment_id', 'id'), 'lecturer assignment'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/students') && !routeStarts(route, '/admin/kca/students/register') && labelIs(label, /edit|update|save/) && !labelIs(label, /delete|remove|create|add|register/)) {
+    return mutate(
+      `admin/kca/enrollments/${encodeURIComponent(requireId(pickRecord(ctx, 'enrollment_id', 'id'), 'student'))}`,
+      {
+        given_name: field(payload, 'given_name') || undefined,
+        family_name: field(payload, 'family_name') || undefined,
+        email: field(payload, 'email') || undefined,
+        phone: field(payload, 'phone') || undefined,
+        kca_cohort_id: firstUlid(payload.cohort_id, payload.kca_cohort_id) ?? undefined,
+        cohort_id: firstUlid(payload.cohort_id, payload.kca_cohort_id) ?? undefined,
+        registration_number: field(payload, 'registration_number') || undefined,
+        starts_on: field(payload, 'starts_on', 'startDate') || undefined,
+      },
+      { ...opts, method: 'PATCH' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/students') && !routeStarts(route, '/admin/kca/students/register') && labelIs(label, /delete|remove/)) {
+    return mutate(
+      `admin/kca/enrollments/${encodeURIComponent(requireId(pickRecord(ctx, 'enrollment_id', 'id'), 'student'))}`,
       undefined,
       { ...opts, method: 'DELETE' },
     );
@@ -1745,6 +1786,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   // --- Press ---
   if (routeStarts(route, '/admin/press/publications', '/admin/press/manuscripts', '/admin/press/catalogue') && labelIs(label, /create publication|add publication|submit manuscript|save|submit/) && !route.includes('/translations')) {
     if (!labelIs(label, /isbn|contributor|translation|transition|approv|publish|edit|update|delete|remove|attach|asset|upload/)) {
+      assertPressTypeRequirements(payload);
       const created = await mutate(
         'admin/press/publications',
         jsonBody({

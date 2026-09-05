@@ -7,7 +7,7 @@ import { AdminFormFields } from './admin-form-fields';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
 import { defaultValueForField, fieldsForEntity, normalizeDetailValues, schemaForAction, type AdminFormField } from '../lib/admin-form-schemas';
-import { fieldsFromRecordDetails } from '../lib/admin-row-actions';
+import { fieldsFromRecordDetails, stripRecordUlid } from '../lib/admin-row-actions';
 import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
 import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
 import { PLATFORM_GLOBAL_SCOPE, uploadPlatformFile } from '../lib/admin-platform-api';
@@ -219,7 +219,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
           <span><small>{t('admin.page', { defaultMessage: 'Page' })}</small><strong>{pageTitle}</strong></span>
           <span><small>{t('admin.scope', { defaultMessage: 'Scope' })}</small><strong>{scope}</strong></span>
           <span><small>{t('admin.permission', { defaultMessage: 'Permission' })}</small><strong>{permission}</strong></span>
-          {(record || idValue) ? <span><small>{t('admin.record', { defaultMessage: 'Record' })}</small><strong>{record ?? idValue}</strong></span> : null}
+          {(record || idValue) ? <span><small>{t('admin.record', { defaultMessage: 'Record' })}</small><strong>{stripRecordUlid(record) || idValue}</strong></span> : null}
         </div>
         <h3>{mode === 'actions' ? t('admin.availableActions', { defaultMessage: 'Available actions' }) : t('admin.recordDetails', { defaultMessage: 'Record details' })}</h3>
         {mode === 'preview' ? (

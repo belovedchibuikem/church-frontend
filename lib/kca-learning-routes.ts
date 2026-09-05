@@ -20,11 +20,11 @@ const mentorRows = [
 ];
 
 const lecturerRows = [
-  { Lecturer: 'Dr. John Samuel', Specialization: 'Systematic Theology', Modules: '5', Status: 'Active' },
-  { Lecturer: 'Rev. Peace Okafor', Specialization: 'Bible & Exegesis', Modules: '4', Status: 'Active' },
-  { Lecturer: 'Pastor David Emmanuel', Specialization: 'Leadership & Ministry', Modules: '6', Status: 'Active' },
-  { Lecturer: 'Dr. Grace Adenina', Specialization: 'Christian Living', Modules: '3', Status: 'Active' },
-  { Lecturer: 'Prof. Michael Eze', Specialization: 'Church History', Modules: '2', Status: 'Pending' },
+  { Lecturer: 'Dr. John Samuel', Module: 'Identity in Christ', Lesson: 'Who Am I in Christ?', Cohort: '1st Batch 2026', Status: 'Active' },
+  { Lecturer: 'Rev. Peace Okafor', Module: 'Bible Survey', Lesson: 'Genesis Overview', Cohort: '1st Batch 2026', Status: 'Active' },
+  { Lecturer: 'Pastor David Emmanuel', Module: 'Leadership & Ministry', Lesson: 'Servant Leadership', Cohort: '1st Batch 2026', Status: 'Active' },
+  { Lecturer: 'Dr. Grace Adenina', Module: 'Christian Living', Lesson: 'Holiness', Cohort: '1st Batch 2026', Status: 'Active' },
+  { Lecturer: 'Prof. Michael Eze', Module: 'Church History', Lesson: 'The Early Church', Cohort: '1st Batch 2026', Status: 'Pending' },
 ];
 
 const moduleRows = [
@@ -56,7 +56,7 @@ export const kcaLearningScreens: AdminScreen[] = [
       { label: 'At Risk', value: '126', trend: '-14%' },
       { label: 'Completed', value: '110', trend: '+10%' },
     ],
-    columns: ['Name', 'ID', 'Cohort', 'Year', 'Mentor', 'Status', 'Progress'], rows: studentRows,
+    columns: ['Name', 'ID', 'Email', 'Phone', 'Cohort', 'Year', 'Mentor', 'Status', 'Progress'], rows: studentRows,
   },
   {
     id: 'H-01b', batch: 'H', route: '/admin/kca/students/register', title: 'Register KCA Student',
@@ -96,8 +96,8 @@ export const kcaLearningScreens: AdminScreen[] = [
   },
   {
     id: 'H-07', batch: 'H', route: '/admin/kca/lecturers', title: 'Lecturers',
-    subtitle: 'Manage lecturers and their subjects.', kind: 'table', permission: 'kca.lecturer.view', scope: 'assigned', nav: 'kca-lecturers', action: '+ Add Lecturer',
-    columns: ['Lecturer', 'Modules', 'Status'], rows: lecturerRows,
+    subtitle: 'Assign lecturers to a module lesson and cohort. Lecturers with the KCA lecturer role can mark attendance, review evidence, and record assessments.', kind: 'table', permission: 'kca.lecturer.view', scope: 'assigned', nav: 'kca-lecturers', action: '+ Add Lecturer',
+    columns: ['Lecturer', 'Module', 'Lesson', 'Cohort', 'Status'], rows: lecturerRows,
   },
   {
     id: 'H-08', batch: 'H', route: '/admin/kca/lecturers/dr-john-samuel', title: 'Dr. John Samuel',

@@ -23,6 +23,7 @@ test('every major public experience has a canonical entry route', () => {
     '/kca',
     '/kca/gate',
     '/press',
+    '/press/publications',
     '/press/devotionals',
     '/events',
     '/give',
@@ -136,4 +137,16 @@ test('member auth registration and verification routes are available', () => {
     assert.ok(route, `Missing ${path}`);
     assert.equal(route?.surface, 'auth');
   }
+});
+
+test('KCA landing title is stable and testimonies have member CRUD routes', () => {
+  assert.equal(findSiteRoute('/kca')?.title, 'Kingdom Citizens Academy');
+  assert.equal(findSiteRoute('/kca/why')?.path, '/kca/why');
+  assert.equal(findSiteRoute('/press/publications')?.path, '/press/publications');
+  assert.equal(findSiteRoute('/account/testimonies')?.surface, 'member');
+  assert.equal(findSiteRoute('/account/testimonies/new')?.kind, 'form');
+  const edit = findSiteRoute('/account/testimonies/01J8TST1234567890ABCDEFGHJ');
+  assert.equal(edit?.surface, 'member');
+  assert.equal(edit?.kind, 'form');
+  assert.ok(memberNavigation.some(([href]) => href === '/account/testimonies'));
 });

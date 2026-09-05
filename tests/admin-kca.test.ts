@@ -244,3 +244,38 @@ test('KCA applications table supports bulk admit and bulk status updates', async
   assert.match(api, /admin\/kca\/applications\/bulk-enrollments/);
   assert.match(api, /admin\/kca\/applications\/bulk-transitions/);
 });
+
+test('KCA students support view, edit, and delete', async () => {
+  const rowActions = await readFile(new URL('../lib/admin-row-actions.ts', import.meta.url), 'utf8');
+  assert.match(rowActions, /\/\^\\\/admin\\\/kca\\\/students\(\?!\\\/register\)\//);
+  assert.match(rowActions, /stripRecordUlid/);
+  assert.match(rowActions, /\\b\[0-7\]\[0-9A-HJKMNP-TV-Z\]\{25\}\\b/);
+  const ulid = /\b[0-7][0-9A-HJKMNP-TV-Z]{25}\b/i;
+  assert.equal('Oko Agha 01m1qrww7aptv6k0jy3s4tva14'.replace(ulid, '').trim(), 'Oko Agha');
+  const shell = await readFile(new URL('../components/admin-interaction-shell.tsx', import.meta.url), 'utf8');
+  assert.match(shell, /\/admin\/kca\/students\/\$\{recordId\}/);
+  const { resolveEntityKey, fieldsForEntity, schemaForAction } = await import('../lib/admin-form-schemas.ts');
+  assert.equal(resolveEntityKey('/admin/kca/students', 'H-01'), 'kca_enrollment');
+  const previewFields = schemaForAction('kca_enrollment', 'preview')?.fields ?? [];
+  assert.ok(previewFields.some((field) => field.name === 'email'));
+  assert.ok(previewFields.some((field) => field.name === 'phone'));
+  assert.ok(previewFields.some((field) => field.name === 'declaration_signature'));
+  const students = getAdminScreen('/admin/kca/students')!;
+  assert.ok(students.columns?.includes('Email'));
+  assert.ok(students.columns?.includes('Phone'));
+  const applications = getAdminScreen('/admin/kca/applications')!;
+  assert.ok(applications.columns?.includes('Email'));
+  assert.ok(applications.columns?.includes('Phone'));
+});
+
+test('KCA lecturer assignment requires a lesson', async () => {
+  const { fieldsForEntity } = await import('../lib/admin-form-schemas.ts');
+  const fields = fieldsForEntity('kca_lecturer_assignment');
+  const lesson = fields.find((field) => field.name === 'kca_lesson_id');
+  assert.ok(lesson);
+  assert.equal(lesson?.required, true);
+  const lecturers = getAdminScreen('/admin/kca/lecturers')!;
+  assert.ok(lecturers.columns?.includes('Lesson'));
+  const dispatcher = await readFile(new URL('../lib/admin-mutation-dispatcher.ts', import.meta.url), 'utf8');
+  assert.match(dispatcher, /kca_lesson_id: requireId\(firstUlid\(payload\.kca_lesson_id/);
+});

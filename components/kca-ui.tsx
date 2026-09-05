@@ -20,6 +20,7 @@ import { executeAdminAction, extractUlid, formatAdminMutationError } from '../li
 import { KcaAdmissionLetterSheet } from './kca-admission-letter-sheet';
 import {
   getKcaAdmissionLetter,
+  getKcaEnrollmentProfile,
   fetchKcaAdmissionLetterAssetBlob,
   issueKcaAdmissionLetter,
   downloadKcaAdmissionLetterPdf,
@@ -33,6 +34,7 @@ import {
   bulkTransitionKcaApplications,
   platformErrorMessage,
   type KcaAdmissionLetter,
+  type KcaEnrollmentProfile,
   type KcaAttendanceRosterStudent,
   type KcaBulkAdmitResult,
   type KcaBulkFailure,
@@ -94,6 +96,13 @@ const kcaFilterMessageKeys: Record<string, string> = {
   'All Venues': 'member.kca.allVenues',
   'All Statuses': 'member.kca.allStatuses',
 };
+
+function RegistrationFieldValue({ value }: { value: string }) {
+  if (/^data:image\//i.test(value) || /^https?:\/\/.+\.(png|jpe?g|webp|gif)(\?|$)/i.test(value)) {
+    return <img alt="" src={value} style={{ maxHeight: 96, maxWidth: '100%' }} />;
+  }
+  return value;
+}
 
 function translateAction(
   t: (key: string, options?: { defaultMessage?: string }) => string,
@@ -303,16 +312,39 @@ function KcaApplicantOverview({ screen }: { screen: AdminScreen }) {
     }
     const name = String(record?.person_name ?? 'Applicant');
     const status = String(record?.status ?? 'received');
+    const email = String(record?.email ?? '').trim();
+    const phone = String(record?.phone ?? '').trim();
+    const registrationSections = Array.isArray(record?.registration_sections)
+      ? (record.registration_sections as Array<{ title: string; fields: Array<{ key: string; label: string; value: string }> }>)
+      : [];
     return (
-      <article className="card kca-identity-banner">
-        <div>
-          <span className="kca-overline">{t('member.kca.applicantProfile', { defaultMessage: 'Applicant profile' })}</span>
-          <h2>{name} <KcaBadge value={status} /></h2>
-          <p>{applicationId}</p>
-          <p>Submitted {record?.received_at ? String(record.received_at) : 'Not provided'}</p>
-          <Link href={`/admin/kca/applications/${applicationId}/decision`}>Open decision</Link>
-        </div>
-      </article>
+      <div className="kca-entity-page">
+        <article className="card kca-identity-banner">
+          <div>
+            <span className="kca-overline">{t('member.kca.applicantProfile', { defaultMessage: 'Applicant profile' })}</span>
+            <h2>{name} <KcaBadge value={status} /></h2>
+            <div className="kca-contact-line">
+              <span>✉ {email || '—'}</span>
+              <span>☎ {phone || '—'}</span>
+            </div>
+            <p>Submitted {record?.received_at ? String(record.received_at) : 'Not provided'}</p>
+            <Link href={`/admin/kca/applications/${applicationId}/decision`}>Open decision</Link>
+          </div>
+        </article>
+        {registrationSections.map((section) => (
+          <article className="card kca-detail-panel" key={section.title}>
+            <h2>{section.title}</h2>
+            <dl>
+              {section.fields.map((field) => (
+                <div key={field.key}>
+                  <dt>{field.label}</dt>
+                  <dd><RegistrationFieldValue value={field.value} /></dd>
+                </div>
+              ))}
+            </dl>
+          </article>
+        ))}
+      </div>
     );
   }
 
@@ -765,6 +797,11 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
     const personName = String(application?.person_name ?? 'Applicant');
     const initials = personName.split(' ').map((part) => part[0]).slice(0, 2).join('') || '?';
     const status = String(application?.status ?? 'received');
+    const email = String(application?.email ?? '').trim();
+    const phone = String(application?.phone ?? '').trim();
+    const registrationSections = Array.isArray(application?.registration_sections)
+      ? (application.registration_sections as Array<{ title: string; fields: Array<{ key: string; label: string; value: string }> }>)
+      : [];
     const orientationProgress = Array.isArray(application?.orientation_progress)
       ? (application.orientation_progress as string[])
       : [];
@@ -778,6 +815,10 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           <h2>{personName}</h2>
           <small>{applicationId}</small>
           <p><KcaBadge value={status} /></p>
+          <div className="kca-contact-line">
+            <span>✉ {email || '—'}</span>
+            <span>☎ {phone || '—'}</span>
+          </div>
           <p>{application?.received_at ? `Received ${formatTimestamp(String(application.received_at))}` : null}</p>
           {application?.batch_name ? <p>{t('member.kca.batch', { defaultMessage: 'Batch' })}: {String(application.batch_name)}</p> : null}
           {showPostDecisionPanel ? (
@@ -797,6 +838,24 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
           ) : null}
         </aside>
         <article className="card kca-decision-card">
+          {registrationSections.length > 0 ? (
+            <div className="kca-detail-panel" style={{ marginBottom: '1.25rem' }}>
+              <h2>{t('member.kca.applicationSummary', { defaultMessage: 'Application Summary' })}</h2>
+              {registrationSections.map((section) => (
+                <div key={section.title} style={{ marginTop: '0.75rem' }}>
+                  <h3>{section.title}</h3>
+                  <dl>
+                    {section.fields.map((field) => (
+                      <div key={field.key}>
+                        <dt>{field.label}</dt>
+                        <dd><RegistrationFieldValue value={field.value} /></dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {showPostDecisionPanel ? (
             <>
               <div className="kca-decision-recorded is-accept">
@@ -1003,7 +1062,8 @@ function KcaLetter({ screen }: { screen: AdminScreen }) {
             )}
             letter={{
               applicant_name: applicant,
-              reference_code: letter.reference_code,
+              reference_code: letter.registration_number || letter.reference_code,
+              registration_number: letter.registration_number,
               letter_body: letter.letter_body,
               signer_name: letter.signer_name,
               signer_title: letter.signer_title,
@@ -1139,7 +1199,7 @@ function KcaEntityDetail({ screen }: { screen: AdminScreen }) {
   const isStudent = screen.id === 'H-02';
   const live = !shouldUseDesignFixtures() && shouldUseCatalogLiveData();
   const enrollmentId = isStudent ? enrollmentIdFromRoute(screen.route) : null;
-  const [record, setRecord] = useState<Record<string, unknown> | null>(null);
+  const [record, setRecord] = useState<KcaEnrollmentProfile | null>(null);
   const [loading, setLoading] = useState(Boolean(live && enrollmentId));
 
   useEffect(() => {
@@ -1148,11 +1208,10 @@ function KcaEntityDetail({ screen }: { screen: AdminScreen }) {
       return;
     }
     let cancelled = false;
-    void listCatalogDomain('kca.enrollments', { perPage: 100, scope: CATALOG_GLOBAL_SCOPE })
+    void getKcaEnrollmentProfile(enrollmentId, CATALOG_GLOBAL_SCOPE)
       .then((result) => {
         if (cancelled) return;
-        const match = result.items.find((item) => String(item.id) === enrollmentId) ?? null;
-        setRecord(match as Record<string, unknown> | null);
+        setRecord(result);
       })
       .catch(() => {
         if (!cancelled) setRecord(null);
@@ -1168,10 +1227,75 @@ function KcaEntityDetail({ screen }: { screen: AdminScreen }) {
   const personName = String(record?.person_name ?? screen.title);
   const initials = personName.split(' ').map((part) => part[0]).slice(0, 2).join('') || '?';
   const registrationNumber = String(record?.registration_number ?? screen.details?.['Registration number'] ?? '—');
-  const cohortName = String(record?.cohort_name ?? record?.batch_name ?? screen.details?.Cohort ?? '—');
+  const cohortName = String(record?.cohort_name ?? screen.details?.Cohort ?? '—');
   const startsOn = String(record?.starts_on ?? screen.details?.['Starts on'] ?? '—');
   const yearName = String(record?.year_name ?? '—');
   const status = String(record?.status ?? t('member.kca.active', { defaultMessage: 'Active' }));
+  const email = `${record?.email ?? ''}`.trim();
+  const phone = `${record?.phone ?? ''}`.trim();
+
+  const curriculum = record?.activity?.curriculum ?? {};
+  const assignmentStates = Array.isArray(record?.activity?.assignments?.items)
+    ? record?.activity?.assignments?.items ?? []
+    : [];
+  const assignmentTotal = assignmentStates.length;
+  const assignmentCompleted = assignmentStates.filter((item) => {
+    const state = `${item.state ?? ''}`.toLowerCase();
+    return state === 'approved' || state === 'final_assessment';
+  }).length;
+  const assignmentPercent = assignmentTotal > 0
+    ? Math.round((assignmentCompleted / assignmentTotal) * 100)
+    : 0;
+
+  const lessonsTotal = Number(curriculum.lessons_total ?? 0);
+  const lessonsCompleted = Number(curriculum.lessons_completed ?? 0);
+  const lessonsPercent = lessonsTotal > 0
+    ? Math.round((lessonsCompleted / lessonsTotal) * 100)
+    : 0;
+
+  const modulesTotal = Number(curriculum.modules_total ?? 0);
+  const modulesCompleted = Number(curriculum.modules_completed ?? 0);
+  const modulesPercent = modulesTotal > 0
+    ? Math.round((modulesCompleted / modulesTotal) * 100)
+    : 0;
+
+  const overallPercent = Number(curriculum.percent ?? 0);
+  const attendanceCount = Number(record?.activity?.attendance_recorded ?? 0);
+  const progressRows = live && isStudent ? [
+    {
+      label: t('member.kca.overallProgress', { defaultMessage: 'Overall Progress' }),
+      display: `${Math.max(0, Math.min(100, overallPercent))}%`,
+      percent: Math.max(0, Math.min(100, overallPercent)),
+    },
+    {
+      label: t('member.kca.lessons', { defaultMessage: 'Lessons' }),
+      display: `${lessonsCompleted}/${lessonsTotal}`,
+      percent: Math.max(0, Math.min(100, lessonsPercent)),
+    },
+    {
+      label: t('member.kca.modules', { defaultMessage: 'Modules' }),
+      display: `${modulesCompleted}/${modulesTotal}`,
+      percent: Math.max(0, Math.min(100, modulesPercent)),
+    },
+    {
+      label: t('member.kca.assignments', { defaultMessage: 'Assignments' }),
+      display: `${assignmentCompleted}/${assignmentTotal}`,
+      percent: Math.max(0, Math.min(100, assignmentPercent)),
+    },
+    {
+      label: t('member.kca.attendanceRecorded', { defaultMessage: 'Attendance Recorded' }),
+      display: `${attendanceCount}`,
+      percent: Math.max(0, Math.min(100, attendanceCount > 0 ? Math.min(100, attendanceCount * 10) : 0)),
+    },
+  ] : (screen.items ?? []).map((item, index) => {
+    const [label, value] = item.split(' — ');
+    const progress = Number(value?.match(/\d+/)?.[0] ?? (86 - index * 9));
+    return {
+      label,
+      display: value,
+      percent: Math.min(progress, 100),
+    };
+  });
 
   if (loading) {
     return <p className="maps-settings-lead" role="status">{t('common.loading', { defaultMessage: 'Loading…' })}</p>;
@@ -1194,10 +1318,81 @@ function KcaEntityDetail({ screen }: { screen: AdminScreen }) {
         [t('member.kca.kcaYear', { defaultMessage: 'KCA year' })]: yearName,
         [t('member.kca.startsOn', { defaultMessage: 'Starts on' })]: startsOn,
         [t('member.kca.status', { defaultMessage: 'Status' })]: status,
+        [t('member.kca.mentor', { defaultMessage: 'Mentor' })]: String(record?.mentor_name ?? '—'),
       }
     : (screen.details ?? {});
+  const registrationSections = isStudent ? (record?.registration_sections ?? []) : [];
 
-  return <div className="kca-entity-page"><article className="card kca-identity-banner"><div className="kca-avatar large">{initials}</div><div><span className="kca-overline">{isStudent ? t('member.kca.studentProfile', { defaultMessage: 'Student profile' }) : screen.subtitle}</span><h2>{personName} <KcaBadge value={status}/></h2><p>{isStudent ? `${registrationNumber}${yearName !== '—' ? ` · ${yearName}` : ''}` : t('member.kca.lagosNigeria', { defaultMessage: 'Lagos, Nigeria' })}</p><div className="kca-contact-line"><span>✉ {personName.toLowerCase().replaceAll(' ', '.')}@kca.org</span><span>☎ +234 803 111 2222</span></div></div></article><div className="kca-overview-grid"><article className="card kca-detail-panel"><h2>{isStudent ? t('member.kca.personalInformation', { defaultMessage: 'Personal Information' }) : t('member.kca.profileOverview', { defaultMessage: 'Profile Overview' })}</h2><dl>{Object.entries(detailEntries).map(([key,value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></article><article className="card kca-detail-panel kca-performance-panel"><h2>{isStudent ? t('member.kca.progressOverview', { defaultMessage: 'Progress Overview' }) : t('member.kca.performance', { defaultMessage: 'Performance' })}</h2>{(screen.items ?? []).map((item,index) => { const [label,value] = item.split(' — '); const progress = Number(value?.match(/\d+/)?.[0] ?? (86 - index * 9)); return <div className="kca-performance-row" key={item}><header><span>{label}</span><strong>{value}</strong></header><i role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(progress,100)}><b style={{ width: `${Math.min(progress,100)}%` }}/></i></div>; })}</article></div></div>;
+  return (
+    <div className="kca-entity-page">
+      <article className="card kca-identity-banner">
+        <div className="kca-avatar large">{initials}</div>
+        <div>
+          <span className="kca-overline">
+            {isStudent ? t('member.kca.studentProfile', { defaultMessage: 'Student profile' }) : screen.subtitle}
+          </span>
+          <h2>{personName} <KcaBadge value={status} /></h2>
+          <p>{isStudent ? `${registrationNumber}${yearName !== '—' ? ` · ${yearName}` : ''}` : t('member.kca.lagosNigeria', { defaultMessage: 'Lagos, Nigeria' })}</p>
+          <div className="kca-contact-line">
+            <span>✉ {email || '—'}</span>
+            <span>☎ {phone || '—'}</span>
+          </div>
+        </div>
+      </article>
+
+      <div className="kca-overview-grid">
+        <article className="card kca-detail-panel">
+          <h2>{isStudent ? t('member.kca.personalInformation', { defaultMessage: 'Personal Information' }) : t('member.kca.profileOverview', { defaultMessage: 'Profile Overview' })}</h2>
+          <dl>
+            {Object.entries(detailEntries).map(([key, value]) => (
+              <div key={key}>
+                <dt>{key}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </article>
+
+        <article className="card kca-detail-panel kca-performance-panel">
+          <h2>{isStudent ? t('member.kca.progressOverview', { defaultMessage: 'Progress Overview' }) : t('member.kca.performance', { defaultMessage: 'Performance' })}</h2>
+          {progressRows.map((row) => (
+            <div className="kca-performance-row" key={row.label}>
+              <header>
+                <span>{row.label}</span>
+                <strong>{row.display}</strong>
+              </header>
+              <i
+                role="progressbar"
+                aria-label={row.label}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={row.percent}
+              >
+                <b style={{ width: `${row.percent}%` }} />
+              </i>
+            </div>
+          ))}
+        </article>
+      </div>
+      {registrationSections.length > 0 ? (
+        <div className="kca-overview-grid">
+          {registrationSections.map((section) => (
+            <article className="card kca-detail-panel" key={section.title}>
+              <h2>{section.title}</h2>
+              <dl>
+                {section.fields.map((field) => (
+                  <div key={field.key}>
+                    <dt>{field.label}</dt>
+                    <dd><RegistrationFieldValue value={field.value} /></dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function KcaCohorts({ screen }: { screen: AdminScreen }) {

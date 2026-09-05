@@ -5,6 +5,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 export type KcaAdmissionLetterSheetData = {
   applicant_name: string;
   reference_code?: string | null;
+  registration_number?: string | null;
   letter_body?: string | null;
   signer_name?: string | null;
   signer_title?: string | null;
@@ -82,7 +83,9 @@ function syncReferenceInBody(
   }
 
   const updated = body
+    .replace(/Registration Number:\s*[^\n]*/gi, `Registration Number: ${referenceCode}`)
     .replace(/Ref\.?\s*No\.?\s*:[^\n]*/gi, `Ref. No.: ${referenceCode}`)
+    .replace(/\{registration_number\}/gi, referenceCode)
     .replace(/\{reference_code\}/gi, referenceCode);
 
   return updated;
@@ -354,8 +357,8 @@ export function KcaAdmissionLetterSheet({
   const issuedOn = letter.issued_at
     ? new Date(letter.issued_at).toLocaleDateString()
     : new Date().toLocaleDateString();
-  const reference = letter.reference_code ?? pendingReferenceLabel;
-  const body = syncReferenceInBody(letter.letter_body ?? '', letter.reference_code, pendingReferenceLabel);
+  const reference = letter.registration_number || letter.reference_code || pendingReferenceLabel;
+  const body = syncReferenceInBody(letter.letter_body ?? '', reference, pendingReferenceLabel);
   const bodyParagraphs = body.split('\n\n').filter(Boolean);
   const batchLabel = letter.batch_label ?? '';
   const structured = isStructuredTemplate(body);
