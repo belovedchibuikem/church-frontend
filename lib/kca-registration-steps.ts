@@ -174,13 +174,17 @@ export function flattenKcaRegistrationPayload(values: Record<string, string>): {
     applicationData.email = email;
   }
 
+  if (phone) {
+    applicationData.phone = phone;
+  }
+
   return {
     application_id: applicationId,
     person_id: personId,
     given_name: personId || applicationId ? undefined : givenName,
     family_name: personId || applicationId ? undefined : familyName,
     email,
-    phone: personId || applicationId ? undefined : phone,
+    phone,
     create_login: createLogin,
     password: createLogin ? password : undefined,
     password_confirmation: createLogin ? passwordConfirmation : undefined,

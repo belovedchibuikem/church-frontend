@@ -201,11 +201,12 @@ function ApplicationsTable({ requestedScope }: { requestedScope?: string }) {
       <StatusLine error={error} onRetry={() => void load()} />
       <div className="card table-card">
         <table>
-          <thead><tr><th>Applicant</th><th>Proposed name</th><th>Church</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Applicant</th><th>Phone</th><th>Proposed name</th><th>Church</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
           <tbody>
-            {items.length === 0 ? <tr><td colSpan={6}>{error ? 'Unable to load applications.' : 'No applications in this scope.'}</td></tr> : items.map((row) => (
+            {items.length === 0 ? <tr><td colSpan={7}>{error ? 'Unable to load applications.' : 'No applications in this scope.'}</td></tr> : items.map((row) => (
               <tr key={row.id}>
                 <td>{row.applicant_name ?? '—'}</td>
+                <td>{row.contact_phone || row.person_phone || '—'}</td>
                 <td>{row.proposed_name}</td>
                 <td>{row.church_name ?? '—'}</td>
                 <td>{row.status.replaceAll('_', ' ')}</td>
@@ -285,6 +286,8 @@ function ApplicationWorkspace({ screen, requestedScope }: ScopeProps) {
             <p className="page-subtitle">Status: {record.status.replaceAll('_', ' ')} · Reference {record.id}</p>
             <dl>
               <div><dt>Applicant</dt><dd>{record.applicant_name ?? '—'}</dd></div>
+              <div><dt>Phone</dt><dd>{record.contact_phone || record.person_phone || '—'}</dd></div>
+              <div><dt>Email</dt><dd>{record.contact_email || '—'}</dd></div>
               <div><dt>Sponsoring church</dt><dd>{record.church_name ?? '—'}</dd></div>
               <div><dt>Location</dt><dd>{record.location_name ?? '—'}</dd></div>
               <div><dt>Administrative unit</dt><dd>{record.administrative_unit_name ?? '—'}</dd></div>

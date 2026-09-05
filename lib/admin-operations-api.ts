@@ -71,6 +71,9 @@ export type HomeChurchApplicationRecord = {
   home_church_id?: string | null;
   applicant_person_id?: string | null;
   applicant_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  person_phone?: string | null;
   proposed_name: string;
   expected_participants?: number;
   meeting_day?: string;
@@ -1244,9 +1247,13 @@ export function opsRecordsToRows(
                 ? humanValue(item, 'church_name', 'proposed_name')
                 : column === 'Submitted On'
                   ? shortDate(get('status_changed_at') === '—' ? null : get('status_changed_at'))
-                  : column === 'Status'
-                    ? get('status')
-                    : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
+                  : column === 'Phone'
+                    ? humanValue(item, 'contact_phone', 'person_phone', 'phone')
+                    : column === 'Email'
+                      ? humanValue(item, 'contact_email', 'person_email', 'email')
+                      : column === 'Status'
+                        ? get('status')
+                        : humanValue(item, column.toLowerCase().replaceAll(' ', '_'));
           break;
         case 'first-timers':
           mapped[column] =

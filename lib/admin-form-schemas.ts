@@ -359,6 +359,8 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
     fields: [
       { label: 'Proposed name', name: 'proposed_name', type: 'text' },
       { label: 'Applicant', name: 'applicant_name', type: 'text' },
+      { label: 'Phone', name: 'contact_phone', type: 'text' },
+      { label: 'Email', name: 'contact_email', type: 'email' },
       { label: 'Church', name: 'church_name', type: 'text' },
       { label: 'Status', name: 'status', type: 'text' },
     ],

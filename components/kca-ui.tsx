@@ -312,8 +312,8 @@ function KcaApplicantOverview({ screen }: { screen: AdminScreen }) {
     }
     const name = String(record?.person_name ?? 'Applicant');
     const status = String(record?.status ?? 'received');
-    const email = String(record?.email ?? '').trim();
-    const phone = String(record?.phone ?? '').trim();
+    const email = String(record?.email ?? record?.person_email ?? '').trim();
+    const phone = String(record?.phone ?? record?.person_phone ?? '').trim();
     const registrationSections = Array.isArray(record?.registration_sections)
       ? (record.registration_sections as Array<{ title: string; fields: Array<{ key: string; label: string; value: string }> }>)
       : [];
@@ -797,8 +797,8 @@ function KcaDecision({ screen }: { screen: AdminScreen }) {
     const personName = String(application?.person_name ?? 'Applicant');
     const initials = personName.split(' ').map((part) => part[0]).slice(0, 2).join('') || '?';
     const status = String(application?.status ?? 'received');
-    const email = String(application?.email ?? '').trim();
-    const phone = String(application?.phone ?? '').trim();
+    const email = String(application?.email ?? application?.person_email ?? '').trim();
+    const phone = String(application?.phone ?? application?.person_phone ?? '').trim();
     const registrationSections = Array.isArray(application?.registration_sections)
       ? (application.registration_sections as Array<{ title: string; fields: Array<{ key: string; label: string; value: string }> }>)
       : [];
@@ -1231,8 +1231,8 @@ function KcaEntityDetail({ screen }: { screen: AdminScreen }) {
   const startsOn = String(record?.starts_on ?? screen.details?.['Starts on'] ?? '—');
   const yearName = String(record?.year_name ?? '—');
   const status = String(record?.status ?? t('member.kca.active', { defaultMessage: 'Active' }));
-  const email = `${record?.email ?? ''}`.trim();
-  const phone = `${record?.phone ?? ''}`.trim();
+  const email = `${record?.email ?? record?.person_email ?? ''}`.trim();
+  const phone = `${record?.phone ?? record?.person_phone ?? ''}`.trim();
 
   const curriculum = record?.activity?.curriculum ?? {};
   const assignmentStates = Array.isArray(record?.activity?.assignments?.items)

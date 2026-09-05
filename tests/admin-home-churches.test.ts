@@ -84,3 +84,13 @@ test('home church workspace uses section links instead of duplicate tab buttons'
   assert.match(source, /href=\{href\}/);
   assert.doesNotMatch(source, /role="tablist"/);
 });
+
+test('home church applications display applicant phone', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../components/home-churches-ops.tsx', import.meta.url), 'utf8');
+  assert.match(source, /<th>Phone<\/th>/);
+  assert.match(source, /row\.contact_phone \|\| row\.person_phone/);
+  assert.match(source, /record\.contact_phone \|\| record\.person_phone/);
+  const schema = await readFile(new URL('../lib/admin-form-schemas.ts', import.meta.url), 'utf8');
+  assert.match(schema, /name: 'contact_phone'/);
+});

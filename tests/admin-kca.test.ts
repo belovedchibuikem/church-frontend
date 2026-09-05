@@ -213,6 +213,7 @@ test('KCA student registration includes login account fields', async () => {
     given_name: 'Ada',
     family_name: 'Okafor',
     email: 'ada@example.org',
+    phone: '+2348012345678',
     create_login: 'true',
     password: 'StudentPass123',
     password_confirmation: 'StudentPass123',
@@ -227,6 +228,8 @@ test('KCA student registration includes login account fields', async () => {
   assert.equal(payload.cohort_id, '01JABCDEFGHJKMNPQRSTVWXYZ0');
   assert.equal(payload.password, 'StudentPass123');
   assert.equal(payload.email, 'ada@example.org');
+  assert.equal(payload.phone, '+2348012345678');
+  assert.equal(payload.application_data.phone, '+2348012345678');
   assert.equal(payload.application_data.why, 'Ministry growth');
   assert.equal(payload.application_data.password, undefined);
 });
@@ -266,6 +269,8 @@ test('KCA students support view, edit, and delete', async () => {
   const applications = getAdminScreen('/admin/kca/applications')!;
   assert.ok(applications.columns?.includes('Email'));
   assert.ok(applications.columns?.includes('Phone'));
+  const catalogApi = await readFile(new URL('../lib/admin-catalog-api.ts', import.meta.url), 'utf8');
+  assert.match(catalogApi, /get\('phone', 'person_phone', 'contact_phone'\)/);
 });
 
 test('KCA lecturer assignment requires a lesson', async () => {

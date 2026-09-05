@@ -450,9 +450,9 @@ export function catalogRecordsToRows(
       } else if (key === 'id') {
         mapped[column] = get('registration_number', 'code', 'id');
       } else if (key === 'email') {
-        mapped[column] = get('email');
+        mapped[column] = get('email', 'person_email', 'contact_email');
       } else if (key === 'phone') {
-        mapped[column] = get('phone');
+        mapped[column] = get('phone', 'person_phone', 'contact_phone');
       } else if (
         key.includes('submitted') ||
         key.includes('received') ||

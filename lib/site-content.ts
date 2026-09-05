@@ -386,6 +386,7 @@ export const formFieldsFor = (path: string): FormField[] => {
   if (path.includes('/kca/apply/church')) return [
     { label: 'Full Name', name: 'fullName', value: 'Samuel David' },
     { label: 'Email Address', name: 'email', type: 'email', value: 'samuel.david@email.com' },
+    { label: 'Phone Number', name: 'phone', type: 'tel', value: '' },
     { label: 'Home Church', name: 'home_church_id', type: 'search-select', catalog: 'homeChurch', value: '01JHCHOMEALLEN' },
     { label: 'Sponsoring Church', name: 'church_id', type: 'search-select', catalog: 'church', value: '01JCHURCHIKEJA' },
     { label: 'Pastor / Leader', name: 'pastor_id', type: 'search-select', catalog: 'person', value: '01JPERSONDAN', wide: true },
