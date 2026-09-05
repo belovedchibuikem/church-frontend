@@ -193,6 +193,9 @@ export const dashboardMetricLinks: Record<string, Record<string, string>> = {
     'Home Churches': '/admin/home-churches',
     Members: '/admin/people',
     Countries: '/admin/geography/countries',
+    'Bible Readers (Day)': '/admin/reports',
+    'Bible Readers (Week)': '/admin/reports',
+    'Bible Readers (Year)': '/admin/reports',
   },
   'C-01': {
     Countries: '/admin/geography/countries',
@@ -261,6 +264,9 @@ export const dashboardMetricLinks: Record<string, Record<string, string>> = {
     'Active Churches': '/admin/reports/churches',
     'Home Churches': '/admin/reports/home-churches',
     Countries: '/admin/reports/countries',
+    'Bible Readers (Day)': '/admin/reports',
+    'Bible Readers (Week)': '/admin/reports',
+    'Bible Readers (Year)': '/admin/reports',
   },
   'N-02': {
     Churches: '/admin/churches',

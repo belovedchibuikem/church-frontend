@@ -431,6 +431,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Ends at', name: 'ends_at', type: 'datetime-local', required: true },
       { label: 'Registration opens', name: 'registration_opens_at', type: 'datetime-local' },
       { label: 'Registration closes', name: 'registration_closes_at', type: 'datetime-local' },
+      { label: 'Important event popup', name: 'is_important', type: 'checkbox', helpText: 'Important events may be highlighted on member dashboards.' },
       { label: 'Publish at', name: 'published_at', type: 'datetime-local', helpText: 'Leave blank to keep the event as a draft.' },
       { label: 'Fee (minor units)', name: 'fee_amount_minor', type: 'number', placeholder: '500000' },
       { label: 'Currency', name: 'fee_currency', type: 'text', placeholder: 'NGN' },

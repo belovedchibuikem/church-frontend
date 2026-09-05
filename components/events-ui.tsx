@@ -25,6 +25,7 @@ type EventDetail = {
   fee_amount_minor?: number | null;
   fee_currency?: string | null;
   capacity?: number | null;
+  is_important?: boolean;
   status?: string | null;
   registrations_count?: number;
   can_delete?: boolean;
@@ -112,6 +113,7 @@ export function EventDetailPanel({ screen }: { screen: AdminScreen }) {
     ['Published', data.published_at ? formatTimestamp(data.published_at) : 'Draft'],
     ['Fee', formatFee(data.fee_amount_minor, data.fee_currency)],
     ['Capacity', missing(data.capacity)],
+    ['Important event popup', data.is_important ? 'Yes' : 'No'],
     ['Registrations', String(data.registrations_count ?? 0)],
   ];
 
@@ -127,6 +129,7 @@ export function EventDetailPanel({ screen }: { screen: AdminScreen }) {
           for (const [key, value] of form.entries()) {
             payload[key] = String(value);
           }
+          payload.is_important = form.has('is_important') ? 'true' : 'false';
           void mutate('Update Event', payload);
         }}
       >
@@ -144,6 +147,7 @@ export function EventDetailPanel({ screen }: { screen: AdminScreen }) {
             ends_at: data.ends_at?.slice(0, 16) ?? '',
             registration_opens_at: data.registration_opens_at?.slice(0, 16) ?? '',
             registration_closes_at: data.registration_closes_at?.slice(0, 16) ?? '',
+            is_important: data.is_important ? 'true' : '',
             published_at: data.published_at?.slice(0, 16) ?? '',
             fee_amount_minor: data.fee_amount_minor != null ? String(data.fee_amount_minor) : '',
             fee_currency: data.fee_currency ?? '',
@@ -239,6 +243,7 @@ export function EventCreateForm({ screen }: { screen: AdminScreen }) {
     for (const [key, value] of form.entries()) {
       payload[key] = String(value);
     }
+    payload.is_important = form.has('is_important') ? 'true' : 'false';
     setBusy(true);
     setMessage(null);
     try {
