@@ -680,6 +680,86 @@ export async function importKcaStudentsFile(
   });
 }
 
+export type KcaBulkFailure = {
+  application_id: string;
+  person_name?: string | null;
+  error: string;
+};
+
+export type KcaBulkTransitionResult = {
+  total: number;
+  updated_count: number;
+  skipped_count: number;
+  failed_count: number;
+  updated: Array<{
+    application_id: string;
+    person_name?: string | null;
+    status: string;
+    skipped?: boolean;
+  }>;
+  failures: KcaBulkFailure[];
+};
+
+export type KcaBulkAdmitResult = {
+  total: number;
+  admitted_count: number;
+  skipped_count: number;
+  failed_count: number;
+  admitted: Array<{
+    application_id: string;
+    person_name?: string | null;
+    status: string;
+    enrollment_id?: string;
+    registration_number?: string;
+    cohort_id?: string;
+    starts_on?: string | null;
+    skipped?: boolean;
+  }>;
+  failures: KcaBulkFailure[];
+};
+
+export async function bulkTransitionKcaApplications(
+  input: {
+    applicationIds: string[];
+    status: string;
+    reasonCode?: string;
+  },
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaBulkTransitionResult> {
+  return platformMutate<KcaBulkTransitionResult>(
+    'POST',
+    'admin/kca/applications/bulk-transitions',
+    {
+      application_ids: input.applicationIds,
+      status: input.status,
+      reason_code: input.reasonCode || undefined,
+    },
+    scope,
+  );
+}
+
+export async function bulkAdmitKcaStudents(
+  input: {
+    applicationIds: string[];
+    cohortId: string;
+    startsOn: string;
+    status?: 'accepted' | 'provisionally_accepted';
+  },
+  scope: AdminScope = PLATFORM_GLOBAL_SCOPE,
+): Promise<KcaBulkAdmitResult> {
+  return platformMutate<KcaBulkAdmitResult>(
+    'POST',
+    'admin/kca/applications/bulk-enrollments',
+    {
+      application_ids: input.applicationIds,
+      cohort_id: input.cohortId,
+      starts_on: input.startsOn,
+      status: input.status ?? 'accepted',
+    },
+    scope,
+  );
+}
+
 export async function getKcaAdmissionLetter(
   applicationId: string,
   scope: AdminScope = PLATFORM_GLOBAL_SCOPE,

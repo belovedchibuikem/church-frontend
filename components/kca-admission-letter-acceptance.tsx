@@ -1,11 +1,14 @@
 'use client';
 
-import { useRef, useState, type FormEvent, type PointerEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import { useLocale } from '@/components/locale-provider';
+import { SignaturePad } from '@/components/signature-pad';
+import { formatUserApiError, storeUserFile } from '@/lib/user-api';
 
 type AcceptancePayload = {
   applicant_signature_name: string;
+  applicant_signature_file_asset_id?: string;
   guardian_name?: string;
   guardian_signature_name?: string;
   guardian_phone?: string;
@@ -23,48 +26,32 @@ export function KcaAdmissionLetterAcceptancePanel({
   onAccept: (payload: AcceptancePayload) => Promise<void>;
 }) {
   const { t } = useLocale();
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [drawing, setDrawing] = useState(false);
   const [typedSignature, setTypedSignature] = useState(applicantName);
+  const [drawnSignature, setDrawnSignature] = useState<string | null>(null);
   const [guardianName, setGuardianName] = useState('');
   const [guardianSignature, setGuardianSignature] = useState('');
+  const [guardianDrawnSignature, setGuardianDrawnSignature] = useState<string | null>(null);
   const [guardianPhone, setGuardianPhone] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const startDraw = (event: PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    setDrawing(true);
-    const rect = canvas.getBoundingClientRect();
-    ctx.beginPath();
-    ctx.moveTo(event.clientX - rect.left, event.clientY - rect.top);
+  const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
+    const response = await fetch(dataUrl);
+    return response.blob();
   };
 
-  const draw = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#111827';
-    ctx.lineTo(event.clientX - rect.left, event.clientY - rect.top);
-    ctx.stroke();
-  };
-
-  const endDraw = () => setDrawing(false);
-
-  const clearSignature = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const uploadSignatureBlob = async (blob: Blob, filename: string): Promise<string> => {
+    const formData = new FormData();
+    formData.set('purpose', 'kca.admission_signature');
+    formData.set('classification', 'restricted');
+    formData.set('file', blob, filename);
+    const asset = await storeUserFile(formData);
+    const id = `${asset.id ?? asset.public_id ?? ''}`.trim();
+    if (!id) {
+      throw new Error('Signature upload succeeded but did not return an asset id.');
+    }
+    return id;
   };
 
   const submit = async (event: FormEvent) => {
@@ -74,20 +61,37 @@ export function KcaAdmissionLetterAcceptancePanel({
       setError(t('member.kca.acceptanceRequired', { defaultMessage: 'Please confirm that you have read and accept the admission letter.' }));
       return;
     }
-    const signature = typedSignature.trim();
+    const signature = typedSignature.trim() || applicantName.trim();
     if (!signature) {
       setError(t('member.kca.signatureRequired', { defaultMessage: 'Please type or draw your signature.' }));
       return;
     }
+    if (requiresGuardian && !guardianSignature.trim() && !guardianDrawnSignature) {
+      setError(t('member.kca.guardianSignatureRequired', { defaultMessage: 'Provide parent/guardian signature (typed or drawn).' }));
+      return;
+    }
+
     try {
+      setUploading(true);
+      let applicantSignatureFileAssetId: string | undefined;
+      if (drawnSignature) {
+        const signatureBlob = await dataUrlToBlob(drawnSignature);
+        applicantSignatureFileAssetId = await uploadSignatureBlob(signatureBlob, 'kca-admission-signature.png');
+      }
+
       await onAccept({
         applicant_signature_name: signature,
+        applicant_signature_file_asset_id: applicantSignatureFileAssetId,
         guardian_name: requiresGuardian ? guardianName.trim() || undefined : undefined,
-        guardian_signature_name: requiresGuardian ? guardianSignature.trim() || undefined : undefined,
+        guardian_signature_name: requiresGuardian
+          ? (guardianSignature.trim() || guardianName.trim() || undefined)
+          : undefined,
         guardian_phone: requiresGuardian ? guardianPhone.trim() || undefined : undefined,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic', { defaultMessage: 'Something went wrong.' }));
+      setError(formatUserApiError(err, t('errors.generic', { defaultMessage: 'Something went wrong.' })));
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -104,20 +108,8 @@ export function KcaAdmissionLetterAcceptancePanel({
         <input onChange={(event) => setTypedSignature(event.target.value)} required value={typedSignature} />
       </label>
       <label>
-        <span>{t('member.kca.drawSignature', { defaultMessage: 'Or draw your signature (optional)' })}</span>
-        <canvas
-          ref={canvasRef}
-          className="kca-signature-canvas"
-          height={120}
-          onPointerDown={startDraw}
-          onPointerLeave={endDraw}
-          onPointerMove={draw}
-          onPointerUp={endDraw}
-          width={420}
-        />
-        <button className="ghost-button" onClick={clearSignature} type="button">
-          {t('common.clear', { defaultMessage: 'Clear' })}
-        </button>
+        <span>{t('member.kca.drawSignature', { defaultMessage: 'Draw your signature' })}</span>
+        <SignaturePad disabled={busy || uploading} onChange={setDrawnSignature} />
       </label>
       {requiresGuardian ? (
         <>
@@ -130,6 +122,10 @@ export function KcaAdmissionLetterAcceptancePanel({
             <input onChange={(event) => setGuardianSignature(event.target.value)} value={guardianSignature} />
           </label>
           <label>
+            <span>{t('member.kca.drawGuardianSignature', { defaultMessage: 'Or draw parent/guardian signature' })}</span>
+            <SignaturePad disabled={busy || uploading} onChange={setGuardianDrawnSignature} />
+          </label>
+          <label>
             <span>{t('member.kca.guardianPhone', { defaultMessage: 'Parent/Guardian phone' })}</span>
             <input onChange={(event) => setGuardianPhone(event.target.value)} value={guardianPhone} />
           </label>
@@ -140,7 +136,7 @@ export function KcaAdmissionLetterAcceptancePanel({
         <span>{t('member.kca.acceptTerms', { defaultMessage: 'I have read and accept this admission letter and commit to participate faithfully.' })}</span>
       </label>
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
-      <button className="primary-button" disabled={busy} type="submit">
+      <button className="primary-button" disabled={busy || uploading} type="submit">
         {t('member.kca.acceptAndSign', { defaultMessage: 'I accept and sign' })}
       </button>
     </form>

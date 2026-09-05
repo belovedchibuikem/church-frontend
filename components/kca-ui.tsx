@@ -29,9 +29,14 @@ import {
   downloadKcaStudentImportTemplate,
   exportKcaStudentsCsv,
   importKcaStudentsFile,
+  bulkAdmitKcaStudents,
+  bulkTransitionKcaApplications,
   platformErrorMessage,
   type KcaAdmissionLetter,
   type KcaAttendanceRosterStudent,
+  type KcaBulkAdmitResult,
+  type KcaBulkFailure,
+  type KcaBulkTransitionResult,
   type KcaStudentImportResult,
 } from '../lib/admin-platform-api';
 import { downloadBlob } from '../lib/download-blob.ts';
@@ -130,23 +135,90 @@ function KcaFilters({ search, compact = false, labels }: { search?: string; comp
   </div>;
 }
 
-function KcaTable({ screen, rows = screen.rows ?? [], columns = screen.columns ?? [], showAction = true, filterLabels, toolbarAction, reviewLabel, total, renderActions }: { screen: AdminScreen; rows?: Row[]; columns?: string[]; showAction?: boolean; filterLabels?: string[]; toolbarAction?: string; reviewLabel?: string; total?: number; renderActions?: (row: Row) => ReactNode }) {
+function rowRecordId(row: Row): string {
+  const id = String(row.__id ?? '').trim();
+  return id && id !== '—' ? id : '';
+}
+
+function KcaTable({
+  screen,
+  rows = screen.rows ?? [],
+  columns = screen.columns ?? [],
+  showAction = true,
+  filterLabels,
+  toolbarAction,
+  reviewLabel,
+  total,
+  renderActions,
+  selectable = false,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
+}: {
+  screen: AdminScreen;
+  rows?: Row[];
+  columns?: string[];
+  showAction?: boolean;
+  filterLabels?: string[];
+  toolbarAction?: string;
+  reviewLabel?: string;
+  total?: number;
+  renderActions?: (row: Row) => ReactNode;
+  selectable?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleRow?: (id: string) => void;
+  onToggleAll?: () => void;
+}) {
   const { t } = useLocale();
   const entityKey = resolveEntityKey(screen.route, screen.id);
+  const selectableIds = rows.map(rowRecordId).filter(Boolean);
+  const selectedCount = selectableIds.filter((id) => selectedIds?.has(id)).length;
+  const allSelected = selectableIds.length > 0 && selectedCount === selectableIds.length;
   return <article className={`card kca-table-card ${toolbarAction ? 'kca-prerequisites' : ''}`}>
     {toolbarAction && <header><div><h2>{t('member.kca.orientationSessions', { defaultMessage: 'Orientation Sessions' })}</h2><p>{t('member.kca.orientationSessionsCopy', { defaultMessage: 'Manage upcoming orientation sessions and student attendance.' })}</p></div><button className="primary-button" type="button">{translateAction(t, toolbarAction)}</button></header>}
     <KcaFilters search={t('member.kca.searchScreen', { defaultMessage: 'Search {title}...', vars: { title: screen.title.toLowerCase() } })} labels={filterLabels} />
     <div className="kca-table-scroll">
       <table className="kca-table" aria-label={t('member.kca.recordsAria', { defaultMessage: '{title} records', vars: { title: screen.title } })}>
-        <thead><tr>{columns.map(column => <th scope="col" key={column}>{column}</th>)}{showAction && <th scope="col">{t('member.kca.actions', { defaultMessage: 'Actions' })}</th>}</tr></thead>
-        <tbody>{rows.map((row, rowIndex) => <tr key={`${screen.id}-${rowIndex}`}>
-          {columns.map((column, columnIndex) => {
-            const value = row[column] ?? '—';
-            const isStatus = /status|priority|progress|issued/i.test(column);
-            return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
-          })}
-          {showAction && <td>{renderActions ? renderActions(row) : <TableRowActions record={formatRowActionRecord(row[columns[0]], row.__id)} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} {...rowActionCapabilities(screen.route)} />}</td>}
-        </tr>)}</tbody>
+        <thead><tr>
+          {selectable ? (
+            <th className="kca-select-col" scope="col">
+              <input
+                aria-label={t('member.kca.selectAllRecords', { defaultMessage: 'Select all records on this page' })}
+                checked={allSelected}
+                disabled={!onToggleAll || selectableIds.length === 0}
+                onChange={() => onToggleAll?.()}
+                type="checkbox"
+              />
+            </th>
+          ) : null}
+          {columns.map(column => <th scope="col" key={column}>{column}</th>)}
+          {showAction && <th scope="col">{t('member.kca.actions', { defaultMessage: 'Actions' })}</th>}
+        </tr></thead>
+        <tbody>{rows.map((row, rowIndex) => {
+          const recordId = rowRecordId(row);
+          const isSelected = Boolean(recordId && selectedIds?.has(recordId));
+          return (
+            <tr className={isSelected ? 'is-selected' : undefined} key={recordId || `${screen.id}-${rowIndex}`}>
+              {selectable ? (
+                <td className="kca-select-col">
+                  <input
+                    aria-label={t('member.kca.selectRecord', { defaultMessage: 'Select {name}', vars: { name: row[columns[0]] ?? recordId } })}
+                    checked={isSelected}
+                    disabled={!recordId || !onToggleRow}
+                    onChange={() => recordId && onToggleRow?.(recordId)}
+                    type="checkbox"
+                  />
+                </td>
+              ) : null}
+              {columns.map((column, columnIndex) => {
+                const value = row[column] ?? '—';
+                const isStatus = /status|priority|progress|issued/i.test(column);
+                return <td key={column}>{columnIndex === 0 ? <div className="kca-person-cell"><span className="kca-mini-avatar">{value.split(' ').map(part => part[0]).slice(0, 2).join('')}</span><strong>{value}</strong></div> : isStatus ? <KcaBadge value={value} /> : value}</td>;
+              })}
+              {showAction && <td>{renderActions ? renderActions(row) : <TableRowActions record={formatRowActionRecord(row[columns[0]], row.__id)} entityKey={entityKey} className="row-actions kca-row-actions" reviewLabel={reviewLabel} {...rowActionCapabilities(screen.route)} />}</td>}
+            </tr>
+          );
+        })}</tbody>
       </table>
     </div>
     <footer className="kca-table-footer"><span>{t('member.kca.showingRecords', { defaultMessage: 'Showing 1 to {visible} of {total} records', vars: { visible: rows.length, total: total ?? rows.length } })}</span><div role="navigation" aria-label={t('member.kca.paginationAria', { defaultMessage: '{title} pagination', vars: { title: screen.title } })}><button type="button" aria-label={t('member.kca.previousPage', { defaultMessage: 'Previous page' })}>‹</button><button className="active" type="button" aria-label={t('member.kca.page', { defaultMessage: 'Page {number}', vars: { number: 1 } })} aria-current="page">1</button></div></footer>
@@ -2738,6 +2810,153 @@ function KcaModulesPanel({ screen }: { screen: AdminScreen }) {
   );
 }
 
+const kcaBulkStatusOptions = [
+  { value: 'accepted', label: 'Admitted' },
+  { value: 'provisionally_accepted', label: 'Provisionally accepted' },
+  { value: 'reviewed', label: 'Under review' },
+  { value: 'interview', label: 'Interview / orientation' },
+  { value: 'information_required', label: 'Information required' },
+  { value: 'deferred', label: 'Deferred' },
+  { value: 'not_accepted', label: 'Not admitted' },
+  { value: 'withdrawn', label: 'Withdrawn' },
+] as const;
+
+function kcaStatusRequiresReason(status: string): boolean {
+  return ['deferred', 'not_accepted', 'suspended', 'revoked'].includes(status);
+}
+
+function formatKcaBulkFailures(failures: KcaBulkFailure[]): string {
+  return failures
+    .slice(0, 6)
+    .map((failure) => `${failure.person_name || failure.application_id}: ${failure.error}`)
+    .join(' · ');
+}
+
+function KcaApplicationsBulkBar({
+  busy,
+  selectedCount,
+  onAdmit,
+  onClear,
+  onUpdateStatus,
+}: {
+  busy: boolean;
+  selectedCount: number;
+  onAdmit: (input: { cohortId: string; startsOn: string; status: 'accepted' | 'provisionally_accepted' }) => Promise<void>;
+  onClear: () => void;
+  onUpdateStatus: (input: { status: string; reasonCode?: string }) => Promise<void>;
+}) {
+  const [status, setStatus] = useState('accepted');
+  const [reasonCode, setReasonCode] = useState('accepted_by_admin');
+  const [admitStatus, setAdmitStatus] = useState<'accepted' | 'provisionally_accepted'>('accepted');
+  const [cohortId, setCohortId] = useState('');
+  const [startsOn, setStartsOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const noneSelected = selectedCount === 0;
+  const needsReason = kcaStatusRequiresReason(status);
+
+  return (
+    <div className="kca-applications-bulk">
+      <div className="kca-applications-bulk-head">
+        <div>
+          <strong>{selectedCount === 0 ? 'Select applicants' : `${selectedCount} selected`}</strong>
+          <p className="maps-settings-lead">
+            Admit several students into one cohort, or update status for everyone you have selected.
+          </p>
+        </div>
+        <button className="ghost-button" disabled={noneSelected || busy} onClick={onClear} type="button">
+          Clear selection
+        </button>
+      </div>
+      <div className="kca-applications-bulk-grid">
+        <section className="card kca-applications-bulk-card" aria-labelledby="kca-bulk-status-title">
+          <h3 id="kca-bulk-status-title">Update status</h3>
+          <label>
+            <span>New status</span>
+            <select
+              disabled={busy}
+              value={status}
+              onChange={(event) => {
+                const next = event.target.value;
+                setStatus(next);
+                setReasonCode(`${next}_by_admin`);
+              }}
+            >
+              {kcaBulkStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          {needsReason ? (
+            <label>
+              <span>Reason code</span>
+              <input
+                disabled={busy}
+                value={reasonCode}
+                onChange={(event) => setReasonCode(event.target.value)}
+                placeholder="does_not_meet_requirements"
+              />
+            </label>
+          ) : null}
+          <button
+            className="ghost-button"
+            disabled={noneSelected || busy}
+            type="button"
+            onClick={() => void onUpdateStatus({
+              status,
+              reasonCode: needsReason ? reasonCode.trim() : undefined,
+            })}
+          >
+            {busy ? 'Working…' : `Update status${selectedCount ? ` (${selectedCount})` : ''}`}
+          </button>
+        </section>
+        <section className="card kca-applications-bulk-card" aria-labelledby="kca-bulk-admit-title">
+          <h3 id="kca-bulk-admit-title">Admit and enroll</h3>
+          <label>
+            <span>Admission outcome</span>
+            <select
+              disabled={busy}
+              value={admitStatus}
+              onChange={(event) => setAdmitStatus(event.target.value === 'provisionally_accepted' ? 'provisionally_accepted' : 'accepted')}
+            >
+              <option value="accepted">Admit</option>
+              <option value="provisionally_accepted">Provisionally accept</option>
+            </select>
+          </label>
+          <label className="wide">
+            <span>Cohort</span>
+            <EntitySearchSelect
+              catalog="kcaCohort"
+              disabled={busy}
+              name="bulk_cohort_id"
+              onValueChange={setCohortId}
+              placeholder="Search cohort"
+              required
+              value={cohortId}
+            />
+          </label>
+          <label>
+            <span>Starts on</span>
+            <input
+              disabled={busy}
+              type="date"
+              value={startsOn}
+              onChange={(event) => setStartsOn(event.target.value)}
+            />
+          </label>
+          <p className="maps-settings-lead">Registration numbers are issued immediately for each student.</p>
+          <button
+            className="primary-button"
+            disabled={noneSelected || busy || !cohortId.trim() || !startsOn}
+            type="button"
+            onClick={() => void onAdmit({ cohortId: cohortId.trim(), startsOn, status: admitStatus })}
+          >
+            {busy ? 'Working…' : `Admit selected${selectedCount ? ` (${selectedCount})` : ''}`}
+          </button>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const columns = screen.columns ?? [];
@@ -2751,9 +2970,12 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [importMode, setImportMode] = useState<'enroll' | 'application'>('enroll');
   const [importResult, setImportResult] = useState<KcaStudentImportResult | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const reviewLabel = dataset === 'kca.applications' ? 'Review' : undefined;
+  const isApplicationsCatalog = dataset === 'kca.applications';
+  const selectedIdSet = new Set(selectedIds);
 
   useEffect(() => {
     if (!live || !dataset) return;
@@ -2763,10 +2985,15 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
       setError(null);
       setMessage(t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
       try {
-        const result = await listCatalogDomain(dataset, { perPage: 25 });
+        const result = await listCatalogDomain(dataset, { perPage: isApplicationsCatalog ? 50 : 25 });
         if (cancelled) return;
         stashAdminRecords(result.items as Array<Record<string, unknown>>);
-        setRows(catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[]);
+        const mapped = catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[];
+        setRows(mapped);
+        setSelectedIds((current) => {
+          const available = new Set(mapped.map(rowRecordId).filter(Boolean));
+          return current.filter((id) => available.has(id));
+        });
         setTotal(result.pagination.total);
         setMessage(
           result.pagination.total === 0
@@ -2783,7 +3010,7 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
     return () => {
       cancelled = true;
     };
-  }, [columnKey, dataset, live, reloadToken, t]);
+  }, [columnKey, dataset, isApplicationsCatalog, live, reloadToken, t]);
 
   async function handleDownloadTemplate() {
     setBulkBusy(true);
@@ -2837,6 +3064,80 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
       if (importInputRef.current) {
         importInputRef.current.value = '';
       }
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  }
+
+  function toggleAllVisible() {
+    const visibleIds = rows.map(rowRecordId).filter(Boolean);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIdSet.has(id));
+    setSelectedIds(allSelected ? [] : visibleIds);
+  }
+
+  async function handleBulkStatusUpdate(input: { status: string; reasonCode?: string }) {
+    if (selectedIds.length === 0) return;
+    if (kcaStatusRequiresReason(input.status) && !input.reasonCode) {
+      setError('A reason code is required for this status.');
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const result: KcaBulkTransitionResult = await bulkTransitionKcaApplications({
+        applicationIds: selectedIds,
+        status: input.status,
+        reasonCode: input.reasonCode,
+      }, CATALOG_GLOBAL_SCOPE);
+      setMessage(
+        `Status update finished · ${result.updated_count} updated · ${result.skipped_count} already at this status · ${result.failed_count} failed`,
+      );
+      if (result.failed_count > 0) {
+        setError(formatKcaBulkFailures(result.failures));
+      }
+      if (result.updated_count > 0 || result.skipped_count > 0) {
+        setSelectedIds([]);
+        setReloadToken((value) => value + 1);
+      }
+    } catch (err) {
+      setError(platformErrorMessage(err, formatAdminMutationError(err) || 'Unable to update selected applications.'));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkAdmit(input: { cohortId: string; startsOn: string; status: 'accepted' | 'provisionally_accepted' }) {
+    if (selectedIds.length === 0) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const result: KcaBulkAdmitResult = await bulkAdmitKcaStudents({
+        applicationIds: selectedIds,
+        cohortId: input.cohortId,
+        startsOn: input.startsOn,
+        status: input.status,
+      }, CATALOG_GLOBAL_SCOPE);
+      const numbers = result.admitted
+        .map((row) => row.registration_number)
+        .filter((value): value is string => Boolean(value));
+      setMessage(
+        `Admission finished · ${result.admitted_count} admitted · ${result.skipped_count} already enrolled · ${result.failed_count} failed${
+          numbers.length ? ` · ${numbers.slice(0, 8).join(', ')}` : ''
+        }`,
+      );
+      if (result.failed_count > 0) {
+        setError(formatKcaBulkFailures(result.failures));
+      }
+      if (result.admitted_count > 0 || result.skipped_count > 0) {
+        setSelectedIds([]);
+        setReloadToken((value) => value + 1);
+      }
+    } catch (err) {
+      setError(platformErrorMessage(err, formatAdminMutationError(err) || 'Unable to admit selected students.'));
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -2906,8 +3207,17 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
           Bulk register with CSV or Excel (.xlsx). Use the template columns (church_id or church_name, recommender fields, commitments, cohort_code, starts_on). Excel opens the CSV template directly.
         </p>
       ) : null}
+      {live && isApplicationsCatalog ? (
+        <KcaApplicationsBulkBar
+          busy={bulkBusy}
+          selectedCount={selectedIds.length}
+          onAdmit={handleBulkAdmit}
+          onClear={() => setSelectedIds([])}
+          onUpdateStatus={handleBulkStatusUpdate}
+        />
+      ) : null}
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
-      {live && !error ? <p className="maps-settings-lead" role="status">{message}</p> : null}
+      {live && message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
       {importResult && importResult.failures.length > 0 ? (
         <div className="kca-import-failures" role="status">
           <p className="maps-settings-lead">Row failures:</p>
@@ -2924,7 +3234,16 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
           ) : null}
         </div>
       ) : null}
-      <KcaTable screen={screen} rows={rows} reviewLabel={reviewLabel} total={total || rows.length} />
+      <KcaTable
+        screen={screen}
+        rows={rows}
+        reviewLabel={reviewLabel}
+        total={total || rows.length}
+        selectable={live && isApplicationsCatalog}
+        selectedIds={selectedIdSet}
+        onToggleRow={toggleSelected}
+        onToggleAll={toggleAllVisible}
+      />
     </div>
   );
 }

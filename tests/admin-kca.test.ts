@@ -230,3 +230,17 @@ test('KCA student registration includes login account fields', async () => {
   assert.equal(payload.application_data.why, 'Ministry growth');
   assert.equal(payload.application_data.password, undefined);
 });
+
+test('KCA applications table supports bulk admit and bulk status updates', async () => {
+  const source = await readFile(new URL('../components/kca-ui.tsx', import.meta.url), 'utf8');
+  assert.match(source, /function KcaApplicationsBulkBar/);
+  assert.match(source, /Admit and enroll/);
+  assert.match(source, /Update status/);
+  assert.match(source, /bulkAdmitKcaStudents/);
+  assert.match(source, /bulkTransitionKcaApplications/);
+  assert.match(source, /selectable=\{live && isApplicationsCatalog\}/);
+  assert.match(source, /Registration numbers are issued immediately/);
+  const api = await readFile(new URL('../lib/admin-platform-api.ts', import.meta.url), 'utf8');
+  assert.match(api, /admin\/kca\/applications\/bulk-enrollments/);
+  assert.match(api, /admin\/kca\/applications\/bulk-transitions/);
+});

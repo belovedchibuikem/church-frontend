@@ -164,6 +164,19 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .kca-students-bulk-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .kca-students-import-mode { display:inline-flex; align-items:center; gap:8px; color:#555d72; font-size:12px; font-weight:700; }
 .kca-students-import-mode select { height:34px; border:1px solid #e0e3eb; border-radius:5px; background:#fff; padding:0 10px; }
+.kca-applications-bulk { display:grid; gap:12px; margin-bottom:16px; }
+.kca-applications-bulk-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.kca-applications-bulk-head strong { display:block; font-size:15px; }
+.kca-applications-bulk-head .maps-settings-lead { margin:4px 0 0; }
+.kca-applications-bulk-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.kca-applications-bulk-card { display:grid; gap:10px; padding:16px; align-content:start; }
+.kca-applications-bulk-card h3 { margin:0; font-size:14px; }
+.kca-applications-bulk-card label { display:grid; gap:6px; color:#454c65; font-size:12px; font-weight:700; }
+.kca-applications-bulk-card input,.kca-applications-bulk-card select { height:40px; border:1px solid #e0e3eb; border-radius:6px; padding:0 10px; background:#fff; }
+.kca-applications-bulk-card .maps-settings-lead { margin:0; }
+.kca-table .kca-select-col { width:42px; padding-left:12px; padding-right:8px; }
+.kca-table .kca-select-col input { width:16px; height:16px; accent-color:var(--fhc-violet-700); }
+.kca-table tbody tr.is-selected { background:#f5f2ff; }
 .kca-import-failures { margin:0 0 16px; padding:12px 14px; border:1px solid #f0d5d5; border-radius:8px; background:#fff7f7; }
 .kca-import-failures ul { margin:8px 0 0; padding-left:18px; color:#9b1c1c; font-size:13px; }
 .kca-add-lesson-form { margin-bottom:20px; }
@@ -459,6 +472,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .kca-letter-document-scroll p { text-align:justify; hyphens:auto; }
 .kca-letter-acceptance { margin-top:18px; padding:20px; display:grid; gap:12px; }
 .kca-letter-acceptance-check { display:flex; gap:10px; align-items:flex-start; font-size:10px; line-height:1.5; }
+.kca-inline-signature-field { display:grid; gap:8px; }
+.kca-inline-signature-field .field-help { margin:0; }
 .kca-governance-form .platform-settings-body { padding-bottom:0; }
 .kca-governance-footer { position:sticky; bottom:0; z-index:2; margin-top:18px; padding:16px 0 20px; border-top:1px solid #e7e9ef; background:linear-gradient(180deg,rgba(255,255,255,.92),#fff 24%); backdrop-filter:blur(6px); }
 .kca-signature-canvas { display:block; width:100%; max-width:420px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; touch-action:none; }
@@ -660,6 +675,7 @@ body:has(.page.batch-l) { overflow-x:hidden; }
   .kca-flow-layout,.kca-decision-layout { grid-template-columns:1fr; }
   .kca-step-rail { position:static; width:auto; max-width:100%; display:block; overflow:visible; padding:0; }.kca-step-rail h3 { margin-bottom:10px; }.kca-step-rail>div[role="list"] { max-width:100%; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(145px,1fr); overflow-x:auto; overscroll-behavior-inline:contain; scrollbar-width:thin; }.kca-step-rail>div:not([role="list"]) { display:inline-grid; width:min(32%,170px); margin-right:4px; vertical-align:top; }.kca-step-rail>div:not([role="list"])::after,.kca-step-rail>div[role="list"]>div::after { display:none; }
   .kca-overview-grid,.mission-detail-grid,.mission-review-columns,.mission-planning-grid,.mission-team-grid,.mission-soul-layout,.mission-analytics-grid,.mission-gap-grid,.mission-report-grid { grid-template-columns:1fr; }
+  .kca-applications-bulk-grid { grid-template-columns:1fr; }
   .kca-section-progress>div { grid-template-columns:repeat(5,1fr); }
   .mission-link-grid { grid-template-columns:repeat(2,1fr); }
   .kca-cohort-cards { grid-template-columns:repeat(2,1fr); }

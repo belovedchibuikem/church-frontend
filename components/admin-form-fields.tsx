@@ -1,11 +1,13 @@
 'use client';
 
 import { useLocale } from '@/components/locale-provider';
+import { SignaturePad } from '@/components/signature-pad';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
 import type { AdminFormField } from '../lib/admin-form-schemas';
 import { defaultValueForField } from '../lib/admin-form-schemas';
 import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
+import { useState } from 'react';
 
 function optionMessageKey(option: string): string {
   return `admin.option.${option.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
@@ -72,6 +74,16 @@ function FieldControl({
   if (field.type === 'file') {
     return <input name={field.name} type="file" accept={field.accept} required={required} />;
   }
+  if ((field.type ?? 'text') === 'text' && /signature/i.test(`${field.name} ${field.label}`)) {
+    return (
+      <SignatureTextField
+        name={field.name}
+        placeholder={placeholder}
+        required={required}
+        defaultValue={defaultValue}
+      />
+    );
+  }
   return (
     <input
       name={field.name}
@@ -80,6 +92,34 @@ function FieldControl({
       required={required}
       defaultValue={defaultValue}
     />
+  );
+}
+
+function SignatureTextField({
+  name,
+  placeholder,
+  required,
+  defaultValue,
+}: {
+  name: string;
+  placeholder?: string;
+  required?: boolean;
+  defaultValue?: string;
+}) {
+  const [value, setValue] = useState(defaultValue ?? '');
+  return (
+    <div className="kca-inline-signature-field">
+      <input
+        name={name}
+        type="text"
+        placeholder={placeholder}
+        required={required}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <small className="field-help">Draw signature below (recommended), and keep signer name above.</small>
+      <SignaturePad onChange={() => undefined} />
+    </div>
   );
 }
 
