@@ -41,6 +41,24 @@ function missing(value?: string | null): string {
   return value && value.trim() !== '' && value !== '—' ? value : 'Not provided';
 }
 
+function transitionLabel(status: string): string {
+  switch (status) {
+    case 'published':
+      return 'Publish';
+    case 'editorial_review':
+      return 'Send to editorial review';
+    case 'unpublished':
+      return 'Unpublish';
+    default:
+      return status.replaceAll('_', ' ');
+  }
+}
+
+function orderedTransitions(statuses: string[]): string[] {
+  const rank = (status: string) => (status === 'published' ? 0 : 1);
+  return [...statuses].sort((left, right) => rank(left) - rank(right));
+}
+
 function publicationTypeLabel(type?: string | null): string {
   switch ((type ?? '').toLowerCase()) {
     case 'bible_study':
@@ -198,19 +216,24 @@ export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
         </article>
         <article className="platform-card">
           <h3>{t('admin.allowedActions', { defaultMessage: 'Allowed actions' })}</h3>
+          <p className="maps-settings-lead">
+            {data.status === 'published' || data.status === 'distribution'
+              ? t('admin.publicationIsLive', { defaultMessage: 'This title is live on the public Press catalogue.' })
+              : t('admin.publishHint', { defaultMessage: 'Manuscript is a working copy. Click Publish to make it visible on the public Press catalogue. Books still need an ISBN first.' })}
+          </p>
           {(data.allowed_transitions ?? []).length === 0 ? (
             <p className="maps-settings-lead">{t('admin.noTransitions', { defaultMessage: 'No further transitions.' })}</p>
           ) : (
             <div className="row-actions platform-row-actions">
-              {(data.allowed_transitions ?? []).map((status) => (
+              {orderedTransitions(data.allowed_transitions ?? []).map((status) => (
                 <button
-                  className="platform-primary"
+                  className={status === 'published' ? 'platform-primary' : 'ghost-button'}
                   disabled={busy}
                   key={status}
                   type="button"
-                  onClick={() => void act(status, `Transition ${status}`)}
+                  onClick={() => void act(status, status === 'published' ? 'Publish' : `Transition ${status}`)}
                 >
-                  {status.replace(/_/g, ' ')}
+                  {transitionLabel(status)}
                 </button>
               ))}
             </div>

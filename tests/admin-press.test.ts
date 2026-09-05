@@ -104,3 +104,36 @@ test('create bible_study publication without a passage is rejected before the AP
   );
   assert.equal(fetchCalls.length, 0);
 });
+
+test('create publication can request publish now', async () => {
+  installFetch();
+  await executeAdminAction({
+    route: '/admin/press/publications/create',
+    label: 'Create Publication',
+    payload: {
+      title: 'Hope Sunday',
+      publisher_name: 'Kingdom Press',
+      language_code: 'en',
+      format: 'pdf',
+      publication_type: 'document_pdf',
+      publish_now: 'true',
+    },
+  });
+  assert.equal(fetchCalls.length, 1);
+  const body = JSON.parse(fetchCalls[0]?.body ?? '{}') as { publish_now?: boolean };
+  assert.equal(body.publish_now, true);
+});
+
+test('publish action sends published status', async () => {
+  installFetch();
+  await executeAdminAction({
+    route: '/admin/press/publications/01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    label: 'Publish',
+    payload: { status: 'published', reason_code: 'publication_reviewed' },
+    recordId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+  });
+  assert.equal(fetchCalls.length, 1);
+  assert.match(fetchCalls[0]?.url ?? '', /\/publications\/01ARZ3NDEKTSV4RRFFQ69G5FAV\/transitions/);
+  const body = JSON.parse(fetchCalls[0]?.body ?? '{}') as { status?: string };
+  assert.equal(body.status, 'published');
+});

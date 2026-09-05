@@ -1802,6 +1802,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
           category: field(payload, 'category') ?? null,
           description: field(payload, 'description') ?? null,
           as_draft: field(payload, 'as_draft') === 'true' || field(payload, 'as_draft') === 'on' ? true : undefined,
+          publish_now: field(payload, 'publish_now') === 'true' || field(payload, 'publish_now') === 'on' ? true : undefined,
           price_minor: asInt(field(payload, 'price_minor') ?? undefined) ?? null,
           currency_code: field(payload, 'currency_code') ?? null,
           content_file_asset_id: firstUlid(payload.content_file_asset_id) ?? null,
