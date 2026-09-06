@@ -7,7 +7,7 @@ import { apiRequest } from '../lib/api-client';
 import { CATALOG_GLOBAL_SCOPE, catalogErrorMessage } from '../lib/admin-catalog-api';
 import { fieldsForEntity } from '../lib/admin-form-schemas';
 import { AdminFormFields } from './admin-form-fields';
-import { executeAdminAction, formatAdminMutationError } from '../lib/admin-mutation-dispatcher';
+import { executeAdminAction, formatAdminMutationError, apiFieldErrors } from '../lib/admin-mutation-dispatcher';
 import { formatTimestamp } from '../lib/admin-identity-api';
 import { PLATFORM_GLOBAL_SCOPE, uploadPlatformFile } from '../lib/admin-platform-api';
 import { useLocale } from '@/components/locale-provider';
@@ -225,19 +225,30 @@ export function PressPublicationDetail({ screen }: { screen: AdminScreen }) {
             <p className="maps-settings-lead">{t('admin.noTransitions', { defaultMessage: 'No further transitions.' })}</p>
           ) : (
             <div className="row-actions platform-row-actions">
-              {orderedTransitions(data.allowed_transitions ?? []).map((status) => (
-                <button
-                  className={status === 'published' ? 'platform-primary' : 'ghost-button'}
-                  disabled={busy}
-                  key={status}
-                  type="button"
-                  onClick={() => void act(status, status === 'published' ? 'Publish' : `Transition ${status}`)}
-                >
-                  {transitionLabel(status)}
-                </button>
-              ))}
+              {orderedTransitions(data.allowed_transitions ?? []).map((status) => {
+                const bookNeedsIsbn = status === 'published'
+                  && (data.publication_type ?? 'book') === 'book'
+                  && !data.isbn;
+                return (
+                  <button
+                    className={status === 'published' ? 'platform-primary' : 'ghost-button'}
+                    disabled={busy || bookNeedsIsbn}
+                    key={status}
+                    title={bookNeedsIsbn ? 'This book needs an ISBN before it can be published.' : undefined}
+                    type="button"
+                    onClick={() => void act(status, status === 'published' ? 'Publish' : `Transition ${status}`)}
+                  >
+                    {transitionLabel(status)}
+                  </button>
+                );
+              })}
             </div>
           )}
+          {(data.publication_type ?? 'book') === 'book' && !data.isbn && (data.allowed_transitions ?? []).includes('published') ? (
+            <p className="maps-settings-lead" role="status">
+              {t('admin.bookNeedsIsbn', { defaultMessage: 'This book needs an ISBN before it can be published. Assign an ISBN, then click Publish.' })}
+            </p>
+          ) : null}
         </article>
       </div>
       <article className="platform-card">
@@ -298,12 +309,16 @@ export function PressPublicationCreateForm({ screen }: { screen: AdminScreen }) 
   const { t } = useLocale();
   const fields = fieldsForEntity('press_publication');
   const [message, setMessage] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
     setMessage(null);
+    setFailed(false);
+    setFieldErrors({});
     try {
       const payload = await payloadFromPublicationForm(event.currentTarget);
       const result = await executeAdminAction({
@@ -317,6 +332,8 @@ export function PressPublicationCreateForm({ screen }: { screen: AdminScreen }) 
         : (result.id ?? 'publication');
       setMessage(t('admin.publicationCreated', { defaultMessage: 'Created {title}', vars: { title } }));
     } catch (err) {
+      setFailed(true);
+      setFieldErrors(apiFieldErrors(err));
       setMessage(formatAdminMutationError(err));
     } finally {
       setBusy(false);
@@ -330,8 +347,8 @@ export function PressPublicationCreateForm({ screen }: { screen: AdminScreen }) 
           <h2>{screen.title}</h2>
           <p>{screen.subtitle}</p>
         </header>
-        {message ? <p className="maps-settings-lead" role="status">{message}</p> : null}
-        <AdminFormFields fields={fields} />
+        {message ? <p className="maps-settings-lead" role={failed ? 'alert' : 'status'}>{message}</p> : null}
+        <AdminFormFields fields={fields} fieldErrors={fieldErrors} />
         <footer className="form-footer">
           <button className="platform-primary" disabled={busy} type="submit">
             {busy ? t('common.saving', { defaultMessage: 'Saving…' }) : t('admin.createPublication', { defaultMessage: 'Create publication' })}

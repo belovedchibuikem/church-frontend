@@ -5,7 +5,7 @@
  * Catalog wrappers are GET-only (`lib/admin-catalog-api.ts`) and are not used here.
  * Do not invent endpoints that are absent from that route file.
  */
-import { ApiError, apiRequestData } from './api-client.ts';
+import { ApiError, apiRequestData, apiFieldErrors, humanizeApiError } from './api-client.ts';
 import type { JsonObject, JsonValue } from './api-types.ts';
 import {
   AdminIdentityApiError,
@@ -36,7 +36,6 @@ import {
   deleteChurch,
   defaultOpsScope,
   GLOBAL_ADMIN_SCOPE,
-  operationsErrorMessage,
   recordSoulFollowUp,
   registerFirstTimer,
   updateFirstTimer,
@@ -55,7 +54,6 @@ import {
   deactivateObjectStorage,
   disableFeatureFlag,
   enableFeatureFlag,
-  platformErrorMessage,
   upsertConfiguration,
   upsertFeatureFlag,
   validateObjectStorage,
@@ -225,13 +223,13 @@ function pressTypeMetadata(payload: Record<string, string>): JsonObject {
 function assertPressTypeRequirements(payload: Record<string, string>): void {
   const type = (field(payload, 'publication_type', 'type') ?? 'book').toLowerCase().replace(/\s+/g, '_');
   if (type === 'sermon' && !field(payload, 'speaker', 'preacher', 'speaker_name')) {
-    throw new Error('Sermons require a speaker or preacher name.');
+    throw new Error('Enter the speaker or preacher name for this sermon.');
   }
   if (type === 'devotional' && !field(payload, 'reflection', 'body', 'content')) {
-    throw new Error('Devotionals require a reflection or body.');
+    throw new Error('Enter the reflection or body for this devotional.');
   }
   if (type === 'bible_study' && !field(payload, 'passage', 'scripture', 'session_passage')) {
-    throw new Error('Study manuals require a scripture passage.');
+    throw new Error('Enter the scripture passage this study manual covers, for example Romans 8:1-39.');
   }
 }
 
@@ -337,22 +335,18 @@ export function formatAdminMutationError(error: unknown): string {
   if (error instanceof UnregisteredAdminActionError) return error.message;
   if (error instanceof OrganizationApiError) return organizationErrorMessage(error);
   if (error instanceof AdminPlatformApiError) {
-    return platformErrorMessage(error, 'The platform admin request failed.');
+    return humanizeApiError(error, 'The platform admin request failed.');
   }
   if (error instanceof AdminOperationsApiError) {
-    return operationsErrorMessage(error, 'Admin operations mutation failed.');
+    return humanizeApiError(error, 'The admin action could not be completed.');
   }
   if (error instanceof AdminIdentityApiError) {
-    return error.code ? `${error.message} (${error.code})` : error.message;
+    return humanizeApiError(error, error.message || 'The identity request failed.');
   }
-  if (error instanceof ApiError) {
-    const first = error.errors ? Object.values(error.errors).flat()[0] : undefined;
-    const message = first || error.message;
-    return error.code ? `${message} (${error.code})` : message;
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return 'The admin action failed.';
+  return humanizeApiError(error, 'The admin action failed.');
 }
+
+export { apiFieldErrors };
 
 async function mutate<T>(
   path: string,

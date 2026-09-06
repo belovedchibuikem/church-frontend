@@ -6,9 +6,9 @@ import { useLocale } from '@/components/locale-provider';
 import { AdminFormFields } from './admin-form-fields';
 import { SearchSelect } from './search-select';
 import { catalogOptions } from '../lib/form-catalogs';
-import { defaultValueForField, fieldsForEntity, normalizeDetailValues, schemaForAction, type AdminFormField } from '../lib/admin-form-schemas';
+import { defaultValueForField, fieldsForEntity, normalizeDetailValues, schemaForAction, adminOptionLabel, type AdminFormField } from '../lib/admin-form-schemas';
 import { fieldsFromRecordDetails, stripRecordUlid } from '../lib/admin-row-actions';
-import { formatAdminMutationError, extractUlid } from '../lib/admin-mutation-dispatcher';
+import { formatAdminMutationError, extractUlid, apiFieldErrors } from '../lib/admin-mutation-dispatcher';
 import { catalogForIdField, placeholderForIdField } from '../lib/id-field-catalog';
 import { PLATFORM_GLOBAL_SCOPE, uploadPlatformFile } from '../lib/admin-platform-api';
 
@@ -152,7 +152,7 @@ function FieldControl({ field, required, defaultValue, defaultLabel }: { field: 
       />
     );
   }
-  if (field.type === 'select') return <select name={field.name} required={required} defaultValue={defaultValue ?? ''}><option value="" disabled>{t('admin.selectOption', { defaultMessage: 'Select an option' })}</option>{field.options?.map((option) => <option value={option} key={option}>{t(optionMessageKey(option), { defaultMessage: option })}</option>)}</select>;
+  if (field.type === 'select') return <select name={field.name} required={required} defaultValue={defaultValue ?? ''}><option value="" disabled>{t('admin.selectOption', { defaultMessage: 'Select an option' })}</option>{field.options?.map((option) => <option value={option} key={option}>{t(optionMessageKey(option), { defaultMessage: adminOptionLabel(option) })}</option>)}</select>;
   if (field.type === 'file') return <input name={field.name} type="file" accept={field.accept} required={required} />;
   return <input name={field.name} type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : field.type === 'date' ? 'date' : 'text'} placeholder={placeholder} required={required} defaultValue={defaultValue}/>;
 }
@@ -164,6 +164,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
   const normalizedDetails = normalizeDetailValues(details);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -176,6 +177,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
     }
     setSubmitting(true);
     setFormError('');
+    setFieldErrors({});
     try {
       if (contentFile instanceof File && contentFile.size > 0) {
         const uploaded = await uploadPlatformFile(contentFile, 'press.publication.content', PLATFORM_GLOBAL_SCOPE);
@@ -183,6 +185,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
       }
       await onSubmit(values);
     } catch (error) {
+      setFieldErrors(apiFieldErrors(error));
       setFormError(formatAdminMutationError(error));
     } finally {
       setSubmitting(false);
@@ -390,7 +393,7 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
   if (schema || ((mode === 'edit' || mode === 'create') && fields.length > 0)) {
     return <form className="interaction-action-form" onSubmit={save}>
       <div className="interaction-form-heading"><span>{modeHeading}</span><h3>{record ? `${entity}: ${record}` : entity}</h3><p>{t('admin.completeFieldsBelow', { defaultMessage: 'Search by name where a person, church, year, or module is needed. The system stores the matching record ID.' })}</p></div>
-      <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' || Boolean(schema) ? normalizedDetails : {}} className="interaction-form-grid" />
+      <AdminFormFields fields={fields} values={mode === 'edit' || mode === 'create' || Boolean(schema) ? normalizedDetails : {}} fieldErrors={fieldErrors} className="interaction-form-grid" />
       {errorNote}
       {footerButtons(submitLabel)}
     </form>;

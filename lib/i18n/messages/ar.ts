@@ -269,6 +269,10 @@ export const ar: MessageTree = {
     translations: 'الترجمات',
     option: {
       bible_study: 'كتيبات الدراسة',
+      document_pdf: 'مستند',
+      book: 'كتاب',
+      sermon: 'عظة',
+      devotional: 'تأمل',
     },
   },
   mobile: {

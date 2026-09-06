@@ -3,9 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { afterEach, before, test } from 'node:test';
 import {
   executeAdminAction,
+  formatAdminMutationError,
   UnregisteredAdminActionError,
   UNREGISTERED_ADMIN_ACTION_MESSAGE,
 } from '../lib/admin-mutation-dispatcher.ts';
+import { ApiError } from '../lib/api-client.ts';
 
 process.env.FHC_LARAVEL_API_URL ??= 'http://example.test/api/v1';
 process.env.NEXT_PUBLIC_FHC_API_URL ??= 'http://example.test/api/v1';
@@ -323,4 +325,28 @@ test('executeAdminAction refuses unmapped actions instead of faking success', as
     },
   );
   assert.equal(fetchCalls.length, 0);
+});
+
+test('formatAdminMutationError uses the first field message and omits error codes', () => {
+  const error = new ApiError(422, 'The request data is invalid.', 'corr', {
+    code: 'VALIDATION_FAILED',
+    errors: {
+      passage: ['Enter the scripture passage this study manual covers, for example Romans 8:1-39.'],
+    },
+  });
+  const message = formatAdminMutationError(error);
+  assert.equal(message, 'Enter the scripture passage this study manual covers, for example Romans 8:1-39.');
+  assert.doesNotMatch(message, /VALIDATION_FAILED/);
+});
+
+test('formatAdminMutationError rewrites technical bible_study validation copy', () => {
+  const error = new ApiError(
+    422,
+    'Publication type bible_study requires one of: passage, scripture, session_passage.',
+    'corr',
+    { code: 'VALIDATION_FAILED' },
+  );
+  const message = formatAdminMutationError(error);
+  assert.equal(message, 'Enter the scripture passage this study manual covers, for example Romans 8:1-39.');
+  assert.doesNotMatch(message, /VALIDATION_FAILED/);
 });

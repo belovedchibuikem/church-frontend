@@ -269,6 +269,10 @@ export const yo: MessageTree = {
     translations: 'Àwọn ìtumọ̀',
     option: {
       bible_study: 'Study Manuals',
+      document_pdf: 'Document',
+      book: 'Book',
+      sermon: 'Sermon',
+      devotional: 'Devotional',
     },
   },
   mobile: {

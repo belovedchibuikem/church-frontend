@@ -271,7 +271,11 @@ export const en: MessageTree = {
     cancel: 'Cancel',
     translations: 'Translations',
     option: {
-      bible_study: 'Study Manuals',
+      bible_study: 'Study Manual',
+      document_pdf: 'Document',
+      book: 'Book',
+      sermon: 'Sermon',
+      devotional: 'Devotional',
     },
   },
   mobile: {

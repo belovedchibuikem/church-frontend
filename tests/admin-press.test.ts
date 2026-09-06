@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { afterEach, before, test } from 'node:test';
 import { executeAdminAction } from '../lib/admin-mutation-dispatcher.ts';
 import { fieldsForEntity, isAdminFieldVisible } from '../lib/admin-form-schemas.ts';
@@ -42,10 +43,13 @@ function installFetch(): void {
 test('study manual passage is required only for bible_study', () => {
   const fields = fieldsForEntity('press_publication');
   const passage = fields.find((field) => field.name === 'passage');
+  const publishNow = fields.find((field) => field.name === 'publish_now');
   assert.equal(passage?.required, true);
   assert.deepEqual(passage?.visibleWhen, { field: 'publication_type', values: ['bible_study'] });
   assert.equal(isAdminFieldVisible(passage!, { publication_type: 'book' }), false);
   assert.equal(isAdminFieldVisible(passage!, { publication_type: 'bible_study' }), true);
+  assert.equal(isAdminFieldVisible(publishNow!, { publication_type: 'book' }), false);
+  assert.equal(isAdminFieldVisible(publishNow!, { publication_type: 'sermon' }), true);
 });
 
 test('create bible_study publication maps passage into type_metadata', async () => {
@@ -100,7 +104,7 @@ test('create bible_study publication without a passage is rejected before the AP
         publication_type: 'bible_study',
       },
     }),
-    /Study manuals require a scripture passage/,
+    /Enter the scripture passage this study manual covers/,
   );
   assert.equal(fetchCalls.length, 0);
 });
@@ -136,4 +140,12 @@ test('publish action sends published status', async () => {
   assert.match(fetchCalls[0]?.url ?? '', /\/publications\/01ARZ3NDEKTSV4RRFFQ69G5FAV\/transitions/);
   const body = JSON.parse(fetchCalls[0]?.body ?? '{}') as { status?: string };
   assert.equal(body.status, 'published');
+});
+
+test('press create form shows field errors and books cannot publish without an ISBN', async () => {
+  const source = await readFile(new URL('../components/press-ui.tsx', import.meta.url), 'utf8');
+  assert.match(source, /fieldErrors=\{fieldErrors\}/);
+  assert.match(source, /apiFieldErrors/);
+  assert.match(source, /bookNeedsIsbn/);
+  assert.match(source, /This book needs an ISBN before it can be published/);
 });

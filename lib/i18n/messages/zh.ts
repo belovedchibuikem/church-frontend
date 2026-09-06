@@ -268,6 +268,10 @@ export const zh: MessageTree = {
     translations: '翻译',
     option: {
       bible_study: '学习手册',
+      document_pdf: '文档',
+      book: '书籍',
+      sermon: '讲道',
+      devotional: '灵修',
     },
   },
   mobile: {

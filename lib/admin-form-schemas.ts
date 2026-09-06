@@ -582,7 +582,13 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Edition', name: 'edition', type: 'text', placeholder: '1st' },
       { label: 'Publication date', name: 'publication_date', type: 'date' },
       { label: 'Save as draft', name: 'as_draft', type: 'checkbox', helpText: 'Keeps the title as a draft. Leave unchecked to create it as a manuscript you can publish.' },
-      { label: 'Publish now', name: 'publish_now', type: 'checkbox', helpText: 'Make this title live on the public Press catalogue. Books still need an ISBN before they can be published.' },
+      {
+        label: 'Publish now',
+        name: 'publish_now',
+        type: 'checkbox',
+        helpText: 'Make this title live on the public Press catalogue. Not available for books until an ISBN is assigned.',
+        visibleWhen: { field: 'publication_type', values: ['document_pdf', 'sermon', 'devotional', 'bible_study'] },
+      },
       { label: 'Price (minor units)', name: 'price_minor', type: 'number', placeholder: '350000' },
       { label: 'Currency', name: 'currency_code', type: 'text', placeholder: 'NGN' },
     ],
@@ -802,6 +808,33 @@ export function isAdminFieldVisible(field: AdminFormField, values: Record<string
   if (!field.visibleWhen) return true;
   const current = values[field.visibleWhen.field] ?? '';
   return field.visibleWhen.values.includes(current);
+}
+
+export function adminOptionLabel(option: string): string {
+  switch (option) {
+    case 'bible_study':
+      return 'Study Manual';
+    case 'document_pdf':
+      return 'Document';
+    case 'devotional':
+      return 'Devotional';
+    case 'sermon':
+      return 'Sermon';
+    case 'book':
+      return 'Book';
+    case 'pdf':
+      return 'PDF';
+    case 'epub':
+      return 'EPUB';
+    case 'print':
+      return 'Print';
+    case 'audio':
+      return 'Audio';
+    case 'video':
+      return 'Video';
+    default:
+      return option.replaceAll('_', ' ');
+  }
 }
 
 /** Map legacy display labels to DB column names for edit defaults. */

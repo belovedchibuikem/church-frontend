@@ -410,3 +410,153 @@ export function requireGeneratedClientBaseUrl(): string {
   }
   return origin.endsWith('/') ? origin : `${origin}/`;
 }
+
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Title',
+  publisher_name: 'Publisher',
+  language_code: 'Language',
+  format: 'Format',
+  publication_type: 'Publication type',
+  content_file: 'Document file',
+  content_file_asset_id: 'Document file',
+  content_source_url: 'Document URL',
+  idempotency_key: 'Save request',
+  speaker: 'Speaker',
+  passage: 'Scripture passage',
+  reflection: 'Reflection',
+  'type_metadata.speaker': 'Speaker',
+  'type_metadata.passage': 'Scripture passage',
+  'type_metadata.reflection': 'Reflection',
+};
+
+const FORM_FIELD_ALIASES: Record<string, string> = {
+  'type_metadata.speaker': 'speaker',
+  'type_metadata.preacher': 'speaker',
+  'type_metadata.speaker_name': 'speaker',
+  'type_metadata.passage': 'passage',
+  'type_metadata.scripture': 'passage',
+  'type_metadata.session_passage': 'passage',
+  'type_metadata.reflection': 'reflection',
+  'type_metadata.body': 'reflection',
+  'type_metadata.content': 'reflection',
+  content_file_asset_id: 'content_file',
+};
+
+function detailsFromUnknown(error: unknown): JsonObject | undefined {
+  if (error instanceof ApiError) return error.details;
+  if (error && typeof error === 'object' && 'details' in error) {
+    const details = (error as { details?: unknown }).details;
+    if (details && typeof details === 'object' && !Array.isArray(details)) {
+      return details as JsonObject;
+    }
+  }
+  return undefined;
+}
+
+function fieldBagFromUnknown(error: unknown): Record<string, string[]> | undefined {
+  if (error instanceof ApiError && error.errors) return error.errors;
+  if (error && typeof error === 'object' && 'errors' in error) {
+    const errors = (error as { errors?: unknown }).errors;
+    if (errors && typeof errors === 'object' && !Array.isArray(errors)) {
+      return errors as Record<string, string[]>;
+    }
+  }
+  return fieldErrorsFromDetails(detailsFromUnknown(error));
+}
+
+function fieldErrorsFromUnknown(error: unknown): string[] {
+  const bag = fieldBagFromUnknown(error);
+  if (!bag) return [];
+  const messages: string[] = [];
+  for (const [field, values] of Object.entries(bag)) {
+    for (const value of values) {
+      if (typeof value !== 'string' || value.trim() === '') continue;
+      messages.push(humanizeFieldMessage(field, value));
+    }
+  }
+  return [...new Set(messages)];
+}
+
+function stripErrorCode(message: string): string {
+  return message.replace(/\s*\([A-Z][A-Z0-9_]{2,}\)\s*$/, '').trim();
+}
+
+function rewriteKnownApiMessage(message: string): string {
+  return stripErrorCode(message)
+    .replace(
+      /Publication type bible_study requires one of:\s*passage, scripture, session_passage\.?/i,
+      'Enter the scripture passage this study manual covers, for example Romans 8:1-39.',
+    )
+    .replace(
+      /Publication type sermon requires one of:\s*speaker, preacher, speaker_name\.?/i,
+      'Enter the speaker or preacher name for this sermon.',
+    )
+    .replace(
+      /Publication type devotional requires one of:\s*body, reflection, content\.?/i,
+      'Enter the reflection or body for this devotional.',
+    )
+    .replace(
+      /Study manuals require a scripture passage\.?/i,
+      'Enter the scripture passage this study manual covers, for example Romans 8:1-39.',
+    )
+    .replace(
+      /Sermons require a speaker or preacher name\.?/i,
+      'Enter the speaker or preacher name for this sermon.',
+    )
+    .replace(
+      /Devotionals require a reflection or body\.?/i,
+      'Enter the reflection or body for this devotional.',
+    );
+}
+
+function humanizeFieldMessage(field: string, message: string): string {
+  const label = FIELD_LABELS[field] ?? field.replaceAll('_', ' ').replace('type metadata.', '');
+  return rewriteKnownApiMessage(message)
+    .replace(/^The .+ field is required\.?$/i, `${label} is required.`)
+    .replace(/^The selected .+ is invalid\.?$/i, `Choose a valid ${label.toLowerCase()}.`)
+    .replace(/^The .+ field must be a valid URL\.?$/i, `Enter a valid ${label.toLowerCase()}.`)
+    .replace(/^The .+ field must be a valid ULID\.?$/i, `Choose a valid ${label.toLowerCase()}.`);
+}
+
+function inferFieldErrorsFromMessage(message: string): Record<string, string> {
+  const lower = message.toLowerCase();
+  if (/scripture passage|passage, scripture|study manual/.test(lower) && /require|enter|need/.test(lower)) {
+    return { passage: message };
+  }
+  if (/speaker|preacher/.test(lower) && /require|enter|need/.test(lower)) {
+    return { speaker: message };
+  }
+  if (/(reflection|devotional)/.test(lower) && /require|enter|need/.test(lower)) {
+    return { reflection: message };
+  }
+  return {};
+}
+
+/** User-facing API error copy without technical codes. */
+export function humanizeApiError(error: unknown, fallback = 'The request could not be completed.'): string {
+  const fieldMessages = fieldErrorsFromUnknown(error);
+  if (fieldMessages.length > 0) return fieldMessages.join(' ');
+
+  let message = '';
+  if (error instanceof Error) message = error.message;
+  message = rewriteKnownApiMessage(message);
+  if (!message || /^the request data is invalid\.?$/i.test(message) || /^the given data was invalid\.?$/i.test(message)) {
+    return fallback || 'Please check the required fields and try again.';
+  }
+  return message;
+}
+
+export function apiFieldErrors(error: unknown): Record<string, string> {
+  const bag = fieldBagFromUnknown(error);
+  const mapped: Record<string, string> = {};
+  if (bag) {
+    for (const [field, values] of Object.entries(bag)) {
+      const first = values.find((value) => typeof value === 'string' && value.trim() !== '');
+      if (!first) continue;
+      const formField = FORM_FIELD_ALIASES[field] ?? field;
+      mapped[formField] = humanizeFieldMessage(formField, first);
+    }
+  }
+  if (Object.keys(mapped).length > 0) return mapped;
+  return inferFieldErrorsFromMessage(humanizeApiError(error, ''));
+}

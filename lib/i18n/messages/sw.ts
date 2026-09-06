@@ -269,6 +269,10 @@ export const sw: MessageTree = {
     translations: 'Tafsiri',
     option: {
       bible_study: 'Study Manuals',
+      document_pdf: 'Document',
+      book: 'Book',
+      sermon: 'Sermon',
+      devotional: 'Devotional',
     },
   },
   mobile: {
