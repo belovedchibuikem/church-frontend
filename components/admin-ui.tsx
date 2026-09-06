@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, type AccessContext, type AccessDecision } from '../lib/access-control';
+import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, isChurchTenantContext, type AccessContext, type AccessDecision } from '../lib/access-control';
 import { AdminAccessProvider, useAdminAccess } from '../lib/admin-access-context';
 import {
   challengeMfa,
@@ -419,10 +419,32 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
 ];
 
 function navItemAllowed(href: string, access: AccessContext, requestedScope: string): boolean {
-  if (access.permissions.includes('*')) return true;
+  if (access.permissions.includes('*') && !isChurchTenantContext(access)) return true;
   const screen = getAdminScreen(href);
   if (!screen) return false;
   return evaluateAccess(screen, access, requestedScope).allowed;
+}
+
+const CHURCH_TENANT_CHURCH_NAV_EXTRAS: EnterpriseNavItem[] = [
+  { icon: '₦', label: 'Finance', href: '/admin/church/finance' },
+  { icon: '▤', label: 'Reports', href: '/admin/church/reports' },
+  { icon: '⚙', label: 'Settings', href: '/admin/church/settings' },
+];
+
+function visibleEnterpriseNavGroups(access: AccessContext, requestedScope: string): EnterpriseNavGroup[] {
+  return enterpriseNavGroups
+    .map((group) => {
+      const items = group.items.filter((item) => navItemAllowed(item.href, access, requestedScope));
+      if (group.id !== 'churches' || !isChurchTenantContext(access)) {
+        return { ...group, items };
+      }
+      const hrefs = new Set(items.map((item) => item.href));
+      const extras = CHURCH_TENANT_CHURCH_NAV_EXTRAS.filter(
+        (item) => !hrefs.has(item.href) && navItemAllowed(item.href, access, requestedScope),
+      );
+      return { ...group, items: [...items, ...extras] };
+    })
+    .filter((group) => group.items.length > 0);
 }
 
 function Brand({ dark = true }: { dark?: boolean }) {
@@ -433,13 +455,7 @@ function Sidebar({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const { access, requestedScope } = useAdminAccess();
   const groups = useMemo(
-    () =>
-      enterpriseNavGroups
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) => navItemAllowed(item.href, access, requestedScope)),
-        }))
-        .filter((group) => group.items.length > 0),
+    () => visibleEnterpriseNavGroups(access, requestedScope),
     [access, requestedScope],
   );
   const allItems = groups.flatMap((group) => group.items);
@@ -463,6 +479,8 @@ function Sidebar({ screen }: { screen: AdminScreen }) {
 function Topbar({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const { clearSession } = useAuth();
+  const { access } = useAdminAccess();
+  const churchTenant = isChurchTenantContext(access);
   const [signingOut, setSigningOut] = useState(false);
   const adminModule = getAdminModuleForRoute(screen.route);
   const allModules = t('admin.allModules', { defaultMessage: 'All modules' });
@@ -489,7 +507,7 @@ function Topbar({ screen }: { screen: AdminScreen }) {
     };
   }, [liveProfile]);
 
-  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label={t('admin.toggleNavigation', { defaultMessage: 'Toggle navigation' })} aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label={allModules} data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>{allModules}</b></button><span className="current-module-label"><small>{t('admin.currentModule', { defaultMessage: 'Current module' })}</small><strong>{adminChrome(t, adminModule.label)}</strong></span><span className="topbar-spacer"/><Link href="/admin/screens" className="screen-index-link" aria-label={previewDirectoryAria} title={previewDirectoryAria}>{previewDirectory}</Link><LocaleSwitcher /><button className="top-icon" type="button" aria-label={t('common.notifications', { defaultMessage: 'Notifications' })}>♧</button><button className="top-icon" type="button" aria-label={t('admin.unreadAlerts', { defaultMessage: 'Unread alerts' })}>♧<span className="dot" /></button><button className="topbar-logout" type="button" data-interaction-native="true" data-admin-intent="logout" disabled={signingOut} aria-label={t('common.logout', { defaultMessage: 'Logout' })} onClick={() => { setSigningOut(true); void signOutAdminSession(clearSession); }}>{signingOut ? t('common.signingOut', { defaultMessage: 'Signing out…' }) : t('common.logout', { defaultMessage: 'Logout' })}</button><button className="avatar" type="button" aria-label={t('admin.openProfile', { defaultMessage: 'Open admin profile' })} data-admin-intent="profile-menu">{avatarInitials}</button></header>;
+  return <header className="topbar"><button className="top-icon navigation-toggle" type="button" aria-label={t('admin.toggleNavigation', { defaultMessage: 'Toggle navigation' })} aria-controls="admin-primary-navigation" aria-expanded="false" data-admin-intent="toggle-navigation">☰</button><button className="module-launcher-button" type="button" aria-label={allModules} data-admin-intent="module-launcher" aria-controls="admin-module-launcher" aria-expanded="false"><span aria-hidden="true">▦</span><b>{allModules}</b></button><span className="current-module-label"><small>{t('admin.currentModule', { defaultMessage: 'Current module' })}</small><strong>{adminChrome(t, adminModule.label)}</strong></span><span className="topbar-spacer"/>{churchTenant ? null : <Link href="/admin/screens" className="screen-index-link" aria-label={previewDirectoryAria} title={previewDirectoryAria}>{previewDirectory}</Link>}<LocaleSwitcher /><button className="top-icon" type="button" aria-label={t('common.notifications', { defaultMessage: 'Notifications' })}>♧</button><button className="top-icon" type="button" aria-label={t('admin.unreadAlerts', { defaultMessage: 'Unread alerts' })}>♧<span className="dot" /></button><button className="topbar-logout" type="button" data-interaction-native="true" data-admin-intent="logout" disabled={signingOut} aria-label={t('common.logout', { defaultMessage: 'Logout' })} onClick={() => { setSigningOut(true); void signOutAdminSession(clearSession); }}>{signingOut ? t('common.signingOut', { defaultMessage: 'Signing out…' }) : t('common.logout', { defaultMessage: 'Logout' })}</button><button className="avatar" type="button" aria-label={t('admin.openProfile', { defaultMessage: 'Open admin profile' })} data-admin-intent="profile-menu">{avatarInitials}</button></header>;
 }
 
 function Breadcrumbs({ items }: { items: AdminBreadcrumb[] }) {

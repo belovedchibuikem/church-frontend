@@ -487,6 +487,14 @@ export function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { r
     const formEl = readSubmitForm(event);
     const form = new FormData(formEl);
     const selectedChurch = churchId || String(form.get('church_id'));
+    if (roleType === 'leader' && form.get('grant_admin_access') === 'on') {
+      const password = String(form.get('admin_password') || '');
+      const confirm = String(form.get('admin_password_confirmation') || '');
+      if (password !== confirm) {
+        setError('The login password and confirmation do not match.');
+        return;
+      }
+    }
     setBusy(true);
     setError(null);
     try {
@@ -500,6 +508,12 @@ export function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { r
           ? {
               grant_admin_access: true,
               ...(String(form.get('admin_email') || '') ? { admin_email: String(form.get('admin_email')) } : {}),
+              ...(String(form.get('admin_password') || '')
+                ? {
+                    admin_password: String(form.get('admin_password')),
+                    admin_password_confirmation: String(form.get('admin_password_confirmation') || ''),
+                  }
+                : {}),
             }
           : {}),
       }, scope);
@@ -508,7 +522,7 @@ export function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { r
       await load();
     } catch (err) {
       setError(operationsErrorMessage(err, roleType === 'leader'
-        ? 'Unable to appoint leader. Check the title, leader cap, and admin email if granting access.'
+        ? 'Unable to appoint leader. Check the title, leader cap, login email, and password if granting access.'
         : 'Unable to assign. Duplicate active roles are blocked.'));
     } finally {
       setBusy(false);
@@ -580,10 +594,37 @@ export function RolePanel({ screen, requestedScope, roleType }: ScopeProps & { r
                 <span>Grant church admin login (scoped to this church)</span>
               </label>
               {grantAdminAccess ? (
-                <label className="full">
-                  <span>Login email *</span>
-                  <input name="admin_email" type="email" required placeholder="pastor@church.org" />
-                </label>
+                <>
+                  <label className="full">
+                    <span>Login email *</span>
+                    <input name="admin_email" type="email" required placeholder="pastor@church.org" autoComplete="off" />
+                  </label>
+                  <label>
+                    <span>Login password *</span>
+                    <input
+                      name="admin_password"
+                      type="password"
+                      required
+                      minLength={12}
+                      autoComplete="new-password"
+                      placeholder="Choose a password"
+                    />
+                  </label>
+                  <label>
+                    <span>Confirm password *</span>
+                    <input
+                      name="admin_password_confirmation"
+                      type="password"
+                      required
+                      minLength={12}
+                      autoComplete="new-password"
+                      placeholder="Repeat password"
+                    />
+                  </label>
+                  <p className="maps-settings-lead full">
+                    Required when this person does not already have a login. Use 12+ characters with upper, lower, a number, and a symbol. They sign in at /admin/login.
+                  </p>
+                </>
               ) : null}
             </>
           ) : null}

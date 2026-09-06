@@ -24,6 +24,9 @@ import { WIZARD_ADVANCE_EVENT, isInPageWizardKind } from '../lib/use-admin-wizar
 import { adminModules, getAdminModule, getAdminModuleForRoute, isCanonicalAdminPath, isRestorableAdminRoute, moduleReturnStorageKey, sanitizeModuleReturn } from '../lib/admin-modules';
 import { sanitizeAdminScopeToken } from '../lib/admin-scope';
 import { signOutAdminSession } from '../lib/auth-api';
+import { useAdminAccess } from '../lib/admin-access-context';
+import { evaluateAccess, isChurchTenantContext } from '../lib/access-control';
+import { getAdminScreen } from '../lib/admin-routes';
 
 type Overlay =
   | {
@@ -68,6 +71,13 @@ function slug(value: string): string {
 
 export function AdminInteractionShell({ children, route, title, permission, scope, screenKind, returnTo, tabs, routes, records = [], details = {}, items = [] }: Props) {
   const { t } = useLocale();
+  const { access, requestedScope } = useAdminAccess();
+  const visibleModules = adminModules.filter((adminModule) => {
+    if (access.permissions.includes('*') && !isChurchTenantContext(access)) return true;
+    const screen = getAdminScreen(adminModule.homeRoute);
+    if (!screen) return false;
+    return evaluateAccess(screen, access, requestedScope).allowed;
+  });
   const tabItems = tabs ?? emptyTabs;
   const inPageWizard = isInPageWizardKind(screenKind) && tabItems.length > 1;
   const currentModule = getAdminModuleForRoute(route);
@@ -694,8 +704,8 @@ export function AdminInteractionShell({ children, route, title, permission, scop
         <p id="interaction-description">{overlay.description}</p>
         {overlay.type === 'drawer' && overlay.mode === 'filters' && <div className="interaction-filter-form"><label>Status<select defaultValue="all"><option value="all">All statuses</option><option value="active">Active</option><option value="pending">Pending</option></select></label><label>Date range<select defaultValue="month"><option value="month">This month</option><option value="quarter">This quarter</option><option value="year">This year</option></select></label><label>Sort<select defaultValue="recent"><option value="recent">Most recent</option><option value="name">Name</option><option value="status">Status</option></select></label><footer><button type="button">Reset Filters</button><button className="primary-button" type="button">Apply Filters</button></footer></div>}
         {overlay.type === 'drawer' && overlay.mode === 'profile' && <div className="interaction-profile-menu"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/profile'); }}>Open Admin Profile</button><button type="button" data-interaction-native="true" data-admin-intent="logout" onClick={() => { void signOutAdminSession(); }}>Logout</button></div>}
-        {overlay.mode === 'modules' && <div className="interaction-module-grid">{adminModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
-        {overlay.mode === 'modules' && <div className="interaction-directory-link"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/screens'); }}>Preview-only screen directory</button></div>}
+        {overlay.mode === 'modules' && <div className="interaction-module-grid">{visibleModules.map((adminModule) => <button type="button" data-admin-module={adminModule.id} className={adminModule.id === currentModule.id ? 'current' : ''} key={adminModule.id}><span aria-hidden="true">{adminModule.icon}</span><strong>{adminModule.label}</strong><small>{adminModule.description}</small><i>{adminModule.id === currentModule.id ? 'Current module' : 'Open module'} →</i></button>)}</div>}
+        {overlay.mode === 'modules' && !isChurchTenantContext(access) && <div className="interaction-directory-link"><button type="button" data-interaction-native="true" onClick={() => { closeOverlay(); window.location.assign('/admin/screens'); }}>Preview-only screen directory</button></div>}
         {overlay.mode === 'action' && <AdminActionSurface mode={overlay.actionMode ?? 'actions'} label={overlay.label ?? overlay.title} pageTitle={title} permission={permission} scope={scope} entityKey={overlay.entityKey} record={overlay.record} details={overlay.details ?? details} items={items} records={overlay.record ? [overlay.record] : records} onClose={closeOverlay} onSubmit={executeMutation}/>} 
       </section>
     </div>}

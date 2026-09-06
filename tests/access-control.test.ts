@@ -145,6 +145,58 @@ test('church-tenant administrators do not receive a platform wildcard', () => {
   assert.equal(evaluateAccess(getAdminScreen('/admin/finance')!, live, `church:${churchId}`).allowed, false);
 });
 
+test('church-tenant administrators only see church menus and church-scoped screens', () => {
+  const churchId = '01JABCDEFGHJKMNPQRSTVWXYZ0';
+  const live = accessContextFromCapabilities({
+    permissions: [
+      'church.churches.view',
+      'church.churches.manage',
+      'church.home_churches.view',
+      'church.home_church_applications.review',
+      'church.memberships.manage',
+      'church.first_timers.view',
+      'church.follow_up.view',
+      'church.finance.view',
+    ],
+    scopes: [{ type: 'church', key: churchId }],
+  });
+  const scope = `church:${churchId}`;
+  const allowed = [
+    '/admin/church/dashboard',
+    '/admin/churches',
+    '/admin/church/members',
+    '/admin/church/leadership',
+    '/admin/church/finance',
+    '/admin/church/reports',
+    '/admin/church/settings',
+    '/admin/home-churches/dashboard',
+    '/admin/people',
+    '/admin/reports/churches',
+  ];
+  for (const route of allowed) {
+    assert.equal(evaluateAccess(getAdminScreen(route)!, live, scope).allowed, true, route);
+  }
+  const hidden = [
+    '/admin',
+    '/admin/users',
+    '/admin/geography',
+    '/admin/kca',
+    '/admin/mission',
+    '/admin/press',
+    '/admin/finance',
+    '/admin/communications',
+    '/admin/reports',
+    '/admin/reports/pastoral-ai',
+    '/admin/security',
+    '/admin/settings/platform',
+    '/admin/approvals',
+    '/admin/tasks',
+  ];
+  for (const route of hidden) {
+    assert.equal(evaluateAccess(getAdminScreen(route)!, live, scope).allowed, false, route);
+  }
+});
+
 test('public routes are available without a session', () => {
   assert.deepEqual(evaluateAccess(publicLogin, context({ authenticated: false })), { allowed: true });
 });

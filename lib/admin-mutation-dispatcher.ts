@@ -1811,6 +1811,8 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   }
   if (routeStarts(route, '/admin/press/publications') && labelIs(label, /edit|update|save publication/) && pickRecord(ctx, 'publication_id', 'id')) {
     const publicationId = requireId(pickRecord(ctx, 'publication_id', 'id'), 'publication');
+    const metadata = pressTypeMetadata(payload);
+    const publicationType = field(payload, 'publication_type', 'type')?.toLowerCase().replace(/\s+/g, '_');
     const updated = await mutate(
       `admin/press/publications/${encodeURIComponent(publicationId)}`,
       jsonBody({
@@ -1818,14 +1820,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
         publisher_name: field(payload, 'publisher_name') ?? 'Kingdom Press',
         language_code: field(payload, 'language_code', 'language') ?? 'en',
         format: (field(payload, 'format') ?? 'print').toLowerCase(),
-        publication_type: (field(payload, 'publication_type', 'type') ?? 'book').toLowerCase().replace(/\s+/g, '_'),
+        publication_type: publicationType,
         subtitle: field(payload, 'subtitle') ?? null,
         summary: field(payload, 'summary') ?? null,
         category: field(payload, 'category') ?? null,
         description: field(payload, 'description') ?? null,
         content_file_asset_id: firstUlid(payload.content_file_asset_id) ?? null,
         content_source_url: field(payload, 'content_source_url') || null,
-        type_metadata: pressTypeMetadata(payload),
+        as_draft: field(payload, 'as_draft') === 'true' || field(payload, 'as_draft') === 'on' ? true : undefined,
+        publish_now: field(payload, 'publish_now') === 'true' || field(payload, 'publish_now') === 'on' ? true : undefined,
+        type_metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       }),
       { ...opts, method: 'PUT' },
     );

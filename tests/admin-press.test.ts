@@ -109,6 +109,34 @@ test('create bible_study publication without a passage is rejected before the AP
   assert.equal(fetchCalls.length, 0);
 });
 
+test('edit publication sends publish_now and keeps the selected type', async () => {
+  installFetch();
+  await executeAdminAction({
+    route: '/admin/press/publications/01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    label: 'Edit publication',
+    recordId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    payload: {
+      title: '2026 Studying at His Feet Manual',
+      publisher_name: 'Kingdom Press',
+      language_code: 'en',
+      format: 'pdf',
+      publication_type: 'bible_study',
+      passage: 'Luke 10:38-42',
+      publish_now: 'true',
+    },
+  });
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0]?.method, 'PUT');
+  const body = JSON.parse(fetchCalls[0]?.body ?? '{}') as {
+    publish_now?: boolean;
+    publication_type?: string;
+    type_metadata?: { passage?: string };
+  };
+  assert.equal(body.publish_now, true);
+  assert.equal(body.publication_type, 'bible_study');
+  assert.equal(body.type_metadata?.passage, 'Luke 10:38-42');
+});
+
 test('create publication can request publish now', async () => {
   installFetch();
   await executeAdminAction({
@@ -124,8 +152,8 @@ test('create publication can request publish now', async () => {
     },
   });
   assert.equal(fetchCalls.length, 1);
-  const body = JSON.parse(fetchCalls[0]?.body ?? '{}') as { publish_now?: boolean };
-  assert.equal(body.publish_now, true);
+  const createBody = JSON.parse(fetchCalls[0]?.body ?? '{}') as { publish_now?: boolean };
+  assert.equal(createBody.publish_now, true);
 });
 
 test('publish action sends published status', async () => {
@@ -148,4 +176,10 @@ test('press create form shows field errors and books cannot publish without an I
   assert.match(source, /apiFieldErrors/);
   assert.match(source, /bookNeedsIsbn/);
   assert.match(source, /This book needs an ISBN before it can be published/);
+});
+
+test('publications table only shows a published date when published_at is set', async () => {
+  const source = await readFile(new URL('../lib/admin-catalog-api.ts', import.meta.url), 'utf8');
+  assert.match(source, /key === 'published' \|\| key.startsWith\('published '/);
+  assert.match(source, /item.published_at/);
 });

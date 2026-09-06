@@ -16,7 +16,7 @@ export const adminModules: AdminModule[] = [
   { id: 'identity', label: 'Identity & Access', description: 'Users, roles, permissions and controlled access', icon: '◉', homeRoute: '/admin/users', prefixes: ['/admin/users', '/admin/roles', '/admin/permissions', '/admin/access', '/admin/sessions'] },
   { id: 'geography', label: 'Geography', description: 'Countries, regions, areas and hierarchy', icon: '◎', homeRoute: '/admin/geography', prefixes: ['/admin/geography'] },
   { id: 'home-churches', label: 'Home Churches', description: 'Applications, leaders, attendance and needs', icon: '◇', homeRoute: '/admin/home-churches/dashboard', prefixes: ['/admin/home-churches'] },
-  { id: 'churches', label: 'Church Operations', description: 'Churches, members, departments and groups', icon: '▣', homeRoute: '/admin/church/dashboard', prefixes: ['/admin/church/dashboard', '/admin/churches'] },
+  { id: 'churches', label: 'Church Operations', description: 'Churches, members, departments and groups', icon: '▣', homeRoute: '/admin/church/dashboard', prefixes: ['/admin/church', '/admin/churches'] },
   { id: 'people', label: 'People & Ministry Care', description: 'People, journeys, prayer, needs and safeguarding', icon: '♙', homeRoute: '/admin/people', prefixes: ['/admin/people'] },
   { id: 'kca', label: 'KCA', description: 'Admissions, learning, assessment and alumni', icon: '▦', homeRoute: '/admin/kca', prefixes: ['/admin/kca'] },
   { id: 'mission', label: 'Mission', description: 'Crusades, souls, follow-up and partners', icon: '✦', homeRoute: '/admin/mission', prefixes: ['/admin/mission'] },

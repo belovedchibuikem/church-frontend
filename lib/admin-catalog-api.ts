@@ -414,6 +414,13 @@ export function catalogRecordsToRows(
         mapped[column] = get('person_name', 'applicant_name', 'name');
       } else if (key.includes('status') || key === 'state') {
         mapped[column] = humanizeCatalogToken(get('status', 'state'));
+      } else if (key === 'published' || key.startsWith('published ')) {
+        const publishedAt = item.published_at;
+        mapped[column] = formatTimestamp(
+          publishedAt === null || publishedAt === undefined || publishedAt === ''
+            ? null
+            : String(publishedAt),
+        );
       } else if (key.includes('author') || key.includes('donor') || key.includes('user') || key === 'by') {
         mapped[column] = get(
           'author_name',

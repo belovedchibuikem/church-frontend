@@ -52,11 +52,43 @@ export function hasGlobalPlatformScope(scopes: CapabilityScope[] | string[]): bo
   return scopes.some((scope) => scope.type === 'global');
 }
 
+/** True when the session is scoped to one or more churches and not the platform. */
+export function isChurchTenantContext(context: AccessContext): boolean {
+  if (hasGlobalPlatformScope(context.scopes)) return false;
+  return context.scopes.some((scope) => scope.startsWith('church:'));
+}
+
+const CHURCH_TENANT_ROUTE_PREFIXES = [
+  '/admin/church',
+  '/admin/churches',
+  '/admin/home-churches',
+  '/admin/people',
+] as const;
+
+const CHURCH_TENANT_EXACT_ROUTES = new Set([
+  '/admin/login',
+  '/admin/mfa',
+  '/admin/forbidden',
+  '/admin/profile',
+  '/admin/reports/churches',
+  '/admin/reports/home-churches',
+  '/admin/reports/membership',
+  '/admin/reports/first-timers',
+  '/admin/reports/evangelism',
+]);
+
+/** Church-tenant admins may only open church, home-church, people, and church-report surfaces. */
+export function churchTenantAllowsRoute(route: string): boolean {
+  if (CHURCH_TENANT_EXACT_ROUTES.has(route)) return true;
+  return CHURCH_TENANT_ROUTE_PREFIXES.some(
+    (prefix) => route === prefix || route.startsWith(`${prefix}/`),
+  );
+}
+
 /** Church-tenant admins land on church operations instead of the global console. */
 export function churchTenantHomePath(context: AccessContext): string | null {
   if (!context.authenticated) return null;
-  if (hasGlobalPlatformScope(context.scopes)) return null;
-  if (!context.scopes.some((scope) => scope.startsWith('church:'))) return null;
+  if (!isChurchTenantContext(context)) return null;
   if (!context.permissions.includes('church.churches.view') && !context.permissions.includes('*')) return null;
   return '/admin/church/dashboard';
 }
@@ -122,12 +154,20 @@ export function evaluateAccess(screen: AdminScreen, context: AccessContext, requ
   if (screen.permission === 'public') return { allowed: true };
   if (!context.authenticated) return { allowed: false, reason: 'unauthenticated' };
   if (!context.mfaVerified) return { allowed: false, reason: 'mfa-required' };
+  if (isChurchTenantContext(context) && !churchTenantAllowsRoute(screen.route)) {
+    return { allowed: false, reason: 'permission-denied' };
+  }
   if (!context.permissions.includes('*') && !context.permissions.includes(screen.permission) && !hasAliasedPermission(screen.permission, context.permissions)) {
     return { allowed: false, reason: 'permission-denied' };
   }
   if (screen.scope === 'global' && !context.scopes.includes('global')) return { allowed: false, reason: 'scope-denied' };
   if (screen.scope === 'assigned' && !context.scopes.includes('global') && !context.scopes.includes(requestedScope)) {
-    return { allowed: false, reason: 'scope-denied' };
+    const churchScopeFallback = isChurchTenantContext(context)
+      && (requestedScope === 'global' || requestedScope === 'assigned')
+      && context.scopes.some((scope) => scope.startsWith('church:'));
+    if (!churchScopeFallback) {
+      return { allowed: false, reason: 'scope-denied' };
+    }
   }
   return { allowed: true };
 }
@@ -171,7 +211,7 @@ const GEOGRAPHY_PERMISSION_ALIASES: Record<string, readonly string[]> = {
 };
 
 const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
-  'admin.dashboard.view': ['identity.users.view', 'platform.configuration.view', 'security.audit.view', 'church.churches.view'],
+  'admin.dashboard.view': ['identity.users.view', 'platform.configuration.view', 'security.audit.view'],
   'organization.view': ['organization.countries.view'],
   'home_church.dashboard.view': ['church.home_churches.view'],
   'home_church.application.view': ['church.home_church_applications.review'],
@@ -331,11 +371,11 @@ const ADMINISTRATION_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'organization.scope.select': ['organization.countries.view', 'identity.scopes.view', 'identity.users.view'],
   'member.self.manage': ['identity.users.view', 'identity.users.manage'],
   'admin.command.use': ['platform.search.query', 'identity.users.view'],
-  'approval.queue.view': ['church.home_churches.view', 'reporting.alert_occurrences.view', 'identity.users.view'],
+  'approval.queue.view': ['reporting.alert_occurrences.view', 'identity.users.view'],
   'alerts.view': ['reporting.alert_occurrences.view'],
   'notifications.view': ['communications.notifications.create', 'member.self.manage', 'identity.users.view'],
   'activity.view': ['security.audit.view'],
-  'tasks.view': ['administration.work_items.view', 'church.follow_up.view'],
+  'tasks.view': ['administration.work_items.view'],
   'admin.actions.view': ['identity.users.view', 'platform.configuration.view'],
   'identity.user.create': ['identity.users.manage'],
   'identity.user.update': ['identity.users.manage'],
