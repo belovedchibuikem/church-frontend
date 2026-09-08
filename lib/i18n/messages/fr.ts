@@ -98,6 +98,14 @@ export const fr: MessageTree = {
   footer: {
     tagline: 'Une famille. Une mission. Transformer les nations pour Christ.',
     copyright: '© {year} Family House Connect',
+    legal: 'Politiques',
+    privacy: 'Politique de confidentialité',
+    terms: 'Conditions d’utilisation',
+    cookies: 'Politique des cookies',
+    safeguarding: 'Protection des personnes',
+    community: 'Règles de la communauté',
+    givingPolicy: 'Politique de don',
+    beliefs: 'Déclaration de foi',
   },
   sections: {
     Home: 'Une famille. Une mission.',
@@ -147,6 +155,9 @@ export const fr: MessageTree = {
     fingerprintUnavailable: 'L’empreinte n’est pas disponible sur cet appareil.',
     fingerprintFailed: 'Empreinte non reconnue. Réessayez ou utilisez votre mot de passe.',
     unlocking: 'Déverrouillage…',
+    orSignInWith: 'ou',
+    fingerprintNeedPassword:
+      'Connectez-vous une fois avec e-mail et mot de passe sur cet appareil. Ensuite vous pourrez ouvrir l’application avec votre empreinte.',
   },
   onboarding: {
     languageLocation: 'Langue et localisation',

@@ -98,6 +98,14 @@ export const ig: MessageTree = {
   footer: {
     tagline: 'Otu ezinụlọ. Otu ozi. Na-agbanwe mba maka Kraịst.',
     copyright: '© {year} Family House Connect',
+    legal: 'Iwu',
+    privacy: 'Iwu nzuzo',
+    terms: 'Iwu ojiji',
+    cookies: 'Iwu cookie',
+    safeguarding: 'Nchekwa',
+    community: 'Ntuziaka obodo',
+    givingPolicy: 'Iwu inye onyinye',
+    beliefs: 'Nkwupụta okwukwe',
   },
   sections: {
     Home: 'Otu ezinụlọ. Otu ozi.',
@@ -147,6 +155,9 @@ export const ig: MessageTree = {
     fingerprintUnavailable: 'Mkpịsị aka adịghị na ngwaọrụ a.',
     fingerprintFailed: 'A naghị ama mkpịsị aka. Nwaa ọzọ ma ọ bụ jiri okwuntughe.',
     unlocking: 'Na-emepe…',
+    orSignInWith: 'ma ọ bụ',
+    fingerprintNeedPassword:
+      'Banye otu ugboro jiri email na okwuntughe na ngwaọrụ a. Mgbe ahụ ị nwere ike iji mkpịsị aka mepee ngwa ahụ.',
   },
   onboarding: {
     languageLocation: 'Asụsụ na ebe',

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findSiteRoute, isMemberNavActive, memberNavigation, siteRoutes } from '../lib/site-routes.ts';
+import { findSiteRoute, isKcaMemberWorkspacePath, isMemberNavActive, memberNavigation, siteRoutes } from '../lib/site-routes.ts';
 
 test('public and member reference catalogue has unique, resolvable routes', () => {
   assert.ok(siteRoutes.length >= 110);
@@ -12,6 +12,23 @@ test('member routes are explicitly classified and public routes are not protecte
   for (const route of siteRoutes) {
     if (route.path.startsWith('/account/') || route.path === '/account') assert.equal(route.surface, 'member');
     if (route.surface === 'public') assert.ok(!route.path.startsWith('/account'));
+  }
+});
+
+test('legal and policy pages are public landing routes', () => {
+  for (const path of [
+    '/privacy',
+    '/terms',
+    '/cookies',
+    '/safeguarding',
+    '/community-guidelines',
+    '/giving-policy',
+    '/beliefs',
+  ]) {
+    const route = findSiteRoute(path);
+    assert.ok(route, `Missing ${path}`);
+    assert.equal(route?.surface, 'public');
+    assert.equal(route?.kind, 'landing');
   }
 });
 
@@ -30,6 +47,13 @@ test('every major public experience has a canonical entry route', () => {
     '/online-church',
     '/bible',
     '/bible/plans',
+    '/privacy',
+    '/terms',
+    '/cookies',
+    '/safeguarding',
+    '/community-guidelines',
+    '/giving-policy',
+    '/beliefs',
     '/login',
     '/register',
     '/account',
@@ -68,14 +92,20 @@ test('events and KCA flows expose register, ticket, modules and mentor routes', 
   }
 });
 
-test('live KCA module and assignment links resolve as protected member pages', () => {
-  const module = findSiteRoute('/account/kca/modules/01J8KCA1234567890ABCDEFGHJ');
-  const assignment = findSiteRoute('/account/kca/assignments/01J8KCA1234567890ABCDEFGHJ');
+test('live KCA entity links resolve as protected member workspace pages', () => {
+  const id = '01J8KCA1234567890ABCDEFGHJ';
+  const module = findSiteRoute(`/account/kca/modules/${id}`);
+  const lesson = findSiteRoute(`/account/kca/lessons/${id}`);
+  const chapter = findSiteRoute(`/account/kca/chapters/${id}`);
+  const assignment = findSiteRoute(`/account/kca/assignments/${id}`);
+  const orientation = findSiteRoute('/account/kca/orientation/vision');
 
-  assert.equal(module?.surface, 'member');
-  assert.equal(module?.kind, 'detail');
-  assert.equal(assignment?.surface, 'member');
-  assert.equal(assignment?.kind, 'detail');
+  for (const route of [module, lesson, chapter, assignment, orientation]) {
+    assert.equal(route?.surface, 'member');
+    assert.equal(route?.kind, 'dashboard');
+    assert.equal(route?.section, 'KCA');
+    assert.equal(isKcaMemberWorkspacePath(route!.path), true);
+  }
 });
 
 test('bible chapter paths resolve as a public reader', () => {

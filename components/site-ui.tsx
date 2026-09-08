@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
 import type { JsonObject } from '@/lib/api-types';
 import type { SiteRoute } from '@/lib/site-routes';
-import { isMemberNavActive, memberNavGroups } from '@/lib/site-routes';
+import { isKcaMemberWorkspacePath, isMemberNavActive, isSiteUlid, legalPageSlug, legalPublicPages, memberNavGroups } from '@/lib/site-routes';
 import { AppBrand } from './app-brand';
 import { useBranding } from './branding-provider';
 import { GiveReceiptScreen, GiveRecurringScreen, GiveScreen } from '@/components/give-ui';
@@ -75,6 +75,7 @@ import {
   loadMapDestination,
   loadMissionLocations,
   loadOnlineChurchContent,
+  loadPolicyPage,
   loadPressPublication,
   loadPressPublications,
   loadDevotionalPublications,
@@ -573,6 +574,8 @@ function Metrics({ items }: { items?: Metric[] }) {
 function cmsSlugForRoute(route: SiteRoute): string | null {
   if (route.path === '/') return 'home';
   if (route.path === '/about') return 'about';
+  const legalSlug = legalPageSlug(route.path);
+  if (legalSlug) return legalSlug;
   if (route.path === '/vision' || route.path === '/global-mission' || route.path === '/global-journey') return 'vision';
   if (route.path === '/find-church') return 'church';
   if (route.path === '/prayer') return 'church';
@@ -1005,6 +1008,78 @@ function ContactLanding() {
         }}
       />
     </div>
+  );
+}
+
+function PolicyLanding({ route }: { route: SiteRoute }) {
+  const { t } = useLocale();
+  const slug = legalPageSlug(route.path) ?? route.path.replace(/^\//, '');
+  const fixtures = useFixtures();
+  const [state, setState] = useState<AsyncListState<{ title: string; body: string }>>(
+    fixtures ? { status: 'ready', items: [] } : { status: 'loading' },
+  );
+  const [title, setTitle] = useState(route.title);
+  const [summary, setSummary] = useState(route.subtitle);
+  const [intro, setIntro] = useState('');
+  const [sections, setSections] = useState<Array<{ title: string; body: string }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!fixtures) setState({ status: 'loading' });
+    void loadPolicyPage(slug)
+      .then((result) => {
+        if (cancelled) return;
+        setTitle(result.data?.title?.trim() || route.title);
+        setSummary(result.data?.summary?.trim() || route.subtitle);
+        setIntro((result.data?.body || result.data?.summary || '').trim());
+        setSections(result.sections);
+        if (!result.data?.body && !result.sections.length) {
+          setState({ status: 'empty', message: 'This page is not published yet.' });
+        } else {
+          setState({ status: 'ready', items: result.sections });
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setState({ status: 'error', message: publicErrorMessage(error) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtures, route.subtitle, route.title, slug]);
+
+  const related = legalPublicPages.filter((page) => page.path !== route.path);
+
+  return (
+    <article className="policy-page">
+      <header className="policy-hero">
+        <span className="eyebrow">{t('footer.legal', { defaultMessage: 'Policies' })}</span>
+        <h1>{title}</h1>
+        <p className="lead">{summary}</p>
+      </header>
+      <DataStatus state={state} emptyLabel={t('landing.policyNotPublished', { defaultMessage: 'This policy is not published yet.' })} />
+      {state.status === 'ready' || fixtures ? (
+        <>
+          {intro ? <p className="policy-intro">{intro}</p> : null}
+          {sections.map((section) => (
+            <section className="policy-section" key={section.title}>
+              {section.title ? <h2>{section.title}</h2> : null}
+              {section.body ? <p>{section.body}</p> : null}
+            </section>
+          ))}
+          <nav className="policy-related" aria-label={t('footer.legal', { defaultMessage: 'Policies' })}>
+            {related.map((page) => (
+              <Link className="soft-chip" href={page.path} key={page.path}>
+                {page.title}
+              </Link>
+            ))}
+            <Link className="soft-chip" href="/contact">
+              {t('common.help', { defaultMessage: 'Help' })} · Contact
+            </Link>
+          </nav>
+        </>
+      ) : null}
+    </article>
   );
 }
 
@@ -3275,6 +3350,11 @@ function kcaLessonTypeIcon(type?: string | null): string {
   }
 }
 
+function kcaBoundPublicId(path: string): string | null {
+  const id = pathEntityId(path) ?? path.split('/').pop() ?? '';
+  return isSiteUlid(id) ? id : null;
+}
+
 function kcaModuleProgressLabel(module: KcaModuleSummary): string | null {
   const total = module.lessons_total ?? module.lessons_count;
   const done = module.lessons_completed;
@@ -3802,13 +3882,18 @@ function KcaModuleDetail({ route }: { route: SiteRoute }) {
 }
 
 function KcaLiveModuleDetail({ route }: { route: SiteRoute }) {
-  const moduleId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
+  const moduleId = kcaBoundPublicId(route.path);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [module, setModule] = useState<KcaModuleSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    if (!moduleId) {
+      setError('This module could not be found.');
+      setLoading(false);
+      return;
+    }
     void fetchKcaModule(moduleId)
       .then((data) => {
         if (!cancelled) {
@@ -3900,9 +3985,11 @@ function KcaLiveModuleDetail({ route }: { route: SiteRoute }) {
 }
 
 function KcaLessonPlayer({ route }: { route: SiteRoute }) {
-  const lessonId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const lessonId = kcaBoundPublicId(route.path);
+  const [loading, setLoading] = useState(Boolean(lessonId));
+  const [error, setError] = useState<string | null>(
+    lessonId ? null : 'This lesson could not be found.',
+  );
   const [lesson, setLesson] = useState<KcaLessonDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -3910,6 +3997,10 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
 
   useEffect(() => {
     let cancelled = false;
+    if (!lessonId) {
+      setLoading(false);
+      return;
+    }
     void fetchKcaLesson(lessonId)
       .then((data) => {
         if (!cancelled) {
@@ -3946,6 +4037,22 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
   }
 
   if (loading) return <p className="panel">Loading lesson…</p>;
+  if (!lessonId && designFixturesEnabled()) {
+    return (
+      <>
+        <div className="welcome">
+          <div>
+            <span className="eyebrow">KCA LESSON</span>
+            <h2>{route.title}</h2>
+            <p>Preview lesson. Published lessons open from a live module.</p>
+          </div>
+          <Link className="site-button secondary" href="/account/kca/modules">
+            Back to modules
+          </Link>
+        </div>
+      </>
+    );
+  }
   if (error && !lesson) return <KcaUnavailable title={route.title} message={error} />;
 
   const moduleHref = lesson?.module_id ? `/account/kca/modules/${lesson.module_id}` : '/account/kca/modules';
@@ -4041,9 +4148,11 @@ function KcaLessonPlayer({ route }: { route: SiteRoute }) {
 }
 
 function KcaChapterPlayer({ route }: { route: SiteRoute }) {
-  const chapterId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const chapterId = kcaBoundPublicId(route.path);
+  const [loading, setLoading] = useState(Boolean(chapterId));
+  const [error, setError] = useState<string | null>(
+    chapterId ? null : 'This chapter could not be found.',
+  );
   const [chapter, setChapter] = useState<KcaChapterSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -4051,6 +4160,10 @@ function KcaChapterPlayer({ route }: { route: SiteRoute }) {
 
   useEffect(() => {
     let cancelled = false;
+    if (!chapterId) {
+      setLoading(false);
+      return;
+    }
     void fetchKcaChapter(chapterId)
       .then((data) => {
         if (!cancelled) {
@@ -4084,6 +4197,22 @@ function KcaChapterPlayer({ route }: { route: SiteRoute }) {
   }
 
   if (loading) return <p className="panel">Loading chapter…</p>;
+  if (!chapterId && designFixturesEnabled()) {
+    return (
+      <>
+        <div className="welcome">
+          <div>
+            <span className="eyebrow">KCA CHAPTER</span>
+            <h2>{route.title}</h2>
+            <p>Preview chapter. Published chapters open from a live lesson.</p>
+          </div>
+          <Link className="site-button secondary" href="/account/kca/modules">
+            Back to modules
+          </Link>
+        </div>
+      </>
+    );
+  }
   if (error && !chapter) return <KcaUnavailable title={route.title} message={error} />;
 
   return (
@@ -4181,11 +4310,13 @@ function KcaStudyNoteForm({ lessonId, chapterId }: { lessonId?: string; chapterI
 }
 
 function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
-  const assignmentId = pathEntityId(route.path) ?? route.path.split('/').pop() ?? '';
+  const assignmentId = kcaBoundPublicId(route.path) ?? '';
   const [title, setTitle] = useState(route.title);
   const [stateLabel, setStateLabel] = useState<string | null>(null);
   const [assignment, setAssignment] = useState<KcaAssignmentSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    assignmentId ? null : 'This assignment could not be found.',
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [soulName, setSoulName] = useState('');
@@ -4194,6 +4325,7 @@ function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
 
   useEffect(() => {
     let cancelled = false;
+    if (!assignmentId) return;
     void fetchKcaAssignment(assignmentId)
       .then((row) => {
         if (cancelled) return;
@@ -4268,6 +4400,17 @@ function KcaAssignmentDetail({ route }: { route: SiteRoute }) {
     }
   }
 
+  if (!assignmentId && designFixturesEnabled()) {
+    return (
+      <section className="panel">
+        <h2>{route.title}</h2>
+        <p>Preview assignment. Live assignments open from the student workspace.</p>
+        <Link className="site-button" href="/account/kca/assignments">
+          Back to assignments
+        </Link>
+      </section>
+    );
+  }
   if (error && !stateLabel) return <KcaUnavailable title={route.title} message={error} />;
   const tree = assignment?.soul_tree;
   const soulOpen = tree?.open === true;
@@ -6703,6 +6846,7 @@ function Landing({ route }: { route: SiteRoute }) {
   if (route.path === '/vision' || route.path === '/global-mission' || route.path === '/global-journey') return <VisionLanding route={route} />;
   if (route.path === '/contact') return <ContactLanding />;
   if (route.path === '/faq') return <FaqLanding />;
+  if (legalPageSlug(route.path)) return <PolicyLanding route={route} />;
   if (route.path === '/search') return <SearchLanding />;
   if (route.path === '/find-church') return <FindChurchLanding route={route} />;
   if (route.path === '/kca' || route.path === '/kca/gate') return <KcaGateLanding route={route} />;
@@ -6781,7 +6925,10 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
     if (route.kind === 'landing') return <Landing route={route} />;
     if (route.kind === 'hub' || route.path === '/events') return <EventsHub route={route} />;
     if (route.kind === 'calendar') return <CalendarView route={route} />;
-    if (route.kind === 'detail') return route.section === 'Events' ? <EventDetail route={route} /> : <Detail route={route} />;
+    if (route.kind === 'detail') {
+      if (isKcaMemberWorkspacePath(route.path)) return <Dashboard route={route} />;
+      return route.section === 'Events' ? <EventDetail route={route} /> : <Detail route={route} />;
+    }
     if (route.kind === 'listing' || route.kind === 'map') return <Listing route={route} />;
     if (route.kind === 'form') return route.surface === 'auth' ? <AuthScreen route={route} /> : <FormScreen route={route} />;
     if (route.kind === 'success') return <Success route={route} />;
@@ -6809,9 +6956,23 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
           {content}
         </main>
       </div>
-      <footer>
+      <footer className="site-footer">
         <Logo />
-        <p>{t('footer.tagline', { defaultMessage: 'One Family. One Mission. Transforming nations for Christ.' })}</p>
+        <div className="site-footer-copy">
+          <p>{t('footer.tagline', { defaultMessage: 'One Family. One Mission. Transforming nations for Christ.' })}</p>
+          <nav className="site-footer-nav" aria-label={t('footer.legal', { defaultMessage: 'Policies' })}>
+            <Link href="/about">{t('common.about', { defaultMessage: 'About' })}</Link>
+            <Link href="/beliefs">{t('footer.beliefs', { defaultMessage: 'Statement of Faith' })}</Link>
+            <Link href="/contact">{t('routes./contact', { defaultMessage: 'Contact Us' })}</Link>
+            <Link href="/faq">{t('routes./faq', { defaultMessage: 'FAQ' })}</Link>
+            <Link href="/privacy">{t('footer.privacy', { defaultMessage: 'Privacy Policy' })}</Link>
+            <Link href="/terms">{t('footer.terms', { defaultMessage: 'Terms of Use' })}</Link>
+            <Link href="/cookies">{t('footer.cookies', { defaultMessage: 'Cookie Policy' })}</Link>
+            <Link href="/safeguarding">{t('footer.safeguarding', { defaultMessage: 'Safeguarding' })}</Link>
+            <Link href="/community-guidelines">{t('footer.community', { defaultMessage: 'Community Guidelines' })}</Link>
+            <Link href="/giving-policy">{t('footer.givingPolicy', { defaultMessage: 'Giving Policy' })}</Link>
+          </nav>
+        </div>
         <span>
           {t('footer.copyright', {
             vars: { year: new Date().getFullYear() },

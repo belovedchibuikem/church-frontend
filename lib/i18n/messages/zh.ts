@@ -98,6 +98,14 @@ export const zh: MessageTree = {
   footer: {
     tagline: '一个家庭。一个使命。为基督改变列国。',
     copyright: '© {year} Family House Connect',
+    legal: '政策',
+    privacy: '隐私政策',
+    terms: '使用条款',
+    cookies: 'Cookie 政策',
+    safeguarding: '安全保障',
+    community: '社区准则',
+    givingPolicy: '奉献政策',
+    beliefs: '信仰告白',
   },
   sections: {
     Home: '一个家庭。一个使命。',
@@ -146,6 +154,8 @@ export const zh: MessageTree = {
     fingerprintUnavailable: '此设备不支持指纹。',
     fingerprintFailed: '未识别指纹。请重试或使用密码。',
     unlocking: '正在解锁…',
+    orSignInWith: '或',
+    fingerprintNeedPassword: '请先用邮箱和密码在此设备登录一次。之后即可用指纹打开应用。',
   },
   onboarding: {
     languageLocation: '语言与位置',

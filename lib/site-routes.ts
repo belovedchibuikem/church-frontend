@@ -41,6 +41,21 @@ const subtitles: Record<string, string> = {
 const make = (section: string, surface: SiteSurface, kind: SiteKind, rows: Array<[string, string, string?]>): SiteRoute[] =>
   rows.map(([path, title, action]) => ({ path, title, action, section, surface, kind, subtitle: subtitles[section] ?? 'Family House Connect' }));
 
+/** Public policy and ministry pages shown in the site footer. */
+export const legalPublicPages: ReadonlyArray<{ path: string; title: string; slug: string }> = [
+  { path: '/beliefs', title: 'Statement of Faith', slug: 'beliefs' },
+  { path: '/privacy', title: 'Privacy Policy', slug: 'privacy' },
+  { path: '/terms', title: 'Terms of Use', slug: 'terms' },
+  { path: '/cookies', title: 'Cookie Policy', slug: 'cookies' },
+  { path: '/safeguarding', title: 'Safeguarding', slug: 'safeguarding' },
+  { path: '/community-guidelines', title: 'Community Guidelines', slug: 'community-guidelines' },
+  { path: '/giving-policy', title: 'Giving Policy', slug: 'giving-policy' },
+];
+
+export function legalPageSlug(path: string): string | null {
+  return legalPublicPages.find((page) => page.path === path)?.slug ?? null;
+}
+
 const eventFlow = (slug: string, title: string): SiteRoute[] => [
   ...make('Events', 'public', 'detail', [[`/events/${slug}`, title, 'Register Now']]),
   ...make('Events', 'workflow', 'form', [
@@ -57,9 +72,16 @@ export const siteRoutes: SiteRoute[] = [
     ['/about', 'About Family House'],
     ['/vision', 'Our Vision & Global Mission'],
     ['/global-mission', 'Global Kingdom Multiplication', 'Be Part of the Story'],
+    ['/beliefs', 'Statement of Faith'],
     ['/contact', 'Contact Us', 'Send Message'],
     ['/faq', 'Frequently Asked Questions'],
     ['/search', 'Search Family House'],
+    ['/privacy', 'Privacy Policy'],
+    ['/terms', 'Terms of Use'],
+    ['/cookies', 'Cookie Policy'],
+    ['/safeguarding', 'Safeguarding'],
+    ['/community-guidelines', 'Community Guidelines'],
+    ['/giving-policy', 'Giving Policy'],
   ]),
   ...make('Church', 'public', 'landing', [
     ['/church', 'Church', 'Find a Church'],
@@ -289,7 +311,16 @@ export const siteRoutes: SiteRoute[] = [
 
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/i;
 
-/** Resolve a static catalogue route, or synthesize detail/workflow routes for live ULID ids. */
+export function isSiteUlid(value: string | null | undefined): boolean {
+  return Boolean(value && ULID.test(value));
+}
+
+/** Member KCA workspace pages that render through `Dashboard`, including live ULID entities. */
+export function isKcaMemberWorkspacePath(path: string): boolean {
+  return path === '/account/kca' || path.startsWith('/account/kca/');
+}
+
+/** Resolve a static catalogue route, or synthesize live ULID / workflow routes. */
 export const findSiteRoute = (path: string): SiteRoute | undefined => {
   const exact = siteRoutes.find((route) => route.path === path);
   if (exact) return exact;
@@ -361,7 +392,7 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
       action: 'View lessons',
       subtitle: subtitles.KCA,
       surface: 'member',
-      kind: 'detail',
+      kind: 'dashboard',
       section: 'KCA',
     };
   }
@@ -374,7 +405,7 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
       action: 'Continue',
       subtitle: subtitles.KCA,
       surface: 'member',
-      kind: 'detail',
+      kind: 'dashboard',
       section: 'KCA',
     };
   }
@@ -387,7 +418,7 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
       action: 'Continue',
       subtitle: subtitles.KCA,
       surface: 'member',
-      kind: 'detail',
+      kind: 'dashboard',
       section: 'KCA',
     };
   }
@@ -413,7 +444,7 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
       action: 'View assignment',
       subtitle: subtitles.KCA,
       surface: 'member',
-      kind: 'detail',
+      kind: 'dashboard',
       section: 'KCA',
     };
   }
@@ -425,7 +456,7 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
       title: 'KCA Orientation',
       subtitle: subtitles.KCA,
       surface: 'member',
-      kind: 'detail',
+      kind: 'dashboard',
       section: 'KCA',
     };
   }

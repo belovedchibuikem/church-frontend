@@ -98,6 +98,14 @@ export const yo: MessageTree = {
   footer: {
     tagline: 'Ìdílé kan. Iṣẹ́ àpín kan. Ń yí orílẹ̀-èdè padà fún Kristi.',
     copyright: '© {year} Family House Connect',
+    legal: 'Àwọn ìlànà',
+    privacy: 'Ìlànà ìpamọ́',
+    terms: 'Àwọn òfin lílò',
+    cookies: 'Ìlànà kuki',
+    safeguarding: 'Ààbò',
+    community: 'Ìtọ́sọ́nà àwùjọ',
+    givingPolicy: 'Ìlànà ìfúnni',
+    beliefs: 'Ìkéde ìgbàgbọ́',
   },
   sections: {
     Home: 'Ìdílé kan. Iṣẹ́ àpín kan.',
@@ -147,6 +155,9 @@ export const yo: MessageTree = {
     fingerprintUnavailable: 'Ìtẹka ika kò sí lórí ẹ̀rọ yìí.',
     fingerprintFailed: 'A kò mọ ìtẹka ika. Gbìyànjú lẹ́ẹ̀kan sí i tàbí lo ọ̀rọ̀ ìgbaniwọlé.',
     unlocking: 'Ń ṣí…',
+    orSignInWith: 'tàbí',
+    fingerprintNeedPassword:
+      'Wọlé pẹ̀lú imeeli àti ọ̀rọ̀ ìgbaniwọlé lẹ́ẹ̀kan sọ́ṣọ́ lórí ẹ̀rọ yìí. Lẹ́yìn náà o lè ṣí app náà pẹ̀lú ìtẹka ika.',
   },
   onboarding: {
     languageLocation: 'Èdè àti ibùdó',

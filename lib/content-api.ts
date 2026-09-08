@@ -159,6 +159,18 @@ export function faqsFromPage(page: ContentPage | null | undefined): FaqItem[] {
   return itemsOfKind(page, 'faq').map(itemToFaq);
 }
 
+/** Policy / legal section copy from CMS `block` (or heading) items. */
+export function policySectionsFromPage(page: ContentPage | null | undefined): Array<{ title: string; body: string }> {
+  const blocks = itemsOfKind(page, 'block');
+  const source = blocks.length ? blocks : itemsOfKind(page, 'heading');
+  return source
+    .map((item) => ({
+      title: (item.title ?? '').trim(),
+      body: (item.body ?? '').trim(),
+    }))
+    .filter((item) => item.title || item.body);
+}
+
 export function metricsFromPage(page: ContentPage | null | undefined): Metric[] {
   return itemsOfKind(page, 'metric').map(itemToMetric);
 }

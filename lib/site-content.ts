@@ -175,7 +175,8 @@ export const faqs: FaqItem[] = [
   { q: 'Can I start a church in my home?', a: 'Yes. Begin at Start a Home Church, confirm eligibility, and complete the guided application. A review team will walk with you through interview, approval, and activation.' },
   { q: 'How do I join KCA?', a: 'Open the KCA gate, choose Enroll Now, then complete the eight-step application covering church information, walk with Christ, interests, and commitments.' },
   { q: 'Where is my event calendar?', a: 'Open Events for Upcoming / My Events / Past, or go to My Calendar in your account for a month view of services and registered gatherings.' },
-  { q: 'How can I give securely?', a: 'Use Give to choose an amount, fund, and payment method. Receipts and recurring giving are available in your member account after sign-in.' },
+  { q: 'How can I give securely?', a: 'Use Give to choose an amount, fund, and payment method. Receipts and recurring giving are available in your member account after sign-in. See Giving Policy for refunds and designated funds.' },
+  { q: 'Where can I read the privacy policy?', a: 'Open Privacy Policy on the public site, or Privacy Controls in your account to request an export or deletion.' },
 ];
 
 export const memberGlance: Metric[] = [

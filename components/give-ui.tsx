@@ -260,7 +260,8 @@ function GiveAmountStep({
             <p>
               {t('account.giftSavedOnDevice', {
                 defaultMessage: 'Your gift is saved on this device until you confirm payment. Nothing is charged on this step.',
-              })}
+              })}{' '}
+              <Link href="/giving-policy">{t('footer.givingPolicy', { defaultMessage: 'Giving Policy' })}</Link>
             </p>
           </div>
           <label className="wide">

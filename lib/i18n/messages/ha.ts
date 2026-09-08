@@ -98,6 +98,14 @@ export const ha: MessageTree = {
   footer: {
     tagline: 'Iyali ɗaya. Aiki ɗaya. Muna canza al’ummai domin Kristi.',
     copyright: '© {year} Family House Connect',
+    legal: 'Manufofi',
+    privacy: 'Manufar sirri',
+    terms: 'Sharuɗɗan amfani',
+    cookies: 'Manufar kuki',
+    safeguarding: 'Kariya',
+    community: 'Jagororin al’umma',
+    givingPolicy: 'Manufar bayarwa',
+    beliefs: 'Sanarwar bangaskiya',
   },
   sections: {
     Home: 'Iyali ɗaya. Aiki ɗaya.',
@@ -147,6 +155,9 @@ export const ha: MessageTree = {
     fingerprintUnavailable: 'Yatsa bai samu ba a wannan na’ura.',
     fingerprintFailed: 'Ba a gane yatsa ba. Gwada kuma ko yi amfani da kalmar sirri.',
     unlocking: 'Ana buɗewa…',
+    orSignInWith: 'ko',
+    fingerprintNeedPassword:
+      'Shiga da imel da kalmar sirri sau ɗaya a wannan na’ura. Bayan haka za ka iya buɗe app ɗin da yatsa.',
   },
   onboarding: {
     languageLocation: 'Harshe da wuri',

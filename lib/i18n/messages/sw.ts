@@ -98,6 +98,14 @@ export const sw: MessageTree = {
   footer: {
     tagline: 'Familia moja. Misheni moja. Kubadilisha mataifa kwa ajili ya Kristo.',
     copyright: '© {year} Family House Connect',
+    legal: 'Sera',
+    privacy: 'Sera ya faragha',
+    terms: 'Masharti ya matumizi',
+    cookies: 'Sera ya vidakuzi',
+    safeguarding: 'Ulinzi',
+    community: 'Miongozo ya jamii',
+    givingPolicy: 'Sera ya sadaka',
+    beliefs: 'Tamko la imani',
   },
   sections: {
     Home: 'Familia moja. Misheni moja.',
@@ -147,6 +155,9 @@ export const sw: MessageTree = {
     fingerprintUnavailable: 'Alama ya kidole haipatikani kwenye kifaa hiki.',
     fingerprintFailed: 'Alama ya kidole haikutambuliwa. Jaribu tena au tumia nenosiri.',
     unlocking: 'Inafungua…',
+    orSignInWith: 'au',
+    fingerprintNeedPassword:
+      'Ingia kwa barua pepe na nenosiri mara moja kwenye kifaa hiki. Baadaye unaweza kufungua programu kwa alama ya kidole.',
   },
   onboarding: {
     languageLocation: 'Lugha na eneo',

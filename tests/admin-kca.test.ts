@@ -78,6 +78,15 @@ test('member KCA destinations map to authoritative routes', () => {
   assert.equal(kcaPrimaryCta('overview').href, '/kca/enrol');
 });
 
+test('member KCA lesson pages dispatch to the student workspace, not CMS detail', async () => {
+  const source = await readFile(new URL('../components/site-ui.tsx', import.meta.url), 'utf8');
+  assert.match(source, /if \(isKcaMemberWorkspacePath\(route\.path\)\) return <Dashboard route=\{route\} \/>/);
+  assert.match(source, /if \(route\.path\.startsWith\('\/account\/kca\/lessons\/'\)\) return <KcaLessonPlayer route=\{route\} \/>/);
+  assert.match(source, /if \(route\.path\.startsWith\('\/account\/kca\/modules\/'\)\) return <KcaModuleDetail route=\{route\} \/>/);
+  assert.match(source, /if \(route\.path\.startsWith\('\/account\/kca\/chapters\/'\)\) return <KcaChapterPlayer route=\{route\} \/>/);
+  assert.match(source, /if \(route\.path\.startsWith\('\/account\/kca\/assignments\/'\)\) return <KcaAssignmentDetail route=\{route\} \/>/);
+});
+
 test('KCA assignments screen resolves to live catalog', async () => {
   const screen = getAdminScreen('/admin/kca/assignments')!;
   assert.equal(screen.id, 'H-14');

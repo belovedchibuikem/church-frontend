@@ -809,9 +809,10 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
             <div className="choice-grid">
               <label>
                 <input type="checkbox" name="terms" required />{' '}
-                {t('auth.agreeTerms', {
-                  defaultMessage: 'I agree to the Family House Connect terms and privacy policy',
-                })}
+                {t('auth.agreeTerms', { defaultMessage: 'I agree to the Family House Connect' })}{' '}
+                <Link href="/terms">{t('footer.terms', { defaultMessage: 'Terms of Use' })}</Link>
+                {' and '}
+                <Link href="/privacy">{t('footer.privacy', { defaultMessage: 'Privacy Policy' })}</Link>
               </label>
             </div>
           ) : null}

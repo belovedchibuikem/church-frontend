@@ -33,6 +33,13 @@ const PAGE_HINTS: Record<string, string> = {
   about: 'About page body and cards.',
   vision: 'Vision page copy and cards.',
   faq: 'FAQ questions (title) and answers (body).',
+  privacy: 'Privacy Policy intro (body) and sections (block title + body).',
+  terms: 'Terms of Use intro and section blocks.',
+  cookies: 'Cookie Policy intro and section blocks.',
+  safeguarding: 'Safeguarding policy intro and section blocks.',
+  'community-guidelines': 'Community Guidelines intro and section blocks.',
+  'giving-policy': 'Giving Policy intro and section blocks.',
+  beliefs: 'Statement of Faith intro and belief blocks.',
 };
 
 type PageDraft = {

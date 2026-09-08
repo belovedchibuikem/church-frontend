@@ -98,6 +98,14 @@ export const ar: MessageTree = {
   footer: {
     tagline: 'عائلة واحدة. رسالة واحدة. نغيّر الأمم من أجل المسيح.',
     copyright: '© {year} Family House Connect',
+    legal: 'السياسات',
+    privacy: 'سياسة الخصوصية',
+    terms: 'شروط الاستخدام',
+    cookies: 'سياسة ملفات الارتباط',
+    safeguarding: 'الحماية',
+    community: 'إرشادات المجتمع',
+    givingPolicy: 'سياسة العطاء',
+    beliefs: 'بيان الإيمان',
   },
   sections: {
     Home: 'عائلة واحدة. رسالة واحدة.',
@@ -147,6 +155,9 @@ export const ar: MessageTree = {
     fingerprintUnavailable: 'البصمة غير متاحة على هذا الجهاز.',
     fingerprintFailed: 'لم يتم التعرف على البصمة. حاول مرة أخرى أو استخدم كلمة المرور.',
     unlocking: 'جارٍ الفتح…',
+    orSignInWith: 'أو',
+    fingerprintNeedPassword:
+      'سجّل الدخول بالبريد وكلمة المرور مرة واحدة على هذا الجهاز. بعد ذلك يمكنك فتح التطبيق ببصمتك.',
   },
   onboarding: {
     languageLocation: 'اللغة والموقع',

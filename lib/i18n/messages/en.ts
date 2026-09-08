@@ -98,6 +98,14 @@ export const en: MessageTree = {
   footer: {
     tagline: 'One Family. One Mission. Transforming nations for Christ.',
     copyright: '© {year} Family House Connect',
+    legal: 'Policies',
+    privacy: 'Privacy Policy',
+    terms: 'Terms of Use',
+    cookies: 'Cookie Policy',
+    safeguarding: 'Safeguarding',
+    community: 'Community Guidelines',
+    givingPolicy: 'Giving Policy',
+    beliefs: 'Statement of Faith',
   },
   sections: {
     Home: 'One family. One mission.',
