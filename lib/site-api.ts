@@ -30,6 +30,7 @@ import {
   type ContentPageSummary,
 } from '@/lib/content-api';
 import { isPublicApiConfigured, publicRequest, PublicApiError } from '@/lib/public-api';
+import { legalPageBySlug, type LegalPageCopy } from '@/lib/legal-pages';
 import type { JsonObject } from '@/lib/api-types';
 import type { MapMarker, MapsBootstrap, MapProvider } from '@/components/interactive-map';
 
@@ -746,68 +747,17 @@ const CMS_CARD_FIXTURES: Record<string, () => ContentCard[]> = {
   'online-church': () => fixtureSermons,
 };
 
-const POLICY_PAGE_FIXTURES: Record<string, { title: string; summary: string; body: string; sections: Array<{ title: string; body: string }> }> = {
-  privacy: {
-    title: 'Privacy Policy',
-    summary: 'How Family House Connect collects, uses, and protects personal information.',
-    body: 'Family House Connect is a ministry platform for churches, home fellowships, online gatherings, missions, giving, and Kingdom Citizens Academy (KCA). This policy explains the information we handle when you use the website, member tools, or related apps.',
-    sections: [
-      { title: 'Information we collect', body: 'We may collect account details (name, email, phone), location used to find a church, membership and ministry involvement, KCA application and study records, giving receipts, prayer and need requests, messages, device and session data, and content you submit such as testimonies.' },
-      { title: 'How we use information', body: 'We use information to operate worship and community tools, process giving, administer KCA, protect children and vulnerable people, send the communications you choose, improve the platform, and meet legal and safeguarding duties.' },
-      { title: 'Your choices', body: 'Signed-in members can manage consents, request an export, or ask for deletion from Privacy Controls. You may also contact hello@familyhouseconnect.org.' },
-    ],
-  },
-  terms: {
-    title: 'Terms of Use',
-    summary: 'The rules for using Family House Connect websites, apps, and ministry tools.',
-    body: 'By creating an account or using Family House Connect you agree to these terms and to our Privacy Policy.',
-    sections: [
-      { title: 'Accounts', body: 'Keep your login details confidential, provide accurate information, and use the platform only for lawful ministry purposes.' },
-      { title: 'Acceptable use', body: 'Do not harass others, post unlawful or sexually explicit content involving minors, attempt unauthorized access, or misuse giving, certificates, or pastoral tools.' },
-    ],
-  },
-  cookies: {
-    title: 'Cookie Policy',
-    summary: 'How Family House Connect uses cookies and similar technologies on the web.',
-    body: 'We use cookies that are needed to keep you signed in, remember language, and protect sessions. Optional analytics cookies, if enabled, help us understand how the public site is used.',
-    sections: [
-      { title: 'Managing cookies', body: 'You can control cookies in your browser. Essential cookies are required for sign-in, locale, and security features to work.' },
-    ],
-  },
-  safeguarding: {
-    title: 'Safeguarding',
-    summary: 'How we protect children and vulnerable people across Family House Connect.',
-    body: 'Family House Connect takes the safety of children, young people, and vulnerable adults seriously in churches, home fellowships, events, KCA, and digital spaces.',
-    sections: [
-      { title: 'Report a concern', body: 'If someone is in immediate danger, contact local emergency services. For platform concerns, use Help & Support or email hello@familyhouseconnect.org so the safeguarding team can review the report.' },
-    ],
-  },
-  'community-guidelines': {
-    title: 'Community Guidelines',
-    summary: 'How we speak, serve, and gather as one family online and in person.',
-    body: 'Family House Connect is a Christ-centred community. Treat people with honour, keep testimony truthful, and follow pastoral covering in churches and groups.',
-    sections: [
-      { title: 'What we do not allow', body: 'Harassment, hate, spam, impersonation, sexually explicit material, and any exploitation of children are forbidden and may lead to account restriction and referral to authorities.' },
-    ],
-  },
-  'giving-policy': {
-    title: 'Giving Policy',
-    summary: 'How tithes, offerings, missions gifts, and project donations are handled.',
-    body: 'Gifts given through Family House Connect support church, missions, KCA, and designated projects. Receipts appear in your member giving history after a successful payment.',
-    sections: [
-      { title: 'Refunds', body: 'Charitable gifts are generally not refundable. If you were charged in error or a payment was duplicated, contact us promptly with the receipt reference so finance can review the transaction.' },
-    ],
-  },
-  beliefs: {
-    title: 'Statement of Faith',
-    summary: 'The biblical convictions that shape Family House Connect.',
-    body: 'We confess Jesus Christ as Lord and gather as one family to worship God, make disciples, and serve the nations.',
-    sections: [
-      { title: 'Scripture', body: 'The Bible is the inspired Word of God and our authority for faith and life.' },
-      { title: 'The Church', body: 'The Church is the Body of Christ expressed in local churches, home fellowships, and the global family.' },
-    ],
-  },
-};
+function policyFromCopy(copy: LegalPageCopy): {
+  data: ContentPage;
+  source: 'fixtures';
+  sections: Array<{ title: string; body: string }>;
+} {
+  return {
+    data: { slug: copy.slug, title: copy.title, summary: copy.summary, body: copy.body },
+    source: 'fixtures',
+    sections: copy.sections,
+  };
+}
 
 async function loadCmsPageOrThrow(slug: string): Promise<ContentPage> {
   const result = await loadContentPage(slug);
@@ -970,28 +920,20 @@ export async function loadStories(): Promise<{ data: ContentCard[]; source: 'api
 export async function loadPolicyPage(
   slug: string,
 ): Promise<{ data: ContentPage | null; source: 'api' | 'fixtures'; sections: Array<{ title: string; body: string }> }> {
-  const fixture = POLICY_PAGE_FIXTURES[slug];
+  const fallback = legalPageBySlug(slug);
   if (!isPublicApiConfigured()) {
-    if (designFixturesEnabled() && fixture) {
-      return {
-        data: { slug, title: fixture.title, summary: fixture.summary, body: fixture.body },
-        source: 'fixtures',
-        sections: fixture.sections,
-      };
-    }
+    if (fallback) return policyFromCopy(fallback);
     throw new PublicApiError(503, 'API_NOT_CONFIGURED', 'The public API base URL is not configured.');
   }
   try {
     const page = await loadCmsPageOrThrow(slug);
-    return { data: page, source: 'api', sections: policySectionsFromPage(page) };
+    const sections = policySectionsFromPage(page);
+    const hasCopy = Boolean((page.body ?? '').trim() || (page.summary ?? '').trim() || sections.length);
+    if (hasCopy) return { data: page, source: 'api', sections };
+    if (fallback) return policyFromCopy(fallback);
+    return { data: page, source: 'api', sections };
   } catch (error) {
-    if (designFixturesEnabled() && fixture) {
-      return {
-        data: { slug, title: fixture.title, summary: fixture.summary, body: fixture.body },
-        source: 'fixtures',
-        sections: fixture.sections,
-      };
-    }
+    if (fallback) return policyFromCopy(fallback);
     if (isContentPageNotFound(error)) {
       return { data: null, source: 'api', sections: [] };
     }

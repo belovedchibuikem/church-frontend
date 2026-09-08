@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api-client';
 import type { JsonObject } from '@/lib/api-types';
 import type { SiteRoute } from '@/lib/site-routes';
 import { isKcaMemberWorkspacePath, isMemberNavActive, isSiteUlid, legalPageSlug, legalPublicPages, memberNavGroups } from '@/lib/site-routes';
+import { legalPageBySlug } from '@/lib/legal-pages';
 import { AppBrand } from './app-brand';
 import { useBranding } from './branding-provider';
 import { GiveReceiptScreen, GiveRecurringScreen, GiveScreen } from '@/components/give-ui';
@@ -1014,39 +1015,50 @@ function ContactLanding() {
 function PolicyLanding({ route }: { route: SiteRoute }) {
   const { t } = useLocale();
   const slug = legalPageSlug(route.path) ?? route.path.replace(/^\//, '');
-  const fixtures = useFixtures();
+  const fallback = legalPageBySlug(slug);
   const [state, setState] = useState<AsyncListState<{ title: string; body: string }>>(
-    fixtures ? { status: 'ready', items: [] } : { status: 'loading' },
+    fallback ? { status: 'ready', items: fallback.sections } : { status: 'loading' },
   );
-  const [title, setTitle] = useState(route.title);
-  const [summary, setSummary] = useState(route.subtitle);
-  const [intro, setIntro] = useState('');
-  const [sections, setSections] = useState<Array<{ title: string; body: string }>>([]);
+  const [title, setTitle] = useState(fallback?.title ?? route.title);
+  const [summary, setSummary] = useState(fallback?.summary ?? route.subtitle);
+  const [intro, setIntro] = useState(fallback?.body ?? '');
+  const [sections, setSections] = useState<Array<{ title: string; body: string }>>(fallback?.sections ?? []);
 
   useEffect(() => {
     let cancelled = false;
-    if (!fixtures) setState({ status: 'loading' });
     void loadPolicyPage(slug)
       .then((result) => {
         if (cancelled) return;
-        setTitle(result.data?.title?.trim() || route.title);
-        setSummary(result.data?.summary?.trim() || route.subtitle);
-        setIntro((result.data?.body || result.data?.summary || '').trim());
-        setSections(result.sections);
-        if (!result.data?.body && !result.sections.length) {
+        const nextTitle = result.data?.title?.trim() || fallback?.title || route.title;
+        const nextSummary = result.data?.summary?.trim() || fallback?.summary || route.subtitle;
+        const nextIntro = (result.data?.body || result.data?.summary || fallback?.body || '').trim();
+        const nextSections = result.sections.length ? result.sections : fallback?.sections ?? [];
+        setTitle(nextTitle);
+        setSummary(nextSummary);
+        setIntro(nextIntro);
+        setSections(nextSections);
+        if (!nextIntro && !nextSections.length) {
           setState({ status: 'empty', message: 'This page is not published yet.' });
         } else {
-          setState({ status: 'ready', items: result.sections });
+          setState({ status: 'ready', items: nextSections });
         }
       })
       .catch((error) => {
         if (cancelled) return;
+        if (fallback) {
+          setTitle(fallback.title);
+          setSummary(fallback.summary);
+          setIntro(fallback.body);
+          setSections(fallback.sections);
+          setState({ status: 'ready', items: fallback.sections });
+          return;
+        }
         setState({ status: 'error', message: publicErrorMessage(error) });
       });
     return () => {
       cancelled = true;
     };
-  }, [fixtures, route.subtitle, route.title, slug]);
+  }, [fallback, route.subtitle, route.title, slug]);
 
   const related = legalPublicPages.filter((page) => page.path !== route.path);
 
@@ -1058,7 +1070,7 @@ function PolicyLanding({ route }: { route: SiteRoute }) {
         <p className="lead">{summary}</p>
       </header>
       <DataStatus state={state} emptyLabel={t('landing.policyNotPublished', { defaultMessage: 'This policy is not published yet.' })} />
-      {state.status === 'ready' || fixtures ? (
+      {state.status === 'ready' || fallback ? (
         <>
           {intro ? <p className="policy-intro">{intro}</p> : null}
           {sections.map((section) => (
