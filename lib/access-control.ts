@@ -100,6 +100,27 @@ export function churchTenantHomeHref(context: AccessContext): string | null {
   return churchScope ? `${path}?scope=${encodeURIComponent(churchScope)}` : path;
 }
 
+/** KCA lecturers / KCA-only operators land on the KCA console instead of Global Administration. */
+export function kcaOperatorHomeHref(context: AccessContext): string | null {
+  if (!context.authenticated) return null;
+  if (isChurchTenantContext(context)) return null;
+  if (hasPlatformAdministratorCapabilities(context)) return null;
+  const canKca = context.permissions.includes('kca.enrollments.view')
+    || context.permissions.includes('kca.applications.view')
+    || context.permissions.includes('kca.attendance.record')
+    || context.permissions.includes('*');
+  if (!canKca || context.permissions.includes('*')) return null;
+  const scopeToken = context.scopes.includes('global')
+    ? 'global'
+    : (context.scopes.find((scope) => scope.length > 0) ?? 'global');
+  return `/admin/kca?scope=${encodeURIComponent(scopeToken)}`;
+}
+
+/** Preferred post-login /admin home for scoped operators. */
+export function adminOperatorHomeHref(context: AccessContext): string | null {
+  return churchTenantHomeHref(context) ?? kcaOperatorHomeHref(context);
+}
+
 /** Build AccessContext from GET /user/me success + GET /user/capabilities snapshot. */
 export function accessContextFromCapabilities(
   snapshot: { permissions: string[]; scopes: CapabilityScope[] },
@@ -109,10 +130,10 @@ export function accessContextFromCapabilities(
   const permissions = [...snapshot.permissions];
   // Live Laravel bundles use API codes (platform.configuration.manage, …) while the
   // admin screen catalog still uses UI codes (admin.dashboard.view, …). Platform
-  // administrators keep a UI wildcard; church-tenant admins keep real permission codes
-  // so they only see the church they are scoped to. Laravel APIs remain the real gate.
+  // identity/config admins keep a UI wildcard; church/KCA/domain operators keep real
+  // permission codes so they only see their surfaces. Laravel APIs remain the real gate.
   if (
-    hasAdministratorCapabilities(snapshot)
+    hasPlatformAdministratorCapabilities(snapshot)
     && hasGlobalPlatformScope(snapshot.scopes ?? [])
     && !permissions.includes('*')
   ) {
@@ -141,14 +162,37 @@ export function hasAdministratorCapabilities(snapshot: {
   return ADMINISTRATOR_CAPABILITY_SIGNALS.some((permission) => snapshot.permissions.includes(permission));
 }
 
-const ADMINISTRATOR_CAPABILITY_SIGNALS = [
+/** Platform identity/config admins — may receive a UI wildcard when globally scoped. */
+export function hasPlatformAdministratorCapabilities(snapshot: {
+  permissions: string[];
+}): boolean {
+  if (snapshot.permissions.includes('*')) return true;
+  return PLATFORM_ADMINISTRATOR_CAPABILITY_SIGNALS.some((permission) => snapshot.permissions.includes(permission));
+}
+
+const PLATFORM_ADMINISTRATOR_CAPABILITY_SIGNALS = [
   'identity.users.view',
   'platform.configuration.view',
   'platform.configuration.manage',
   'platform.files.manage',
   'organization.countries.view',
-  'church.churches.view',
   'security.audit.view',
+] as const;
+
+const ADMINISTRATOR_CAPABILITY_SIGNALS = [
+  ...PLATFORM_ADMINISTRATOR_CAPABILITY_SIGNALS,
+  'church.churches.view',
+  'kca.enrollments.view',
+  'kca.applications.view',
+  'kca.attendance.record',
+  'mission.crusades.view',
+  'press.publications.view',
+  'events.events.view',
+  'finance.payment_intents.view',
+  'communications.broadcasts.view',
+  'reporting.alert_rules.view',
+  'privacy.data_subject_requests.view',
+  'platform.files.view',
 ] as const;
 
 /** Member `/account/*` surfaces only require an authenticated (verified) session. */

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, isChurchTenantContext, churchTenantHomeHref, accessContextFromCapabilities, type AccessContext, type AccessDecision } from '../lib/access-control';
+import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, isChurchTenantContext, adminOperatorHomeHref, accessContextFromCapabilities, type AccessContext, type AccessDecision } from '../lib/access-control';
 import { AdminAccessProvider, useAdminAccess } from '../lib/admin-access-context';
 import {
   challengeMfa,
@@ -3890,7 +3890,7 @@ export function ForbiddenView({
   access?: AccessContext;
 }) {
   const { t } = useLocale();
-  const churchHome = access ? churchTenantHomeHref(access) : null;
+  const churchHome = access ? adminOperatorHomeHref(access) : null;
   const missingChurchScope = Boolean(
     access
     && access.authenticated
@@ -3984,7 +3984,7 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
       }
       setSessionUser(user);
       const context = accessContextFromCapabilities(capabilities);
-      router.push(churchTenantHomeHref(context) ?? dest);
+      router.push(adminOperatorHomeHref(context) ?? dest);
       router.refresh();
     } catch (err) {
       setError(formatAuthError(err));

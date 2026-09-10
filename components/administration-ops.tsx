@@ -765,8 +765,9 @@ function UserRoleManager({
         <form className="form-grid" onSubmit={(event) => void onAssign(event)}>
           <h3 className="section-title full">Assign or change role</h3>
           <p className="field-help full">
-            Promote a member (for example Member security self-service) by assigning an admin bundle such as
-            Super administrator, Church operations administrator, or Platform identity and access administrator.
+            Promote a member by assigning an admin bundle such as Super administrator, Church operations administrator,
+            KCA lecturer, or Platform identity and access administrator. KCA lecturer opens the KCA module for attendance,
+            evidence review, and assessments. Church operations requires a church scope; other admin roles default to global platform scope.
             Pastor is a church leadership title, not an identity role — set that on the church leadership page after this user has admin access.
           </p>
           <label>

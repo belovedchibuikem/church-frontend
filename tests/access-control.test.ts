@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   accessContextFromCapabilities,
+  adminOperatorHomeHref,
   churchTenantHomeHref,
   churchTenantHomePath,
   designFixtureAccessContext,
@@ -9,6 +10,8 @@ import {
   evaluateAccess,
   evaluateMemberAccess,
   formatCapabilityScope,
+  hasAdministratorCapabilities,
+  kcaOperatorHomeHref,
   resolveAdminGuestLoginRedirect,
   type AccessContext,
 } from '../lib/access-control.ts';
@@ -127,7 +130,32 @@ test('member self-service capabilities do not open the admin console', () => {
     scopes: [{ type: 'global', key: 'platform' }],
   });
   assert.equal(member.permissions.includes('*'), false);
+  assert.equal(hasAdministratorCapabilities(member), false);
   assert.deepEqual(evaluateAccess(dashboard, member), { allowed: false, reason: 'permission-denied' });
+});
+
+test('KCA lecturer capabilities allow admin sign-in and land on the KCA dashboard', () => {
+  const lecturer = accessContextFromCapabilities({
+    permissions: [
+      'kca.enrollments.view',
+      'kca.applications.view',
+      'kca.attendance.record',
+      'kca.evidence.view',
+      'kca.evidence.review',
+      'kca.assessments.view',
+      'kca.assessments.record',
+      'kca.assignments.transition',
+    ],
+    scopes: [{ type: 'global', key: 'platform' }],
+  });
+  assert.equal(lecturer.permissions.includes('*'), false);
+  assert.equal(hasAdministratorCapabilities(lecturer), true);
+  assert.equal(adminOperatorHomeHref(lecturer), '/admin/kca?scope=global');
+  assert.equal(kcaOperatorHomeHref(lecturer), '/admin/kca?scope=global');
+  assert.equal(churchTenantHomeHref(lecturer), null);
+  assert.deepEqual(evaluateAccess(getAdminScreen('/admin/kca')!, lecturer, 'global'), { allowed: true });
+  assert.deepEqual(evaluateAccess(getAdminScreen('/admin/kca/attendance')!, lecturer, 'global'), { allowed: true });
+  assert.equal(evaluateAccess(dashboard, lecturer).allowed, false);
 });
 
 test('church-tenant administrators do not receive a platform wildcard', () => {
