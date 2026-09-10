@@ -380,6 +380,7 @@ const ADMINISTRATION_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'identity.user.create': ['identity.users.manage'],
   'identity.user.update': ['identity.users.manage'],
   'identity.role.create': ['identity.roles.manage'],
+  'identity.role.assign': ['identity.roles.assign'],
   'people.member.view': ['identity.users.view'],
   'security.session.view': ['identity.security.sessions.view'],
   'security.impersonation.request': ['security.audit.view'],

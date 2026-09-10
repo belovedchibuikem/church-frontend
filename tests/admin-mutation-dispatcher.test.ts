@@ -52,6 +52,7 @@ test('dispatcher maps to Laravel admin.php operations and refuses unmapped actio
   assert.match(source, /completeSoulFollowUp/);
   assert.match(source, /createCountry/);
   assert.match(source, /suspendAdminUser/);
+  assert.match(source, /revokeAdminUserRole/);
   assert.match(source, /upsertConfiguration/);
   assert.match(source, /admin\/kca\/years/);
   assert.match(source, /admin\/kca\/modules/);

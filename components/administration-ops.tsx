@@ -6,11 +6,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useState, type KeyboardEven
 import { AdminWizardFooter, AdminWizardStepper } from './admin-wizard-chrome';
 import { useAdminScreenTab } from '../lib/use-admin-screen-tab';
 import { useAdminWizardStep } from '../lib/use-admin-wizard-step';
+import { useAdminAccess } from '../lib/admin-access-context';
 
 import type { AdminScreen } from '../lib/admin-routes';
 import {
   archiveAdminRole,
   archiveAdminWorkItem,
+  assignAdminUserRole,
   createAdminRole,
   createAdminUser,
   createAdminWorkItem,
@@ -28,6 +30,7 @@ import {
   listAdminWorkItems,
   reactivateAdminUser,
   requestAdminUserPasswordReset,
+  revokeAdminUserRole,
   suspendAdminUser,
   updateAdminUser,
   updateAdminWorkItem,
@@ -553,6 +556,312 @@ function UserDetailDefinitionList({ rows }: { rows: Array<[string, string | null
   );
 }
 
+function formText(form: FormData, key: string): string {
+  return String(form.get(key) ?? '').trim();
+}
+
+function formOptional(form: FormData, key: string): string | null {
+  const value = formText(form, key);
+  return value === '' ? null : value;
+}
+
+function UserRoleManager({
+  user,
+  scope,
+  onError,
+  onMessage,
+  onUserUpdated,
+}: {
+  user: AdminUser;
+  scope: ReturnType<typeof defaultAdminScope>;
+  onError: (message: string | null) => void;
+  onMessage: (message: string | null) => void;
+  onUserUpdated: (user: AdminUser) => void;
+}) {
+  const { access } = useAdminAccess();
+  const canAssign = access.permissions.includes('*') || access.permissions.includes('identity.roles.assign');
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [roleId, setRoleId] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [removeMemberRole, setRemoveMemberRole] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listAdminRoles({ scope, perPage: 100, sort: 'name' })
+      .then((result) => {
+        if (!cancelled) setRoles(result.data);
+      })
+      .catch((err) => {
+        if (!cancelled) onError(identityErrorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onError, scope]);
+
+  const selectedRole = roles.find((role) => role.id === roleId);
+  const assigningAdminBundle = Boolean(selectedRole && selectedRole.code !== 'member_security_self_service');
+
+  async function refreshUser(): Promise<AdminUser> {
+    const next = await getAdminUser(user.id, scope);
+    onUserUpdated(next);
+    return next;
+  }
+
+  async function onAssign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canAssign) {
+      onError('You do not have permission to assign roles.');
+      return;
+    }
+    if (!roleId) {
+      onError('Select a role to assign.');
+      return;
+    }
+    setBusy(true);
+    onError(null);
+    try {
+      await assignAdminUserRole(
+        user.id,
+        { role_id: roleId, expires_at: expiresAt ? new Date(expiresAt).toISOString() : null },
+        scope,
+      );
+      let next = await refreshUser();
+      if (removeMemberRole && assigningAdminBundle) {
+        const memberAssignment = (next.roles ?? []).find((role) => role.code === 'member_security_self_service');
+        if (memberAssignment) {
+          await revokeAdminUserRole(user.id, memberAssignment.assignment_id, scope);
+          next = await refreshUser();
+        }
+      }
+      onMessage(`Assigned ${selectedRole?.name ?? 'role'} to ${next.name}.`);
+      setRoleId('');
+      setExpiresAt('');
+    } catch (err) {
+      onError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRevoke(assignmentId: string, roleName: string) {
+    if (!canAssign) {
+      onError('You do not have permission to change roles.');
+      return;
+    }
+    if (!window.confirm(`Revoke “${roleName}” from ${user.name}?`)) return;
+    setBusy(true);
+    onError(null);
+    try {
+      await revokeAdminUserRole(user.id, assignmentId, scope);
+      await refreshUser();
+      onMessage(`Revoked ${roleName}.`);
+    } catch (err) {
+      onError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="card details-card">
+      <h2 className="card-title">Roles &amp; permissions</h2>
+      {(user.roles ?? []).length === 0 ? (
+        <p className="maps-settings-lead">No roles assigned to this user yet.</p>
+      ) : (
+        user.roles?.map((role) => (
+          <div className="card nested-card" key={role.assignment_id} style={{ marginBottom: 12 }}>
+            <div className="rank-row">
+              <span>{role.name}</span>
+              <strong><code>{role.code}</code></strong>
+            </div>
+            <p className="field-help">Assignment {role.assignment_id}{role.expires_at ? ` · expires ${formatTimestamp(role.expires_at)}` : ''}</p>
+            {(role.scopes ?? []).length === 0 ? (
+              <p className="field-help">No scope attached to this assignment. Church-limited admin work needs a church, home church, or country scope.</p>
+            ) : (
+              <ul className="plain-list">
+                {role.scopes?.map((item) => (
+                  <li key={item.id}><code>{item.type}:{item.scope_id}</code></li>
+                ))}
+              </ul>
+            )}
+            {canAssign ? (
+              <div className="row-actions">
+                <button
+                  type="button"
+                  className="danger-button"
+                  data-interaction-native="true"
+                  disabled={busy}
+                  onClick={() => void onRevoke(role.assignment_id, role.name || role.code)}
+                >
+                  Revoke role
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ))
+      )}
+
+      {canAssign ? (
+        <form className="form-grid" onSubmit={(event) => void onAssign(event)}>
+          <h3 className="section-title full">Assign or change role</h3>
+          <p className="field-help full">
+            Promote a member (for example Member security self-service) by assigning an admin bundle such as
+            Super administrator, Church operations administrator, or Platform identity and access administrator.
+            Pastor is a church leadership title, not an identity role — set that on the church leadership page after this user has admin access.
+          </p>
+          <label>
+            <span>Role *</span>
+            <select value={roleId} onChange={(event) => setRoleId(event.target.value)} required disabled={busy || roles.length === 0}>
+              <option value="">{roles.length ? 'Select a role' : 'Loading roles…'}</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>{role.name} ({role.code})</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Expires at</span>
+            <input type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} disabled={busy} />
+          </label>
+          <label className="full">
+            <input
+              type="checkbox"
+              checked={removeMemberRole}
+              onChange={(event) => setRemoveMemberRole(event.target.checked)}
+              disabled={busy}
+            />
+            <span> Remove member self-service when assigning an admin role</span>
+          </label>
+          <div className="form-footer full">
+            <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy || !roleId}>
+              {busy ? 'Saving…' : 'Assign role'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="field-help">You can view this user&apos;s roles, but assigning or revoking them requires identity.roles.assign.</p>
+      )}
+
+      <div className="row-actions">
+        <Link href={`/admin/access/user-role-assignment?user=${encodeURIComponent(user.id)}`}>Open full assignment form</Link>
+        <Link href="/admin/access/scope-assignments">Manage scopes</Link>
+        {user.person_id ? <Link href={`/admin/people/${user.person_id}`}>Person record (church leadership)</Link> : null}
+      </div>
+    </article>
+  );
+}
+
+function UserEditProfileForm({
+  user,
+  scope,
+  error,
+  onError,
+  onSaved,
+}: {
+  user: AdminUser;
+  scope: ReturnType<typeof defaultAdminScope>;
+  error: string | null;
+  onError: (message: string | null) => void;
+  onSaved: (user: AdminUser) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = formText(form, 'name');
+    const email = formText(form, 'email');
+    setBusy(true);
+    onError(null);
+    try {
+      const next = await updateAdminUser(user.id, {
+        name,
+        email,
+        ...(user.person_id ? {
+          profile: {
+            given_name: formText(form, 'given_name'),
+            middle_name: formOptional(form, 'middle_name'),
+            family_name: formText(form, 'family_name'),
+            preferred_name: formOptional(form, 'preferred_name'),
+            phone: formOptional(form, 'phone'),
+            country: formOptional(form, 'country')?.toUpperCase() ?? null,
+            region: formOptional(form, 'region'),
+            locality: formOptional(form, 'locality'),
+          },
+        } : {}),
+      }, scope);
+      onSaved(next);
+    } catch (err) {
+      onError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="card form-card" key={`${user.id}-${user.email}-${user.name}`} onSubmit={(event) => void onSubmit(event)}>
+      <Status error={error} />
+      <h2 className="section-title">Account</h2>
+      <div className="form-grid">
+        <label className="full">
+          <span>Display name *</span>
+          <input name="name" defaultValue={user.name} required />
+        </label>
+        <label className="full">
+          <span>Email *</span>
+          <input name="email" type="email" defaultValue={user.email} required />
+        </label>
+      </div>
+      {user.person_id ? (
+        <>
+          <h2 className="section-title">Profile</h2>
+          <div className="form-grid">
+            <label>
+              <span>Given name *</span>
+              <input name="given_name" defaultValue={user.profile?.given_name ?? ''} required />
+            </label>
+            <label>
+              <span>Middle name</span>
+              <input name="middle_name" defaultValue={user.profile?.middle_name ?? ''} />
+            </label>
+            <label>
+              <span>Family name *</span>
+              <input name="family_name" defaultValue={user.profile?.family_name ?? ''} required />
+            </label>
+            <label>
+              <span>Preferred name</span>
+              <input name="preferred_name" defaultValue={user.profile?.preferred_name ?? ''} />
+            </label>
+            <label>
+              <span>Phone</span>
+              <input name="phone" defaultValue={user.profile?.phone ?? ''} />
+            </label>
+            <label>
+              <span>Country (ISO-2)</span>
+              <input name="country" defaultValue={user.profile?.country ?? ''} maxLength={2} placeholder="NG" />
+            </label>
+            <label>
+              <span>Region / state</span>
+              <input name="region" defaultValue={user.profile?.region ?? ''} />
+            </label>
+            <label>
+              <span>Locality / city</span>
+              <input name="locality" defaultValue={user.profile?.locality ?? ''} />
+            </label>
+          </div>
+        </>
+      ) : (
+        <p className="field-help">This account is not linked to a person profile, so only the display name and email can be changed here.</p>
+      )}
+      <footer className="form-footer">
+        <Link className="ghost-button link-button" href={`/admin/users/${user.id}`}>Cancel</Link>
+        <button className="primary-button" type="submit" data-interaction-native="true" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+      </footer>
+    </form>
+  );
+}
+
 function UserDetailTabPanel({
   user,
   scope,
@@ -628,6 +937,10 @@ function UserDetailTabPanel({
           ['Preferred name', user.profile?.preferred_name],
           ['Display name', user.name],
           ['Email', user.email],
+          ['Phone', user.profile?.phone],
+          ['Country', user.profile?.country],
+          ['Region', user.profile?.region],
+          ['Locality', user.profile?.locality],
         ]} />
         <footer className="form-footer">
           <Link className="primary-button link-button" href={`/admin/users/${user.id}/edit`}>Edit profile</Link>
@@ -641,36 +954,13 @@ function UserDetailTabPanel({
 
   if (tabKey === 'roles-permissions') {
     return (
-      <article className="card details-card">
-        <h2 className="card-title">Roles &amp; permissions</h2>
-        {(user.roles ?? []).length === 0 ? (
-          <p className="maps-settings-lead">No roles assigned to this user yet.</p>
-        ) : (
-          user.roles?.map((role) => (
-            <div className="card nested-card" key={role.assignment_id} style={{ marginBottom: 12 }}>
-              <div className="rank-row">
-                <span>{role.name}</span>
-                <strong><code>{role.code}</code></strong>
-              </div>
-              <p className="field-help">Assignment {role.assignment_id}{role.expires_at ? ` · expires ${formatTimestamp(role.expires_at)}` : ''}</p>
-              {(role.scopes ?? []).length === 0 ? (
-                <p className="field-help">No scope attached to this assignment.</p>
-              ) : (
-                <ul className="plain-list">
-                  {role.scopes?.map((item) => (
-                    <li key={item.id}><code>{item.type}:{item.scope_id}</code></li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))
-        )}
-        <div className="row-actions">
-          <Link href={`/admin/access/user-role-assignment?user=${encodeURIComponent(user.id)}`}>Assign roles</Link>
-          <Link href="/admin/access/scope-assignments">Manage scopes</Link>
-          <Link href="/admin/permissions">Grant permissions</Link>
-        </div>
-      </article>
+      <UserRoleManager
+        user={user}
+        scope={scope}
+        onError={onError}
+        onMessage={onMessage}
+        onUserUpdated={onUserUpdated}
+      />
     );
   }
 
@@ -909,46 +1199,63 @@ function UserDetail({ screen, requestedScope }: ScopeProps) {
   }
 
   if (isEdit) {
+    if (tabKey === 'roles-permissions') {
+      return (
+        <>
+          <Status error={error} message={message} />
+          <UserRoleManager
+            user={user}
+            scope={scope}
+            onError={setError}
+            onMessage={setMessage}
+            onUserUpdated={setUser}
+          />
+        </>
+      );
+    }
+    if (tabKey === 'church-scope') {
+      return (
+        <article className="card details-card">
+          <h2 className="card-title">Church / scope</h2>
+          <p className="maps-settings-lead">
+            Identity roles grant permissions. Attach a church, home church, country, or administrative unit scope so those permissions apply in the right place.
+            Pastor, Resident Pastor, and similar titles are church leadership records — not identity roles.
+          </p>
+          <div className="row-actions">
+            <Link className="primary-button link-button" href={`/admin/access/user-role-assignment?user=${encodeURIComponent(user.id)}`}>Assign role</Link>
+            <Link className="ghost-button link-button" href="/admin/access/scope-assignments">Assign scope</Link>
+            {user.person_id ? <Link className="ghost-button link-button" href={`/admin/people/${user.person_id}`}>Open person record</Link> : null}
+          </div>
+        </article>
+      );
+    }
+    if (tabKey === 'review') {
+      return (
+        <article className="card details-card">
+          <h2 className="card-title">Review</h2>
+          <UserDetailDefinitionList rows={[
+            ['Display name', user.name],
+            ['Email', user.email],
+            ['Phone', user.profile?.phone],
+            ['Roles', (user.roles ?? []).map((role) => role.name || role.code).join(', ') || 'None'],
+          ]} />
+          <footer className="form-footer">
+            <Link className="primary-button link-button" href={`/admin/users/${user.id}`}>Back to user</Link>
+          </footer>
+        </article>
+      );
+    }
     return (
-      <form
-        className="card form-card"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const form = new FormData(event.currentTarget);
-          void updateAdminUser(user.id, {
-            name: String(form.get('name') ?? ''),
-            profile: {
-              given_name: String(form.get('given_name') ?? ''),
-              family_name: String(form.get('family_name') ?? ''),
-              preferred_name: String(form.get('preferred_name') ?? '') || null,
-            },
-          }, scope).then(setUser).catch((err) => setError(identityErrorMessage(err)));
+      <UserEditProfileForm
+        user={user}
+        scope={scope}
+        error={error}
+        onError={setError}
+        onSaved={(next) => {
+          setUser(next);
+          setMessage('User updated.');
         }}
-      >
-        <Status error={error} />
-        <div className="form-grid">
-          <label className="full">
-            <span>Display name</span>
-            <input name="name" defaultValue={user.name} required />
-          </label>
-          <label>
-            <span>Given name *</span>
-            <input name="given_name" defaultValue={user.profile?.given_name ?? ''} required />
-          </label>
-          <label>
-            <span>Family name *</span>
-            <input name="family_name" defaultValue={user.profile?.family_name ?? ''} required />
-          </label>
-          <label>
-            <span>Preferred name</span>
-            <input name="preferred_name" defaultValue={user.profile?.preferred_name ?? ''} />
-          </label>
-        </div>
-        <footer className="form-footer">
-          <Link className="ghost-button link-button" href={`/admin/users/${user.id}`}>Cancel</Link>
-          <button className="primary-button" type="submit" data-interaction-native="true">Save changes</button>
-        </footer>
-      </form>
+      />
     );
   }
 

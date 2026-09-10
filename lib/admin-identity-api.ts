@@ -28,6 +28,10 @@ export type AdminUser = {
     middle_name?: string | null;
     family_name?: string | null;
     preferred_name?: string | null;
+    phone?: string | null;
+    country?: string | null;
+    region?: string | null;
+    locality?: string | null;
   } | null;
   roles?: Array<{
     assignment_id: string;
@@ -139,6 +143,7 @@ export type AdminRoleAssignment = {
   role_code?: string | null;
   assigned_at?: string | null;
   expires_at?: string | null;
+  revoked_at?: string | null;
 };
 
 export type AssignAdminRoleAssignmentScopeInput = {
@@ -386,6 +391,21 @@ export async function assignAdminUserRole(
         role_id: input.role_id,
         ...(expiresAt ? { expires_at: expiresAt } : {}),
       }),
+    },
+  );
+  return envelope.data;
+}
+
+export async function revokeAdminUserRole(
+  userId: string,
+  assignmentId: string,
+  scope?: AdminScopeHeaders,
+): Promise<AdminRoleAssignment> {
+  const envelope = await identityRequest<AdminRoleAssignment>(
+    `admin/users/${encodeURIComponent(userId)}/role-assignments/${encodeURIComponent(assignmentId)}`,
+    {
+      method: 'DELETE',
+      scope,
     },
   );
   return envelope.data;
@@ -643,7 +663,20 @@ export async function createAdminUser(
 
 export async function updateAdminUser(
   userId: string,
-  input: { name?: string; profile?: { given_name: string; family_name: string; middle_name?: string | null; preferred_name?: string | null } },
+  input: {
+    name?: string;
+    email?: string;
+    profile?: {
+      given_name: string;
+      family_name: string;
+      middle_name?: string | null;
+      preferred_name?: string | null;
+      phone?: string | null;
+      country?: string | null;
+      region?: string | null;
+      locality?: string | null;
+    };
+  },
   scope?: AdminScopeHeaders,
 ): Promise<AdminUser> {
   const envelope = await identityRequest<AdminUser>(`admin/users/${encodeURIComponent(userId)}`, {

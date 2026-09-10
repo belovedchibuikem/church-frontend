@@ -31,6 +31,7 @@ import {
   fetchAdminProfile,
   formatAccountStatus,
   formatTimestamp,
+  getAdminUser,
   grantAdminRolePermission,
   identityApiConfigured,
   initialsFromAdminProfile,
@@ -656,7 +657,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [showAppMembers, setShowAppMembers] = useState(false);
+  const [showAppMembers, setShowAppMembers] = useState(true);
 
   const refresh = useCallback(async () => {
     const scope = defaultAdminScope(requestedScope);
@@ -802,6 +803,7 @@ function IdentityUsersTable({ screen, requestedScope }: { screen: AdminScreen; r
                     <div className="row-actions">
                       <Link className="table-action" href={`/admin/users/${user.id}`}>View</Link>
                       <Link className="table-action" href={`/admin/users/${user.id}/edit`}>Edit</Link>
+                      <Link className="table-action" href={`/admin/users/${user.id}?tab=roles-permissions`}>Roles</Link>
                       <TableRowActions
                         record={formatRowActionRecord(user.name, user.id)}
                         entityKey="user"
@@ -2926,6 +2928,7 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
   const { t } = useLocale();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2935,14 +2938,25 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
     let cancelled = false;
     void (async () => {
       const scope = defaultAdminScope(requestedScope);
+      const requestedUser = new URLSearchParams(window.location.search).get('user')?.trim() ?? '';
       try {
         const [userResult, roleResult] = await Promise.all([
-          listAdminUsers({ scope, perPage: 50, sort: '-created_at' }),
-          listAdminRoles({ scope, perPage: 50, sort: 'code' }),
+          listAdminUsers({ scope, perPage: 50, sort: '-created_at', excludeAppMembers: false }),
+          listAdminRoles({ scope, perPage: 100, sort: 'name' }),
         ]);
         if (cancelled) return;
-        setUsers(userResult.data);
+        let loadedUsers = userResult.data;
+        if (requestedUser && !loadedUsers.some((user) => user.id === requestedUser)) {
+          try {
+            const extra = await getAdminUser(requestedUser, scope);
+            loadedUsers = [extra, ...loadedUsers];
+          } catch {
+            // Keep the listed users; the requested ULID may still be typed if it is valid.
+          }
+        }
+        setUsers(loadedUsers);
         setRoles(roleResult.data);
+        setSelectedUserId(requestedUser && loadedUsers.some((user) => user.id === requestedUser) ? requestedUser : '');
         setError(null);
       } catch (err) {
         if (cancelled) return;
@@ -2997,7 +3011,7 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
       <p className="maps-settings-lead">
         {apiReady
           ? t('admin.assignRoleCopy', {
-              defaultMessage: 'Assign a live catalogue role to a live user. Submit calls POST /admin/users/{user}/role-assignments.',
+              defaultMessage: 'Assign a live catalogue role to a live user, including app members. Super administrator can only be assigned by an existing super administrator.',
             })
           : t('admin.assignRoleBlocked', {
               defaultMessage: 'The platform API is not configured; role assignment submit is blocked.',
@@ -3006,8 +3020,14 @@ function IdentityUserRoleAssignForm({ screen, requestedScope }: { screen: AdminS
       <div className="form-grid">
         <label>
           <span>{t('admin.userRequired', { defaultMessage: 'User *' })}</span>
-          <select name="user_id" defaultValue="" required disabled={!apiReady || users.length === 0}>
-            <option value="" disabled>{users.length ? t('admin.selectLiveUser', { defaultMessage: 'Select a live user' }) : t('admin.noLiveUsersLoaded', { defaultMessage: 'No live users loaded' })}</option>
+          <select
+            name="user_id"
+            value={selectedUserId}
+            onChange={(event) => setSelectedUserId(event.target.value)}
+            required
+            disabled={!apiReady || users.length === 0}
+          >
+            <option value="">{users.length ? t('admin.selectLiveUser', { defaultMessage: 'Select a live user' }) : t('admin.noLiveUsersLoaded', { defaultMessage: 'No live users loaded' })}</option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
             ))}

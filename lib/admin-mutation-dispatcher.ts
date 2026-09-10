@@ -10,6 +10,7 @@ import type { JsonObject, JsonValue } from './api-types.ts';
 import {
   AdminIdentityApiError,
   reactivateAdminUser,
+  revokeAdminUserRole,
   suspendAdminUser,
 } from './admin-identity-api.ts';
 import {
@@ -464,6 +465,14 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       role_id: requireId(firstUlid(payload.role_id, payload.role), 'role'),
       expires_at: field(payload, 'expires_at', 'expiresAt') ?? null,
     }, opts);
+  }
+  if (
+    (routeStarts(route, '/admin/access/user-role-assignment', '/admin/users') && labelIs(label, /revoke role|remove role|unassign role/))
+    || labelIs(label, /^revoke role( assignment)?$/)
+  ) {
+    const userId = requireId(pickRecord(ctx, 'user_id', 'id'), 'user');
+    const assignmentId = requireId(firstUlid(payload.assignment_id, payload.role_assignment_id, payload.id), 'role assignment');
+    return revokeAdminUserRole(userId, assignmentId, scope);
   }
   if (routeStarts(route, '/admin/roles', '/admin/permissions') && labelIs(label, /grant permission|add permission|assign permission/)) {
     const roleId = requireId(pickRecord(ctx, 'role_id', 'id'), 'role');
