@@ -13,6 +13,7 @@ import {
   archiveAdminRole,
   archiveAdminWorkItem,
   assignAdminUserRole,
+  assignAdminRoleAssignmentScope,
   createAdminRole,
   createAdminUser,
   createAdminWorkItem,
@@ -41,6 +42,7 @@ import {
   type AdminWorkItem,
 } from '../lib/admin-identity-api';
 import { listCatalogDomain, catalogErrorMessage, shouldUseCatalogLiveData, CATALOG_GLOBAL_SCOPE } from '../lib/admin-catalog-api';
+import { listChurches } from '../lib/admin-operations-api';
 import { listCountriesPage, organizationErrorMessage } from '../lib/admin-organization-api';
 import { sanitizeAdminScopeToken } from '../lib/admin-scope';
 import { apiRequest } from '../lib/api-client';
@@ -582,25 +584,36 @@ function UserRoleManager({
   const canAssign = access.permissions.includes('*') || access.permissions.includes('identity.roles.assign');
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [roleId, setRoleId] = useState('');
+  const [churchId, setChurchId] = useState('');
+  const [churches, setChurches] = useState<Array<{ id: string; name: string }>>([]);
   const [expiresAt, setExpiresAt] = useState('');
   const [removeMemberRole, setRemoveMemberRole] = useState(true);
   const [busy, setBusy] = useState(false);
+  const canAttachScope = canAssign || access.permissions.includes('identity.scopes.assign');
+  const selectedRole = roles.find((role) => role.id === roleId);
+  const churchRoleNeedsScope = selectedRole?.code === 'church_operations_administrator'
+    || selectedRole?.code === 'mission_operations_administrator';
 
   useEffect(() => {
     let cancelled = false;
-    void listAdminRoles({ scope, perPage: 100, sort: 'name' })
-      .then((result) => {
-        if (!cancelled) setRoles(result.data);
-      })
-      .catch((err) => {
-        if (!cancelled) onError(identityErrorMessage(err));
+    void Promise.allSettled([
+      listAdminRoles({ scope, perPage: 100, sort: 'name' }),
+      listChurches({ perPage: 100, scope }),
+    ])
+      .then(([roleResult, churchResult]) => {
+        if (cancelled) return;
+        if (roleResult.status === 'fulfilled') setRoles(roleResult.value.data);
+        if (churchResult.status === 'fulfilled') {
+          setChurches(churchResult.value.items.map((church) => ({ id: church.id, name: church.name })));
+        }
+        const failure = [roleResult, churchResult].find((result) => result.status === 'rejected');
+        if (failure && failure.status === 'rejected') onError(identityErrorMessage(failure.reason));
       });
     return () => {
       cancelled = true;
     };
   }, [onError, scope]);
 
-  const selectedRole = roles.find((role) => role.id === roleId);
   const assigningAdminBundle = Boolean(selectedRole && selectedRole.code !== 'member_security_self_service');
 
   async function refreshUser(): Promise<AdminUser> {
@@ -619,12 +632,20 @@ function UserRoleManager({
       onError('Select a role to assign.');
       return;
     }
+    if (churchRoleNeedsScope && !churchId) {
+      onError('Select the church this administrator should manage.');
+      return;
+    }
     setBusy(true);
     onError(null);
     try {
       await assignAdminUserRole(
         user.id,
-        { role_id: roleId, expires_at: expiresAt ? new Date(expiresAt).toISOString() : null },
+        {
+          role_id: roleId,
+          expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+          ...(churchId ? { scope_type: 'church', scope_key: churchId } : {}),
+        },
         scope,
       );
       let next = await refreshUser();
@@ -637,6 +658,7 @@ function UserRoleManager({
       }
       onMessage(`Assigned ${selectedRole?.name ?? 'role'} to ${next.name}.`);
       setRoleId('');
+      setChurchId('');
       setExpiresAt('');
     } catch (err) {
       onError(identityErrorMessage(err));
@@ -645,6 +667,27 @@ function UserRoleManager({
     }
   }
 
+  async function onAttachChurch(assignmentId: string) {
+    if (!canAttachScope) {
+      onError('You do not have permission to attach a church scope.');
+      return;
+    }
+    if (!churchId) {
+      onError('Select a church to attach to this role.');
+      return;
+    }
+    setBusy(true);
+    onError(null);
+    try {
+      await assignAdminRoleAssignmentScope(assignmentId, { scope_type: 'church', scope_id: churchId }, scope);
+      await refreshUser();
+      onMessage('Church scope attached. The church administrator can sign in to that church dashboard.');
+    } catch (err) {
+      onError(identityErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function onRevoke(assignmentId: string, roleName: string) {
     if (!canAssign) {
       onError('You do not have permission to change roles.');
@@ -678,7 +721,22 @@ function UserRoleManager({
             </div>
             <p className="field-help">Assignment {role.assignment_id}{role.expires_at ? ` · expires ${formatTimestamp(role.expires_at)}` : ''}</p>
             {(role.scopes ?? []).length === 0 ? (
-              <p className="field-help">No scope attached to this assignment. Church-limited admin work needs a church, home church, or country scope.</p>
+              <>
+                <p className="field-help">No church is attached to this assignment, so this person cannot open the church dashboard.</p>
+                {canAttachScope ? (
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      data-interaction-native="true"
+                      disabled={busy || !churchId}
+                      onClick={() => void onAttachChurch(role.assignment_id)}
+                    >
+                      Attach selected church
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : (
               <ul className="plain-list">
                 {role.scopes?.map((item) => (
@@ -723,6 +781,15 @@ function UserRoleManager({
           <label>
             <span>Expires at</span>
             <input type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} disabled={busy} />
+          </label>
+          <label className="full">
+            <span>Church {churchRoleNeedsScope ? '*' : ''}</span>
+            <select value={churchId} onChange={(event) => setChurchId(event.target.value)} disabled={busy}>
+              <option value="">{churches.length ? 'Select a church' : 'No churches loaded'}</option>
+              {churches.map((church) => (
+                <option key={church.id} value={church.id}>{church.name}</option>
+              ))}
+            </select>
           </label>
           <label className="full">
             <input

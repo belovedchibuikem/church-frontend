@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, isChurchTenantContext, type AccessContext, type AccessDecision } from '../lib/access-control';
+import { emptyAccessContext, evaluateAccess, hasAdministratorCapabilities, isChurchTenantContext, churchTenantHomeHref, accessContextFromCapabilities, type AccessContext, type AccessDecision } from '../lib/access-control';
 import { AdminAccessProvider, useAdminAccess } from '../lib/admin-access-context';
 import {
   challengeMfa,
@@ -427,7 +427,15 @@ function navItemAllowed(href: string, access: AccessContext, requestedScope: str
 }
 
 const CHURCH_TENANT_CHURCH_NAV_EXTRAS: EnterpriseNavItem[] = [
-  { icon: '₦', label: 'Finance', href: '/admin/church/finance' },
+  { icon: '◉', label: 'Members', href: '/admin/church/members' },
+  { icon: '◇', label: 'First Timers', href: '/admin/church/first-timers' },
+  { icon: '♙', label: 'Converts', href: '/admin/church/converts' },
+  { icon: '▦', label: 'Attendance', href: '/admin/church/attendance' },
+  { icon: '◎', label: 'Groups', href: '/admin/church/small-groups' },
+  { icon: '▦', label: 'Departments', href: '/admin/church/departments' },
+  { icon: '♛', label: 'Leadership', href: '/admin/church/leadership' },
+  { icon: '◇', label: 'Evangelism', href: '/admin/church/evangelism' },
+  { icon: '₦', label: 'Giving', href: '/admin/church/finance' },
   { icon: '▤', label: 'Reports', href: '/admin/church/reports' },
   { icon: '⚙', label: 'Settings', href: '/admin/church/settings' },
 ];
@@ -3872,8 +3880,23 @@ function Impersonation({ screen }: { screen: AdminScreen }) {
   return <><div className="warning-card"><strong>Impersonation is a powerful tool and must be used responsibly.</strong><ul><li>Use only for troubleshooting and support.</li><li>Ensure you have explicit approval.</li><li>All impersonation sessions are logged.</li><li>Do not access sensitive personal information unnecessarily.</li></ul></div><div className="support-grid"><div className="card settings-card"><h2>Request Impersonation Access</h2><FormFields /><button className="primary-button">{screen.action}</button></div><div className="card feed-card"><h2>My Access Requests</h2>{['John Chinedu Doe — Pending','Grace Ezekiel — Pending'].map(item=><div className="feed-item" key={item}><span className="feed-icon">♙</span><strong>{item}</strong><StatusBadge value="Pending" /></div>)}</div></div></>;
 }
 
-export function ForbiddenView({ scope = 'Global', reason = 'permission-denied' }: { scope?: string; reason?: string }) {
+export function ForbiddenView({
+  scope = 'Global',
+  reason = 'permission-denied',
+  access,
+}: {
+  scope?: string;
+  reason?: string;
+  access?: AccessContext;
+}) {
   const { t } = useLocale();
+  const churchHome = access ? churchTenantHomeHref(access) : null;
+  const missingChurchScope = Boolean(
+    access
+    && access.authenticated
+    && access.permissions.includes('church.churches.view')
+    && !isChurchTenantContext(access),
+  );
   if (reason === 'unauthenticated') {
     return (
       <div className="forbidden-view">
@@ -3891,9 +3914,13 @@ export function ForbiddenView({ scope = 'Global', reason = 'permission-denied' }
       <div className="shield-lock">▣</div>
       <h1>{t('errors.permissionDenied', { defaultMessage: 'Permission Denied' })}</h1>
       <p>
-        {t('errors.noPermissionInScope', {
-          defaultMessage: 'You don’t have permission to access this resource in the current scope.',
-        })}
+        {missingChurchScope
+          ? t('errors.churchAdminNeedsChurch', {
+              defaultMessage: 'Your church administration role is not attached to a church yet. Ask a platform administrator to attach the church on Users → Roles & Permissions, then sign in again.',
+            })
+          : t('errors.noPermissionInScope', {
+              defaultMessage: 'You don’t have permission to access this resource in the current scope.',
+            })}
       </p>
       <dl>
         <div>
@@ -3905,7 +3932,7 @@ export function ForbiddenView({ scope = 'Global', reason = 'permission-denied' }
           <dd>{reason.replace('-', ' ')}</dd>
         </div>
       </dl>
-      <Link href="/admin" className="primary-button link-button">
+      <Link href={churchHome ?? '/admin'} className="primary-button link-button">
         {t('common.backToDashboard', { defaultMessage: 'Back to Dashboard' })}
       </Link>
     </div>
@@ -3956,7 +3983,8 @@ function AuthView({ screen, returnTo }: { screen: AdminScreen; returnTo?: string
         return;
       }
       setSessionUser(user);
-      router.push(dest);
+      const context = accessContextFromCapabilities(capabilities);
+      router.push(churchTenantHomeHref(context) ?? dest);
       router.refresh();
     } catch (err) {
       setError(formatAuthError(err));
@@ -4120,7 +4148,7 @@ export function AdminScreenView({ screen, decision, requestedScope, returnTo, ac
     || /^\/admin\/churches\/[0-7][0-9A-HJKMNP-TV-Z]{25}/i.test(screen.route);
   const rendererNeedsAction = new Set(['G-03']).has(screen.id);
   const rendererOwnsAction = new Set(['G-01','G-16','G-17','H-01','H-11','H-13','H-17','H-20','I-02','I-08','I-10','I-12','I-13','I-14','I-15','I-16','I-18','I-19','I-20','E-02']).has(screen.id);
-  return <AdminAccessProvider value={{ access, requestedScope }}><AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason}/>}</main></div></AdminInteractionShell></AdminAccessProvider>;
+  return <AdminAccessProvider value={{ access, requestedScope }}><AdminInteractionShell {...interactionProps}><div className="admin-shell"><Sidebar screen={screen}/><main className="admin-main"><Topbar screen={screen}/>{decision.allowed?<section className={`page batch-${screen.batch.toLowerCase()} ${rendererOwnsHeader ? 'renderer-header' : ''}`}><Breadcrumbs items={breadcrumbs}/>{!rendererOwnsHeader && <PageHeader screen={screen} hideAction={rendererOwnsAction}/>} {rendererNeedsAction && screen.action && <div className="renderer-action-row"><button type="button" className={screen.action.includes('Print') || screen.action.includes('Download') ? 'ghost-button' : 'primary-button'}>{screen.action}</button></div>}<ScreenContent screen={screen} requestedScope={requestedScope}/></section>:<ForbiddenView scope={requestedScope} reason={decision.reason} access={access}/>}</main></div></AdminInteractionShell></AdminAccessProvider>;
 }
 
 const batchNames = {

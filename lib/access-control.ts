@@ -93,6 +93,13 @@ export function churchTenantHomePath(context: AccessContext): string | null {
   return '/admin/church/dashboard';
 }
 
+export function churchTenantHomeHref(context: AccessContext): string | null {
+  const path = churchTenantHomePath(context);
+  if (!path) return null;
+  const churchScope = context.scopes.find((scope) => scope.startsWith('church:'));
+  return churchScope ? `${path}?scope=${encodeURIComponent(churchScope)}` : path;
+}
+
 /** Build AccessContext from GET /user/me success + GET /user/capabilities snapshot. */
 export function accessContextFromCapabilities(
   snapshot: { permissions: string[]; scopes: CapabilityScope[] },

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   accessContextFromCapabilities,
+  churchTenantHomeHref,
   churchTenantHomePath,
   designFixtureAccessContext,
   emptyAccessContext,
@@ -137,6 +138,7 @@ test('church-tenant administrators do not receive a platform wildcard', () => {
   });
   assert.equal(live.permissions.includes('*'), false);
   assert.equal(churchTenantHomePath(live), '/admin/church/dashboard');
+  assert.equal(churchTenantHomeHref(live), `/admin/church/dashboard?scope=${encodeURIComponent(`church:${churchId}`)}`);
   assert.deepEqual(
     evaluateAccess(getAdminScreen('/admin/church/dashboard')!, live, `church:${churchId}`),
     { allowed: true },

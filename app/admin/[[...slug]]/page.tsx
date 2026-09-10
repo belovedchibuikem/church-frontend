@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { AdminScreenIndex, AdminScreenView } from '../../../components/admin-ui';
-import { churchTenantHomePath, evaluateAccess, resolveAdminGuestLoginRedirect } from '../../../lib/access-control';
+import { churchTenantHomeHref, evaluateAccess, resolveAdminGuestLoginRedirect } from '../../../lib/access-control';
 import { getAdminScreen, normalizeAdminRoute } from '../../../lib/admin-routes';
 import { sanitizeAdminScopeToken } from '../../../lib/admin-scope';
 import { getServerAccessContext } from '../../../lib/server-access';
@@ -37,9 +37,9 @@ export default async function AdminPage({
       ? 'global'
       : (sanitizeAdminScopeToken(context.scopes[0]) ?? 'global'));
   if (route === '/admin') {
-    const churchHome = churchTenantHomePath(context);
+    const churchHome = churchTenantHomeHref(context);
     if (churchHome) {
-      redirect(`${churchHome}?scope=${encodeURIComponent(requestedScope)}`);
+      redirect(churchHome);
     }
   }
   const decision = evaluateAccess(screen, context, requestedScope);

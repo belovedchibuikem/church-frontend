@@ -134,6 +134,8 @@ export type AdminAccessDecision = {
 export type AssignAdminUserRoleInput = {
   role_id: string;
   expires_at?: string | null;
+  scope_type?: string | null;
+  scope_key?: string | null;
 };
 
 export type AdminRoleAssignment = {
@@ -390,6 +392,9 @@ export async function assignAdminUserRole(
       body: JSON.stringify({
         role_id: input.role_id,
         ...(expiresAt ? { expires_at: expiresAt } : {}),
+        ...(input.scope_type && input.scope_key
+          ? { scope_type: input.scope_type, scope_key: input.scope_key }
+          : {}),
       }),
     },
   );
