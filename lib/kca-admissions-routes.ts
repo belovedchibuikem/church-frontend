@@ -45,11 +45,12 @@ export const kcaAdmissionsScreens: AdminScreen[] = [
     rows: applicationRows.slice(0, 5), action: 'View Review Queue',
   },
   {
-    id: 'G-02', batch: 'G', route: '/admin/kca/applications', title: 'Applications',
-    subtitle: 'Manage KCA admission applications.', kind: 'table',
+    id: 'G-02', batch: 'G', route: '/admin/kca/applications', title: 'Admitted & Decided',
+    subtitle: 'Applications that already have an admission decision (admitted, provisional, deferred, or not accepted).', kind: 'table',
     permission: 'kca.application.view', scope: 'assigned', nav: 'kca-applications', action: 'Export',
-    tabs: ['All Status', 'All Batches', 'All Regions'],
-    columns: ['Applicant', 'Email', 'Phone', 'Church', 'Batch', 'Submitted', 'Status'], rows: applicationRows,
+    tabs: ['Admitted', 'All decided'],
+    columns: ['Applicant', 'Email', 'Phone', 'Church', 'Batch', 'Submitted', 'Status'],
+    rows: applicationRows.filter((row) => !['Under Review'].includes(row.Status)),
   },
   {
     id: 'G-03', batch: 'G', route: '/admin/kca/applications/samuel-david', title: 'Samuel David',
@@ -143,19 +144,12 @@ export const kcaAdmissionsScreens: AdminScreen[] = [
     },
   },
   {
-    id: 'G-11', batch: 'G', route: '/admin/kca/review-queue', title: 'Review Queue',
-    subtitle: 'Review and process applications.', kind: 'table',
-    permission: 'kca.application.review', scope: 'assigned', nav: 'kca-review',
-    metrics: [
-      { label: 'Upcoming Sessions', value: '3' }, { label: 'Total Students', value: '185' },
-      { label: 'Attended', value: '162' }, { label: 'Completion Rate', value: '87%' },
-    ],
-    columns: ['Session', 'Date', 'Time', 'Venue', 'Students'],
-    rows: [
-      { Session: 'Batch 2024-06 Orientation', Date: 'Jun 6, 2024', Time: '9:00 AM', Venue: 'The Covenant Place', Students: '72' },
-      { Session: 'Batch 2024-06 Orientation', Date: 'Jun 8, 2024', Time: '4:00 PM', Venue: 'Online (Zoom)', Students: '58' },
-      { Session: 'Batch 2024-06 Make-up', Date: 'Jun 11, 2024', Time: '10:00 AM', Venue: 'The Covenant Place', Students: '55' },
-    ],
+    id: 'G-11', batch: 'G', route: '/admin/kca/review-queue', title: 'New Applications',
+    subtitle: 'Submitted applications waiting for review or an admission decision.', kind: 'table',
+    permission: 'kca.application.review', scope: 'assigned', nav: 'kca-review', action: 'Export',
+    tabs: ['Needs review'],
+    columns: ['Applicant', 'Email', 'Phone', 'Church', 'Batch', 'Submitted', 'Status'],
+    rows: applicationRows.filter((row) => row.Status === 'Under Review'),
   },
   {
     id: 'G-12', batch: 'G', route: '/admin/kca/applications/samuel-david/decision',

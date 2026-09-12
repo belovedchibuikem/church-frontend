@@ -644,7 +644,7 @@ function UserRoleManager({
         {
           role_id: roleId,
           expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-          ...(churchId ? { scope_type: 'church', scope_key: churchId } : {}),
+          ...(churchRoleNeedsScope && churchId ? { scope_type: 'church', scope_key: churchId } : {}),
         },
         scope,
       );
@@ -784,8 +784,12 @@ function UserRoleManager({
             <input type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} disabled={busy} />
           </label>
           <label className="full">
-            <span>Church {churchRoleNeedsScope ? '*' : ''}</span>
-            <select value={churchId} onChange={(event) => setChurchId(event.target.value)} disabled={busy}>
+            <span>Church {churchRoleNeedsScope ? '*' : '(only for church / mission ops)'}</span>
+            <select
+              value={churchId}
+              onChange={(event) => setChurchId(event.target.value)}
+              disabled={busy || !churchRoleNeedsScope}
+            >
               <option value="">{churches.length ? 'Select a church' : 'No churches loaded'}</option>
               {churches.map((church) => (
                 <option key={church.id} value={church.id}>{church.name}</option>

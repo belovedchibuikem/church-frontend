@@ -3152,6 +3152,55 @@ function KcaApplicationsBulkBar({
   );
 }
 
+const KCA_OPEN_APPLICATION_STATUSES = [
+  'received',
+  'information_required',
+  'interview',
+  'reviewed',
+] as const;
+
+const KCA_DECIDED_APPLICATION_STATUSES = [
+  'accepted',
+  'provisionally_accepted',
+  'deferred',
+  'not_accepted',
+  'withdrawn',
+  'suspended',
+  'revoked',
+] as const;
+
+async function listKcaApplicationsForQueue(queue: 'open' | 'decided'): Promise<{
+  items: Record<string, unknown>[];
+  total: number;
+}> {
+  const statuses = queue === 'open' ? KCA_OPEN_APPLICATION_STATUSES : KCA_DECIDED_APPLICATION_STATUSES;
+  const batches = await Promise.all(
+    statuses.map((status) =>
+      listCatalogDomain('kca.applications', {
+        perPage: 50,
+        status,
+        scope: CATALOG_GLOBAL_SCOPE,
+      }),
+    ),
+  );
+  const byId = new Map<string, Record<string, unknown>>();
+  let total = 0;
+  for (const batch of batches) {
+    total += batch.pagination.total;
+    for (const item of batch.items as Record<string, unknown>[]) {
+      const id = String(item.id ?? item.public_id ?? '');
+      if (!id) continue;
+      byId.set(id, item);
+    }
+  }
+  const items = Array.from(byId.values()).sort((left, right) => {
+    const leftAt = String(left.received_at ?? left.submitted_at ?? left.created_at ?? '');
+    const rightAt = String(right.received_at ?? right.submitted_at ?? right.created_at ?? '');
+    return rightAt.localeCompare(leftAt);
+  });
+  return { items, total: total || items.length };
+}
+
 function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const columns = screen.columns ?? [];
@@ -3170,6 +3219,11 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
   const [reloadToken, setReloadToken] = useState(0);
   const reviewLabel = dataset === 'kca.applications' ? 'Review' : undefined;
   const isApplicationsCatalog = dataset === 'kca.applications';
+  const applicationsQueue: 'open' | 'decided' | null = !isApplicationsCatalog
+    ? null
+    : screen.route.includes('review-queue')
+      ? 'open'
+      : 'decided';
   const selectedIdSet = new Set(selectedIds);
 
   useEffect(() => {
@@ -3180,20 +3234,32 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
       setError(null);
       setMessage(t('common.loadingCatalog', { defaultMessage: 'Loading catalog…' }));
       try {
-        const result = await listCatalogDomain(dataset, { perPage: isApplicationsCatalog ? 50 : 25 });
+        const result = applicationsQueue
+          ? await listKcaApplicationsForQueue(applicationsQueue)
+          : await listCatalogDomain(dataset, { perPage: isApplicationsCatalog ? 50 : 25 }).then((page) => ({
+              items: page.items as Record<string, unknown>[],
+              total: page.pagination.total,
+            }));
         if (cancelled) return;
-        stashAdminRecords(result.items as Array<Record<string, unknown>>);
-        const mapped = catalogRecordsToRows(result.items as Record<string, unknown>[], mappedColumns) as Row[];
+        stashAdminRecords(result.items);
+        const mapped = catalogRecordsToRows(result.items, mappedColumns) as Row[];
         setRows(mapped);
         setSelectedIds((current) => {
           const available = new Set(mapped.map(rowRecordId).filter(Boolean));
           return current.filter((id) => available.has(id));
         });
-        setTotal(result.pagination.total);
+        setTotal(result.total);
         setMessage(
-          result.pagination.total === 0
-            ? t('errors.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
-            : t('common.showingOfRecords', { defaultMessage: 'Showing {visible} of {total} records', vars: { visible: result.items.length, total: result.pagination.total } }),
+          result.total === 0
+            ? applicationsQueue === 'open'
+              ? t('member.kca.noNewApplications', { defaultMessage: 'No new applications waiting for review.' })
+              : applicationsQueue === 'decided'
+                ? t('member.kca.noDecidedApplications', { defaultMessage: 'No admitted or decided applications yet.' })
+                : t('errors.noCatalogRecords', { defaultMessage: 'No catalog records in this scope.' })
+            : t('common.showingOfRecords', {
+                defaultMessage: 'Showing {visible} of {total} records',
+                vars: { visible: result.items.length, total: result.total },
+              }),
         );
       } catch (err) {
         if (cancelled) return;
@@ -3205,7 +3271,7 @@ function KcaManagedTable({ screen }: { screen: AdminScreen }) {
     return () => {
       cancelled = true;
     };
-  }, [columnKey, dataset, isApplicationsCatalog, live, reloadToken, t]);
+  }, [applicationsQueue, columnKey, dataset, isApplicationsCatalog, live, reloadToken, t]);
 
   async function handleDownloadTemplate() {
     setBulkBusy(true);

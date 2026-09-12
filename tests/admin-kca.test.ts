@@ -252,9 +252,21 @@ test('KCA applications table supports bulk admit and bulk status updates', async
   assert.match(source, /bulkTransitionKcaApplications/);
   assert.match(source, /selectable=\{live && isApplicationsCatalog\}/);
   assert.match(source, /Registration numbers are issued immediately/);
+  assert.match(source, /listKcaApplicationsForQueue/);
+  assert.match(source, /KCA_OPEN_APPLICATION_STATUSES/);
+  assert.match(source, /KCA_DECIDED_APPLICATION_STATUSES/);
   const api = await readFile(new URL('../lib/admin-platform-api.ts', import.meta.url), 'utf8');
   assert.match(api, /admin\/kca\/applications\/bulk-enrollments/);
   assert.match(api, /admin\/kca\/applications\/bulk-transitions/);
+});
+
+test('KCA new applications and decided applications are separate admin screens', () => {
+  const openQueue = getAdminScreen('/admin/kca/review-queue')!;
+  const decided = getAdminScreen('/admin/kca/applications')!;
+  assert.equal(openQueue.title, 'New Applications');
+  assert.deepEqual(openQueue.columns, ['Applicant', 'Email', 'Phone', 'Church', 'Batch', 'Submitted', 'Status']);
+  assert.equal(decided.title, 'Admitted & Decided');
+  assert.deepEqual(decided.columns, ['Applicant', 'Email', 'Phone', 'Church', 'Batch', 'Submitted', 'Status']);
 });
 
 test('KCA students support view, edit, and delete', async () => {

@@ -259,8 +259,8 @@ const navByBatch = {
     ['reports', '▣', 'Reports', '/admin/people/reports'], ['settings', '⚙', 'Settings', '/admin/people/settings'],
   ],
   G: [
-    ['dashboard', '⌂', 'Dashboard', '/admin/kca'], ['kca-applications', '▤', 'Applications', '/admin/kca/applications'],
-    ['kca-review', '↻', 'Review Queue', '/admin/kca/review-queue'], ['kca-decisions', '✓', 'Decisions', '/admin/kca/applications'],
+    ['dashboard', '⌂', 'Dashboard', '/admin/kca'], ['kca-review', '↻', 'New Applications', '/admin/kca/review-queue'],
+    ['kca-applications', '▤', 'Admitted / Decided', '/admin/kca/applications'],
     ['kca-students', '♙', 'Students', '/admin/kca/students'], ['kca-cohorts', '◎', 'Cohorts', '/admin/kca/cohorts'],
     ['kca-mentors', '♛', 'Mentors', '/admin/kca/mentors'], ['kca-lecturers', '▦', 'Lecturers', '/admin/kca/lecturers'],
     ['kca-modules', '◇', 'Modules', '/admin/kca/modules'], ['kca-learning', '▣', 'Learning', '/admin/kca/attendance'],

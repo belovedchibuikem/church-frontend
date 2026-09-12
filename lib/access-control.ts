@@ -303,6 +303,8 @@ const DASHBOARD_PERMISSION_ALIASES: Record<string, readonly string[]> = {
   'church.settings.update': ['church.churches.manage', 'platform.configuration.manage'],
   'kca.dashboard.view': ['kca.enrollments.view', 'kca.applications.view'],
   'kca.application.view': ['kca.applications.view'],
+  'kca.application.review': ['kca.applications.view', 'kca.applications.transition'],
+  'kca.application.decide': ['kca.applications.transition', 'kca.applications.view'],
   'kca.application.update': ['kca.applications.transition', 'kca.applications.manage'],
   'kca.student.view': ['kca.enrollments.view'],
   'kca.student.create': ['kca.enrollments.manage'],
