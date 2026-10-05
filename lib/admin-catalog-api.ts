@@ -249,10 +249,10 @@ export async function searchCatalogOptions(
     scope: options.scope,
     moduleId: options.moduleId,
   });
-  const options = result.items.map((item) => catalogRecordToOption(item as Record<string, unknown>));
-  if (key !== 'kca.lessons') return options;
+  const items = result.items.map((item) => catalogRecordToOption(item as Record<string, unknown>));
+  if (key !== 'kca.lessons') return items;
   const seen = new Set<string>();
-  return options.filter((option) => {
+  return items.filter((option) => {
     const token = `${option.meta ?? ''}::${option.label.trim().toLowerCase()}`;
     if (seen.has(token)) return false;
     seen.add(token);
