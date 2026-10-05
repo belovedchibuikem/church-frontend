@@ -89,12 +89,9 @@ export const kcaRegistrationSteps: KcaRegistrationStep[] = [
   {
     id: 'recommendation',
     title: 'Leadership Recommendation',
-    subtitle: 'Request a leadership recommendation from the applicant’s pastor or leader.',
+    subtitle: 'The student only gives the church leader’s email. KCA emails that leader a separate recommendation form.',
     fields: [
-      { label: 'Recommender full name', name: 'recommender_name', type: 'text', required: true },
-      { label: 'Position / ministry role', name: 'recommender_position', type: 'text', required: true },
-      { label: 'Recommender phone number', name: 'recommender_phone', type: 'text', placeholder: '+234' },
-      { label: 'Recommender email address', name: 'recommender_email', type: 'email', required: true },
+      { label: 'Church leader email', name: 'recommender_email', type: 'email', required: true, placeholder: 'pastor@church.org', wide: true, helpText: 'KCA sends the recommendation form to this address with a note asking the leader to complete it. The student does not fill in the recommendation.' },
     ],
   },
   {

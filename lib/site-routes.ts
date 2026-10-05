@@ -384,6 +384,19 @@ export const findSiteRoute = (path: string): SiteRoute | undefined => {
     return { path, title: 'Crusade Details', action: 'Support This Crusade', subtitle: subtitles.Mission, surface: 'public', kind: 'detail', section: 'Mission' };
   }
 
+  const leaderRecommendation = path.match(/^\/kca\/recommend\/([a-f0-9]{64})$/i);
+  if (leaderRecommendation) {
+    return {
+      path,
+      title: 'Church leader recommendation',
+      action: 'Send recommendation',
+      subtitle: 'KCA asked you to recommend this applicant.',
+      surface: 'public',
+      kind: 'form',
+      section: 'KCA',
+    };
+  }
+
   const kcaModuleMatch = path.match(/^\/account\/kca\/modules\/([0-9A-HJKMNP-TV-Z]{26})$/i);
   if (kcaModuleMatch) {
     return {

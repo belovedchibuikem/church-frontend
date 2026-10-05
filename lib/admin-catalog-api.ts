@@ -71,6 +71,7 @@ export type CatalogListQuery = {
   search?: string;
   status?: string;
   purpose?: string;
+  moduleId?: string;
   page?: number;
   perPage?: number;
   scope?: AdminScope;
@@ -156,7 +157,8 @@ export async function listCatalogDomain<T = Record<string, unknown>>(
     const search = new URLSearchParams();
     if (params.search) search.set('filter[search]', params.search);
     if (params.status) search.set('filter[status]', params.status);
-    if (params.purpose) search.set('filter[purpose]', params.purpose);
+      if (params.purpose) search.set('filter[purpose]', params.purpose);
+    if (params.moduleId) search.set('filter[module_id]', params.moduleId);
     if (params.page) search.set('page', String(params.page));
     search.set('per_page', String(params.perPage ?? 25));
     const qs = search.toString();
@@ -221,8 +223,11 @@ export function catalogRecordToOption(record: Record<string, unknown>): SearchSe
       break;
     }
   }
-  let meta: string | undefined;
-  for (const field of META_FIELDS) {
+  const moduleTitle = record.module_title;
+  let meta: string | undefined = typeof moduleTitle === 'string' && moduleTitle.trim() && moduleTitle !== label
+    ? moduleTitle
+    : undefined;
+  if (!meta) for (const field of META_FIELDS) {
     const value = record[field];
     if (typeof value === 'string' && value.trim() && value !== label) {
       meta = value;
@@ -235,15 +240,24 @@ export function catalogRecordToOption(record: Record<string, unknown>): SearchSe
 export async function searchCatalogOptions(
   key: CatalogDomainKey,
   query = '',
-  options: { perPage?: number; signal?: AbortSignal; scope?: AdminScope } = {},
+  options: { perPage?: number; signal?: AbortSignal; scope?: AdminScope; moduleId?: string } = {},
 ): Promise<SearchSelectOption[]> {
   const result = await listCatalogDomain(key, {
     search: query || undefined,
     perPage: options.perPage ?? 25,
     signal: options.signal,
     scope: options.scope,
+    moduleId: options.moduleId,
   });
-  return result.items.map((item) => catalogRecordToOption(item as Record<string, unknown>));
+  const options = result.items.map((item) => catalogRecordToOption(item as Record<string, unknown>));
+  if (key !== 'kca.lessons') return options;
+  const seen = new Set<string>();
+  return options.filter((option) => {
+    const token = `${option.meta ?? ''}::${option.label.trim().toLowerCase()}`;
+    if (seen.has(token)) return false;
+    seen.add(token);
+    return true;
+  });
 }
 
 /** Form-catalog keys that resolve to ProtectedDomainRegistry catalogs (searchable). */
@@ -517,6 +531,8 @@ export function catalogRecordsToRows(
         mapped[column] = get('assessment_code', 'title', 'name');
       } else if (key.includes('assignment')) {
         mapped[column] = get('title', 'assignment_kind', 'name');
+      } else if (key === 'mentor') {
+        mapped[column] = get('mentor_name');
       } else if (key.includes('lecturer') || key.includes('mentor')) {
         mapped[column] = get('lecturer_name', 'mentor_name', 'person_name');
       } else if (key.includes('lesson')) {

@@ -119,6 +119,9 @@ export function SearchSelect({
 
       const countryId = readSiblingHiddenValue(rootRef.current, 'country_id');
       const administrativeUnitId = readSiblingHiddenValue(rootRef.current, 'administrative_unit_id');
+      const moduleId = catalog === 'kcaLesson'
+        ? readSiblingHiddenValue(rootRef.current, 'kca_module_id')
+        : undefined;
       const rawSearch = searchOverride ?? debouncedQuery;
       const searchText =
         value && rawSearch.trim() === selectedLabelRef.current.trim() ? '' : rawSearch.trim();
@@ -133,6 +136,7 @@ export function SearchSelect({
               ? countryId
               : undefined,
           administrativeUnitId: catalog === 'location' ? administrativeUnitId : undefined,
+          moduleId,
         });
         if (seq !== requestSeq.current) return;
         setRemoteOptions((prev) => {

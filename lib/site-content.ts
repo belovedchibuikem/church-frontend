@@ -422,10 +422,7 @@ export const formFieldsFor = (path: string): FormField[] => {
     { label: 'Guardian consent is required only where applicable.', name: 'guardian_consent', type: 'checkbox', wide: true },
   ];
   if (path.includes('/kca/apply/recommendation')) return [
-      { label: 'Recommender full name', name: 'recommender_name', value: '' },
-      { label: 'Position / ministry role', name: 'recommender_position', value: '' },
-      { label: 'Recommender phone number', name: 'recommender_phone', type: 'tel', value: '' },
-      { label: 'Recommender email address', name: 'recommender_email', type: 'email', value: '' },
+      { label: 'Church leader email', name: 'recommender_email', type: 'email', value: '', wide: true },
   ];
   if (path.includes('/events/') && path.includes('/register')) return [
     { label: 'Full Name', name: 'fullName', value: 'John Chinedu Doe' },

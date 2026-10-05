@@ -348,7 +348,7 @@ const navByBatch = {
 } as const;
 
 type NavBatch = keyof typeof navByBatch;
-type EnterpriseNavItem = { icon: string; label: string; href: string };
+type EnterpriseNavItem = { icon: string; label: string; href: string; children?: EnterpriseNavItem[] };
 type EnterpriseNavGroup = { id: string; icon: string; label: string; items: EnterpriseNavItem[] };
 
 function navItems(batches: NavBatch[], excludedLabels: string[] = []): EnterpriseNavItem[] {
@@ -377,6 +377,29 @@ const reportItems: EnterpriseNavItem[] = [
   { icon: '✉', label: 'Delivery Reports', href: '/admin/communications/delivery-report' },
 ];
 
+const kcaItems: EnterpriseNavItem[] = [
+  { icon: '↻', label: 'Applications', href: '/admin/kca/review-queue', children: [
+    { icon: '▤', label: 'Admitted / Decided', href: '/admin/kca/applications' },
+  ] },
+  { icon: '♙', label: 'Students', href: '/admin/kca/students', children: [
+    { icon: '▣', label: 'Attendance', href: '/admin/kca/attendance' },
+    { icon: '▤', label: 'Assignments', href: '/admin/kca/assignments' },
+    { icon: '□', label: 'Assessments', href: '/admin/kca/assessments/final' },
+    { icon: '♛', label: 'Mentors', href: '/admin/kca/mentors' },
+    { icon: '✓', label: 'Certifications', href: '/admin/kca/certificates' },
+    { icon: '♙', label: 'Alumni', href: '/admin/kca/alumni' },
+  ] },
+  { icon: '◎', label: 'Cohorts', href: '/admin/kca/cohorts', children: [
+    { icon: '▥', label: 'KCA Years', href: '/admin/kca/years' },
+    { icon: '◇', label: 'Modules', href: '/admin/kca/modules' },
+    { icon: '▦', label: 'Lecturers', href: '/admin/kca/lecturers' },
+  ] },
+];
+
+function flattenNavItems(items: EnterpriseNavItem[]): EnterpriseNavItem[] {
+  return items.flatMap((item) => [item, ...(item.children ?? [])]);
+}
+
 const enterpriseNavGroups: EnterpriseNavGroup[] = [
   { id: 'dashboards', icon: '⌂', label: 'Dashboards', items: dashboardItems },
   { id: 'administration', icon: '◆', label: 'Administration', items: navItems(['A', 'B'], ['Dashboard', 'Reports', 'Settings', 'Churches', 'Events', 'Giving', 'Content']) },
@@ -384,7 +407,7 @@ const enterpriseNavGroups: EnterpriseNavGroup[] = [
   { id: 'home-churches', icon: '⌂', label: 'Home Churches', items: navItems(['D'], ['Dashboard', 'Reports', 'Settings', 'Finance']) },
   { id: 'churches', icon: '▣', label: 'Churches', items: navItems(['E'], ['Dashboard', 'Reports', 'Settings', 'Finance']) },
   { id: 'people', icon: '♙', label: 'People', items: navItems(['F'], ['Dashboard', 'Reports', 'Settings']) },
-  { id: 'kca', icon: '◇', label: 'KCA', items: navItems(['G', 'H'], ['Dashboard', 'Settings']) },
+  { id: 'kca', icon: '◇', label: 'KCA', items: kcaItems },
   { id: 'mission', icon: '⌖', label: 'Mission', items: navItems(['I'], ['Dashboard', 'Reports', 'Settings']) },
   { id: 'press', icon: '▤', label: 'Press', items: navItems(['J'], ['Dashboard', 'Analytics', 'Settings']) },
   { id: 'events', icon: '▣', label: 'Events', items: navItems(['P'], ['Dashboard', 'Settings']) },
@@ -443,7 +466,11 @@ const CHURCH_TENANT_CHURCH_NAV_EXTRAS: EnterpriseNavItem[] = [
 function visibleEnterpriseNavGroups(access: AccessContext, requestedScope: string): EnterpriseNavGroup[] {
   return enterpriseNavGroups
     .map((group) => {
-      const items = group.items.filter((item) => navItemAllowed(item.href, access, requestedScope));
+      const items = group.items.flatMap((item): EnterpriseNavItem[] => {
+        const children = (item.children ?? []).filter((child) => navItemAllowed(child.href, access, requestedScope));
+        if (navItemAllowed(item.href, access, requestedScope)) return [{ ...item, children }];
+        return children;
+      });
       if (group.id !== 'churches' || !isChurchTenantContext(access)) {
         return { ...group, items };
       }
@@ -467,20 +494,23 @@ function Sidebar({ screen }: { screen: AdminScreen }) {
     () => visibleEnterpriseNavGroups(access, requestedScope),
     [access, requestedScope],
   );
-  const allItems = groups.flatMap((group) => group.items);
+  const allItems = groups.flatMap((group) => flattenNavItems(group.items));
   const exact = allItems.filter((item) => item.href === screen.route);
   const prefix = allItems.filter((item) => item.href !== '/admin' && screen.route.startsWith(`${item.href}/`)).sort((left, right) => right.href.length - left.href.length);
   const activeHref = (exact[0] ?? prefix[0])?.href;
   return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label={t('admin.enterpriseNavAria', { defaultMessage: 'Enterprise administration navigation' })}>{groups.map((group) => {
-    const groupActive = group.items.some((item) => item.href === activeHref);
+    const groupActive = flattenNavItems(group.items).some((item) => item.href === activeHref);
     const groupLabel = adminChrome(t, group.label);
+    const renderItem = (item: EnterpriseNavItem, child = false) => {
+      const active = item.href === activeHref;
+      const itemLabel = adminChrome(t, item.label);
+      return <Link className={`nav-item nav-subitem ${child ? 'nav-child' : ''} ${active ? 'active' : ''}`} href={item.href} key={`${group.id}-${item.href}`} aria-label={`${groupLabel}: ${itemLabel}`} aria-current={active ? 'page' : undefined}><span className="nav-icon nav-subicon" aria-hidden="true">{item.icon}</span><span className="nav-label">{itemLabel}</span></Link>;
+    };
     return <details className={`enterprise-nav-group ${groupActive ? 'active' : ''}`} data-nav-group={group.id} data-nav-active={groupActive ? 'true' : 'false'} open={groupActive} key={group.id}>
       <summary data-nav-group-summary={group.id} aria-label={`${groupLabel} menu`}><span className="nav-icon" aria-hidden="true">{group.icon}</span><span className="nav-group-label">{groupLabel}</span><span className="nav-chevron" aria-hidden="true">⌄</span></summary>
-      <div className="enterprise-nav-items">{group.items.map((item) => {
-        const active = item.href === activeHref;
-        const itemLabel = adminChrome(t, item.label);
-        return <Link className={`nav-item nav-subitem ${active ? 'active' : ''}`} href={item.href} key={`${group.id}-${item.href}`} aria-label={`${groupLabel}: ${itemLabel}`} aria-current={active ? 'page' : undefined}><span className="nav-icon nav-subicon" aria-hidden="true">{item.icon}</span><span className="nav-label">{itemLabel}</span></Link>;
-      })}</div>
+      <div className="enterprise-nav-items">{group.items.map((item) => item.children?.length
+        ? <div className="nav-parent" key={`${group.id}-${item.href}-parent`}>{renderItem(item)}<div className="nav-children">{item.children.map((childItem) => renderItem(childItem, true))}</div></div>
+        : renderItem(item))}</div>
     </details>;
   })}</nav></aside>;
 }

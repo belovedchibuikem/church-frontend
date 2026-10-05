@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api-client';
 import type { JsonObject } from '@/lib/api-types';
 import type { SiteRoute } from '@/lib/site-routes';
 import { isKcaMemberWorkspacePath, isMemberNavActive, isSiteUlid, legalPageSlug, legalPublicPages, memberNavGroups } from '@/lib/site-routes';
+import { KcaLeaderRecommendation } from './kca-leader-recommendation';
 import { legalPageBySlug } from '@/lib/legal-pages';
 import { AppBrand } from './app-brand';
 import { useBranding } from './branding-provider';
@@ -6942,6 +6943,10 @@ export function SiteScreen({ route }: { route: SiteRoute }) {
       return route.section === 'Events' ? <EventDetail route={route} /> : <Detail route={route} />;
     }
     if (route.kind === 'listing' || route.kind === 'map') return <Listing route={route} />;
+    if (route.path.startsWith('/kca/recommend/')) {
+      const token = route.path.split('/').pop() ?? '';
+      return <KcaLeaderRecommendation token={token} />;
+    }
     if (route.kind === 'form') return route.surface === 'auth' ? <AuthScreen route={route} /> : <FormScreen route={route} />;
     if (route.kind === 'success') return <Success route={route} />;
     if (route.kind === 'dashboard') return <Dashboard route={route} />;

@@ -170,6 +170,12 @@ export function AdminFormFields({ fields, values = {}, className = 'kca-form-gri
   const { t } = useLocale();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const resolved = { ...values, ...overrides };
+  for (const field of fields) {
+    if (!resolved[field.name]) {
+      const fallback = defaultValueForField(field, resolved);
+      if (fallback) resolved[field.name] = fallback;
+    }
+  }
   const visibleFields = fields.filter((field) => isAdminFieldVisible(field, resolved));
   return (
     <div className={className}>

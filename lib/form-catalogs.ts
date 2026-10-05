@@ -180,6 +180,7 @@ export type FormCatalogPageFilters = {
   countryId?: string;
   /** When set, locations are filtered to this administrative unit ULID. */
   administrativeUnitId?: string;
+  moduleId?: string;
   signal?: AbortSignal;
 };
 
@@ -204,7 +205,7 @@ export async function loadFormCatalogPage(
     (typeof catalog === 'string' && catalog.includes('.') ? (catalog as CatalogDomainKey) : undefined);
 
   if (domainKey && shouldUseCatalogLiveData()) {
-    const items = await searchCatalogOptions(domainKey, query, { signal, perPage });
+    const items = await searchCatalogOptions(domainKey, query, { signal, perPage, moduleId: filters.moduleId });
     return {
       items,
       page: 1,
@@ -246,7 +247,7 @@ export async function loadFormCatalogPage(
         items: result.items.map((item) => ({
           value: String(item.id ?? ''),
           label: String(item.name ?? ([item.given_name, item.family_name].filter(Boolean).join(' ') || item.id)),
-          meta: typeof item.email === 'string' ? item.email : typeof item.phone === 'string' ? item.phone : undefined,
+          meta: [item.type, item.email].filter((part) => typeof part === 'string' && part.trim()).join(' · ') || undefined,
         })),
         page: result.pagination.current_page,
         hasMore: result.pagination.current_page < result.pagination.last_page,

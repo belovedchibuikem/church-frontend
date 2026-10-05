@@ -978,7 +978,7 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
   if (route.includes('/converts') && labelIs(label, /delete|remove/)) {
     return mutateMinistryRecord(`admin/church/converts/${encodeURIComponent(requireId(pickRecord(ctx, 'convert_id', 'id'), 'convert'))}`, 'DELETE', undefined, scope);
   }
-  if ((route.includes('/evangelism') || route.includes('/departments') || route.includes('/workers') || route.includes('/leadership') || route.includes('/leaders') || route.includes('/disciples') || route.includes('/counselling') || route.includes('/testimonies') || route.includes('/attendance')) && labelIs(label, /delete|remove/)) {
+  if (!routeStarts(route, '/admin/kca') && (route.includes('/evangelism') || route.includes('/departments') || route.includes('/workers') || route.includes('/leadership') || route.includes('/leaders') || route.includes('/disciples') || route.includes('/counselling') || route.includes('/testimonies') || route.includes('/attendance')) && labelIs(label, /delete|remove/)) {
     const id = requireId(pickRecord(ctx, 'id'), 'record');
     const path = route.includes('/evangelism')
       ? `admin/church/evangelism-activities/${id}`
@@ -1558,13 +1558,13 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       { ...opts, method: 'PATCH' },
     );
   }
-  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /create assignment|add assignment|save assignment/)) {
+  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /create assignment|add assignment|save assignment|publish to all/)) {
     const levelsRaw = field(payload, 'soul_tree_levels') ?? '';
     const levels = levelsRaw
       .split(/[,\s]+/)
       .map((part) => Number.parseInt(part, 10))
       .filter((n) => Number.isFinite(n) && n > 0);
-    const audienceRaw = field(payload, 'audience') ?? 'One student';
+    const audienceRaw = field(payload, 'audience') ?? 'All enrolled students';
     const audience = /all/i.test(audienceRaw)
       ? 'all'
       : /cohort/i.test(audienceRaw)
@@ -1642,6 +1642,16 @@ async function dispatch(ctx: Ctx): Promise<unknown> {
       }),
       opts,
     );
+  }
+  if (routeStarts(route, '/admin/kca/attendance') && labelIs(label, /reverse attendance|delete attendance|remove attendance|delete|remove/)) {
+    return mutate(
+      `admin/kca/attendance/${encodeURIComponent(requireId(pickRecord(ctx, 'attendance_id', 'id'), 'attendance'))}`,
+      undefined,
+      { ...opts, method: 'DELETE' },
+    );
+  }
+  if (routeStarts(route, '/admin/kca/assignments') && labelIs(label, /publish drafts/)) {
+    return mutate('admin/kca/assignments/publish-drafts', {}, opts);
   }
   if (routeStarts(route, '/admin/kca') && labelIs(label, /record attendance|mark attendance/)) {
     const enrollmentId = requireId(firstUlid(payload.kca_enrollment_id, payload.enrollment_id, ctx.recordId), 'enrollment');

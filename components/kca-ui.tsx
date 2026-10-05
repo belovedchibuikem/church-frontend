@@ -2360,6 +2360,30 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
     }
   }
 
+  async function reverseAttendance(row: Row) {
+    const attendanceId = String(row.__id ?? '');
+    if (!attendanceId) {
+      setError('This attendance row has no id to reverse.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await executeAdminAction({
+        route: '/admin/kca/attendance',
+        label: 'Reverse attendance',
+        payload: { id: attendanceId },
+        recordId: attendanceId,
+      });
+      setMessage('Attendance reversed.');
+      await loadHistory();
+    } catch (err) {
+      setError(formatAdminMutationError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="kca-attendance">
       {error ? <p className="maps-settings-lead" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
@@ -2467,16 +2491,21 @@ function KcaAttendance({ screen }: { screen: AdminScreen }) {
 
       <article className="card kca-table-card">
         <table className="kca-table" aria-label="Attendance sessions">
-          <thead><tr><th>Student</th><th>Lesson</th><th>Session</th><th>Status</th></tr></thead>
+          <thead><tr><th>Student</th><th>Lesson</th><th>Session</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={4}>{live ? 'No attendance recorded yet.' : 'Design fixtures are disabled for attendance.'}</td></tr>
+              <tr><td colSpan={5}>{live ? 'No attendance recorded yet.' : 'Design fixtures are disabled for attendance.'}</td></tr>
             ) : rows.map((row, index) => (
               <tr key={`${row.__id ?? index}`}>
                 <td>{row.Name ?? '—'}</td>
                 <td>{row.Lesson ?? '—'}</td>
                 <td>{row.Session ?? '—'}</td>
                 <td><KcaBadge value={row.Status ?? '—'} /></td>
+                <td>
+                  <button className="ghost-button" type="button" disabled={busy} onClick={() => void reverseAttendance(row)}>
+                    Reverse
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

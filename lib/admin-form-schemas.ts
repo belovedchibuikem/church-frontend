@@ -70,16 +70,16 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_assignment: {
     entity: 'KCA assignment',
     fields: [
-      { label: 'Assign to', name: 'audience', type: 'select', required: true, options: ['One student', 'A cohort', 'All enrolled students'], helpText: 'Creates one assignment per matching enrolled student. Uncheck Save as draft to assign immediately.' },
-      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', placeholder: 'Search enrolled student (required for One student)' },
-      { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', placeholder: 'Search cohort (required for A cohort)' },
+      { label: 'Publish to', name: 'audience', type: 'select', required: true, options: ['All enrolled students', 'A cohort', 'One student'], helpText: 'Publish to all sends this assignment to every enrolled student at once.' },
+      { label: 'Student', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', placeholder: 'Search enrolled student', visibleWhen: { field: 'audience', values: ['One student'] } },
+      { label: 'Cohort', name: 'cohort_id', type: 'search-select', catalog: 'kcaCohort', placeholder: 'Search cohort', visibleWhen: { field: 'audience', values: ['A cohort'] } },
       { label: 'Assignment', name: 'title', type: 'text', required: true, placeholder: 'Assignment title' },
       { label: 'Module', name: 'kca_module_id', type: 'search-select', catalog: 'kcaModule', required: true, placeholder: 'Search module' },
       { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
       { label: 'Type', name: 'assignment_kind', type: 'select', required: true, options: ['standard', 'written', 'practical', 'soul_winning'] },
       { label: 'Due Date', name: 'due_at', type: 'date' },
-      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: 'Levels for soul-winning', wide: true, helpText: 'Required for Type = soul_winning. Status stays open until the tree is complete.' },
-      { label: 'Save as draft', name: 'as_draft', type: 'checkbox', helpText: 'Draft assignments are hidden from students until you publish them.' },
+      { label: 'Soul-winning tree', name: 'soul_tree_levels', type: 'text', placeholder: 'Example: 1,2', wide: true, helpText: 'Only for soul-winning work. Each number is how many people that level should reach. 1,2 means the student reaches 1 person, and that person reaches 2 more. Leave this blank for every other type.', visibleWhen: { field: 'assignment_kind', values: ['soul_winning'] } },
+      { label: 'Save as draft', name: 'as_draft', type: 'checkbox', helpText: 'Leave this unchecked to publish now. Drafts stay hidden until you publish them.' },
     ],
   },
   kca_assignment_view: {
@@ -93,7 +93,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Type', name: 'assignment_kind', type: 'select', options: ['standard', 'written', 'practical', 'soul_winning'] },
       { label: 'Due Date', name: 'due_at', type: 'date' },
       { label: 'Status', name: 'status', type: 'text' },
-      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', wide: true },
+      { label: 'Soul-winning tree', name: 'soul_tree_levels', type: 'text', wide: true, helpText: 'People to reach at each level, for soul-winning assignments only. Example: 1,2.' },
     ],
   },
   kca_assignment_edit: {
@@ -105,7 +105,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
       { label: 'Lesson', name: 'kca_lesson_id', type: 'search-select', catalog: 'kcaLesson', required: true, placeholder: 'Search lesson in the selected module' },
       { label: 'Type', name: 'assignment_kind', type: 'select', options: ['standard', 'written', 'practical', 'soul_winning'] },
       { label: 'Due Date', name: 'due_at', type: 'date' },
-      { label: 'Soul tree levels', name: 'soul_tree_levels', type: 'text', placeholder: 'Levels for soul-winning', wide: true, helpText: 'Required for Type = soul_winning.' },
+      { label: 'Soul-winning tree', name: 'soul_tree_levels', type: 'text', placeholder: 'Example: 1,2', wide: true, helpText: 'People to reach at each level. Example: 1,2 means the student reaches 1 person, and that person reaches 2 more. Only used when Type is soul-winning.', visibleWhen: { field: 'assignment_kind', values: ['soul_winning'] } },
     ],
   },
   kca_cohort: {
@@ -181,7 +181,7 @@ export const adminFormSchemas: Record<string, AdminFormSchema> = {
   kca_mentor_assignment: {
     entity: 'Mentor assignment',
     fields: [
-      { label: 'Mentor', name: 'mentor_person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Search mentor person' },
+      { label: 'Mentor', name: 'mentor_person_id', type: 'search-select', catalog: 'person', required: true, placeholder: 'Type a name — pastors and church leaders are included', helpText: 'Search by first name, last name, or both. The list is every person in the directory, including pastors and church leaders, not only KCA students. A mentor is saved only when you submit this form.' },
       { label: 'Enrollment', name: 'kca_enrollment_id', type: 'search-select', catalog: 'kcaEnrollment', required: true, placeholder: 'Search student enrollment' },
       { label: 'Starts at', name: 'starts_at', type: 'date', required: true },
       { label: 'Ends at', name: 'ends_at', type: 'date' },
@@ -925,5 +925,7 @@ export function defaultValueForField(field: AdminFormField, values: Record<strin
     return direct ?? values.Status;
   }
   if (direct !== undefined) return direct;
+  if (field.name === 'audience') return 'All enrolled students';
+  if (field.name === 'assignment_kind') return 'standard';
   return undefined;
 }

@@ -197,7 +197,9 @@ export function AdminActionSurface({ mode, label, pageTitle, permission, scope, 
     : mode === 'assign'
       ? t('admin.assignment', { defaultMessage: 'Assignment' })
       : t('admin.newRecord', { defaultMessage: 'New record' });
-  const submitLabel = t('common.submit', { defaultMessage: 'Submit' });
+  const submitLabel = entityKey === 'kca_assignment' && mode === 'create'
+    ? t('admin.publishToAll', { defaultMessage: 'Publish to all' })
+    : t('common.submit', { defaultMessage: 'Submit' });
   const closeLabel = t('common.close', { defaultMessage: 'Close' });
   const cancelLabel = t('common.cancel', { defaultMessage: 'Cancel' });
   const errorNote = formError ? <div className="interaction-safety-note" role="alert">{formError}</div> : null;
