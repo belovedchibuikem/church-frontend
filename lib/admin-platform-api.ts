@@ -464,6 +464,7 @@ export type KcaGovernanceStatus = {
   attendance_threshold_percent: number;
   require_final_assessment: boolean;
   require_signed_pdf: boolean;
+  enforce_lesson_day_locks?: boolean;
   certificate_signer_name?: string | null;
   certificate_signer_title?: string | null;
   admission_signer_name?: string | null;

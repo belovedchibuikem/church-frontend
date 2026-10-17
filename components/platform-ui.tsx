@@ -925,6 +925,7 @@ export function KcaSettingsPanel() {
         attendance_threshold_percent: Number(form.get('attendance_threshold_percent') || 75),
         require_final_assessment: form.get('require_final_assessment') === 'on',
         require_signed_pdf: form.get('require_signed_pdf') === 'on',
+        enforce_lesson_day_locks: form.get('enforce_lesson_day_locks') === 'on',
         certificate_signer_name: String(form.get('certificate_signer_name') || ''),
         certificate_signer_title: String(form.get('certificate_signer_title') || ''),
         admission_signer_name: String(form.get('admission_signer_name') || ''),
@@ -1010,6 +1011,14 @@ export function KcaSettingsPanel() {
               <input defaultChecked={status?.require_signed_pdf ?? false} name="require_signed_pdf" type="checkbox" />
               <i />
             </span>
+          </label>
+          <label>
+            <span>{t('admin.enforceLessonDayLocks', { defaultMessage: 'Lock lessons to the daily schedule' })}</span>
+            <span className="platform-toggle">
+              <input defaultChecked={status?.enforce_lesson_day_locks ?? false} key={status ? `lesson-locks-${status.enforce_lesson_day_locks ? 'on' : 'off'}` : 'lesson-locks-pending'} name="enforce_lesson_day_locks" type="checkbox" />
+              <i />
+            </span>
+            <small>{t('admin.enforceLessonDayLocksHelp', { defaultMessage: 'Off: enrolled students can open every published lesson. On: a lesson stays locked until the previous day is finished and the next learning day begins.' })}</small>
           </label>
         </div>
         <h3>{t('admin.admissionLetterGovernance', { defaultMessage: 'Admission letter' })}</h3>
