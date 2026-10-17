@@ -1114,6 +1114,12 @@ export function AuthScreen({ route }: { route: SiteRoute }) {
               : t('auth.sendResetLink', { defaultMessage: 'Send Reset Link' })}
         </button>
         <p className="auth-switch">
+          {done ? (
+            <>
+              <Link href="/reset-password">{t('auth.openResetPassword', { defaultMessage: 'Enter the code from your email' })}</Link>
+              {' · '}
+            </>
+          ) : null}
           <Link href="/account-recovery">{t('auth.moreRecoveryOptions', { defaultMessage: 'More recovery options' })}</Link> ·{' '}
           <Link href="/login">{t('auth.backToSignIn', { defaultMessage: 'Back to Sign In' })}</Link>
         </p>

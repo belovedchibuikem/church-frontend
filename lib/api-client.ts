@@ -199,7 +199,11 @@ function isFormDataBody(body: BodyInit | null | undefined): boolean {
 }
 
 /** Shared cookie-session fetch: CSRF, credentials, error envelope. Caller owns the Response body. */
-async function executeApiRequest(path: string, init: ApiRequestInit = {}): Promise<Response> {
+async function executeApiRequest(
+  path: string,
+  init: ApiRequestInit = {},
+  allowCsrfRetry = true,
+): Promise<Response> {
   const baseUrl = requireV1BaseUrl();
   const {
     xsrfToken: _xsrfToken,
@@ -245,10 +249,21 @@ async function executeApiRequest(path: string, init: ApiRequestInit = {}): Promi
     response.headers.get(CORRELATION_HEADER) ?? response.headers.get('x-correlation-id') ?? undefined;
 
   if (!response.ok) {
+    if (allowCsrfRetry && response.status === 419 && shouldRefreshCsrf(init, headers)) {
+      cachedCsrfToken = undefined;
+      await ensureCsrfCookie(true);
+      return executeApiRequest(path, init, false);
+    }
     throw await buildApiError(response, responseCorrelationId);
   }
 
   return response;
+}
+
+function shouldRefreshCsrf(init: ApiRequestInit, headers: Headers): boolean {
+  if (!isBrowserRuntime() || !isMutatingMethod(init.method)) return false;
+  if (init.bearerToken || headers.has('Authorization')) return false;
+  return init.bootstrapCsrf !== false;
 }
 
 async function resolveCsrfHeader(init: ApiRequestInit, headers: Headers): Promise<void> {
