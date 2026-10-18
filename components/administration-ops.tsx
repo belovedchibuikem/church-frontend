@@ -32,6 +32,7 @@ import {
   reactivateAdminUser,
   requestAdminUserPasswordReset,
   revokeAdminUserRole,
+  setAdminUserPassword,
   suspendAdminUser,
   updateAdminUser,
   updateAdminWorkItem,
@@ -519,6 +520,32 @@ function UserDetailIdentityAside({
   scope: ReturnType<typeof defaultAdminScope>;
   onError: (message: string | null) => void;
 }) {
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const setNewPassword = () => {
+    if (password !== confirmation) {
+      onError('Passwords do not match.');
+      setNotice(null);
+      return;
+    }
+    setBusy(true);
+    onError(null);
+    void setAdminUserPassword(user.id, password, confirmation, scope)
+      .then(() => {
+        setPassword('');
+        setConfirmation('');
+        setNotice(`Password updated for ${user.email}. Existing sign-ins for this account were signed out.`);
+      })
+      .catch((err) => {
+        setNotice(null);
+        onError(identityErrorMessage(err));
+      })
+      .finally(() => setBusy(false));
+  };
+
   return (
     <article className="card identity-card">
       <h2>{user.name}</h2>
@@ -533,7 +560,10 @@ function UserDetailIdentityAside({
           onClick={() => {
             if (window.confirm(`Send a password reset email to ${user.email}?`)) {
               void requestAdminUserPasswordReset(user.id, scope)
-                .then(() => onError(null))
+                .then(() => {
+                  onError(null);
+                  setNotice(`Reset email queued for ${user.email}.`);
+                })
                 .catch((err) => onError(identityErrorMessage(err)));
             }
           }}
@@ -541,6 +571,42 @@ function UserDetailIdentityAside({
           Send password reset
         </button>
       </div>
+      <form
+        className="stack-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setNewPassword();
+        }}
+      >
+        <h3>Set a new password</h3>
+        <p>Use this when email delivery is unavailable. The user signs in with this password. It needs 12 characters, upper and lower case, a number, and a symbol.</p>
+        <label>
+          New password
+          <input
+            autoComplete="new-password"
+            name="password"
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            type="password"
+            value={password}
+          />
+        </label>
+        <label>
+          Confirm password
+          <input
+            autoComplete="new-password"
+            name="password_confirmation"
+            onChange={(event) => setConfirmation(event.target.value)}
+            required
+            type="password"
+            value={confirmation}
+          />
+        </label>
+        <button className="primary-button" disabled={busy} type="submit">
+          {busy ? 'Saving…' : 'Set password'}
+        </button>
+        {notice ? <p role="status">{notice}</p> : null}
+      </form>
     </article>
   );
 }

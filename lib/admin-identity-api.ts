@@ -700,6 +700,23 @@ export async function requestAdminUserPasswordReset(userId: string, scope?: Admi
   return envelope.data;
 }
 
+export async function setAdminUserPassword(
+  userId: string,
+  password: string,
+  passwordConfirmation: string,
+  scope?: AdminScopeHeaders,
+): Promise<AdminUser> {
+  const envelope = await identityRequest<AdminUser>(`admin/users/${encodeURIComponent(userId)}/password`, {
+    method: 'POST',
+    scope,
+    body: JSON.stringify({
+      password,
+      password_confirmation: passwordConfirmation,
+    }),
+  });
+  return envelope.data;
+}
+
 export async function getAdminRole(roleId: string, scope?: AdminScopeHeaders): Promise<AdminRole> {
   const envelope = await identityRequest<AdminRole>(`admin/access/roles/${encodeURIComponent(roleId)}`, { scope });
   return envelope.data;
