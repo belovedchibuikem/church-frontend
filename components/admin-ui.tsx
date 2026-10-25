@@ -487,6 +487,34 @@ function Brand({ dark = true }: { dark?: boolean }) {
   return <AppBrand variant="admin" dark={dark} />;
 }
 
+const NAV_GROUP_COPY: Record<string, { rail: string; blurb: string }> = {
+  dashboards: { rail: 'Home', blurb: 'Overview, scope, and reports' },
+  administration: { rail: 'Admin', blurb: 'Users, access, and daily operations' },
+  geography: { rail: 'Places', blurb: 'Countries, regions, and locations' },
+  'home-churches': { rail: 'Homes', blurb: 'Fellowships, leaders, and care' },
+  churches: { rail: 'Church', blurb: 'Congregations, members, and ministry' },
+  people: { rail: 'People', blurb: 'Directory, follow-up, and pastoral care' },
+  kca: { rail: 'KCA', blurb: 'Students, cohorts, and learning' },
+  mission: { rail: 'Mission', blurb: 'Crusades, souls, and partners' },
+  press: { rail: 'Press', blurb: 'Publications, manuscripts, and sales' },
+  events: { rail: 'Events', blurb: 'Gatherings and registrations' },
+  finance: { rail: 'Finance', blurb: 'Giving, payments, and ledgers' },
+  communications: { rail: 'Comms', blurb: 'Broadcasts, audiences, and delivery' },
+  reports: { rail: 'Reports', blurb: 'Analytics across the ministry' },
+  security: { rail: 'Security', blurb: 'Access, audit, and safeguarding' },
+  settings: { rail: 'Setup', blurb: 'Platform and ministry configuration' },
+};
+
+function menuItemsMatching(items: EnterpriseNavItem[], query: string): EnterpriseNavItem[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return items;
+  return items.flatMap((item) => {
+    const children = (item.children ?? []).filter((child) => child.label.toLowerCase().includes(needle));
+    if (item.label.toLowerCase().includes(needle)) return [{ ...item, children }];
+    return children;
+  });
+}
+
 function Sidebar({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
   const { access, requestedScope } = useAdminAccess();
@@ -498,21 +526,98 @@ function Sidebar({ screen }: { screen: AdminScreen }) {
   const exact = allItems.filter((item) => item.href === screen.route);
   const prefix = allItems.filter((item) => item.href !== '/admin' && screen.route.startsWith(`${item.href}/`)).sort((left, right) => right.href.length - left.href.length);
   const activeHref = (exact[0] ?? prefix[0])?.href;
-  return <aside className="admin-sidebar" id="admin-primary-navigation"><Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand /></Link><nav className="nav-list enterprise-nav" aria-label={t('admin.enterpriseNavAria', { defaultMessage: 'Enterprise administration navigation' })}>{groups.map((group) => {
-    const groupActive = flattenNavItems(group.items).some((item) => item.href === activeHref);
+  const routeGroupId = groups.find((group) => flattenNavItems(group.items).some((item) => item.href === activeHref))?.id ?? groups[0]?.id ?? '';
+  const [pickedGroupId, setPickedGroupId] = useState(routeGroupId);
+  const [menuQuery, setMenuQuery] = useState('');
+  useEffect(() => {
+    setPickedGroupId(routeGroupId);
+  }, [routeGroupId]);
+  const selected = groups.find((group) => group.id === pickedGroupId) ?? groups[0];
+  const searching = menuQuery.trim().length > 0;
+  const panels = searching
+    ? groups
+      .map((group) => ({ ...group, items: menuItemsMatching(group.items, menuQuery) }))
+      .filter((group) => group.items.length > 0)
+    : selected
+      ? [selected]
+      : [];
+  const selectedCopy = selected ? NAV_GROUP_COPY[selected.id] : undefined;
+  const renderLink = (group: EnterpriseNavGroup, item: EnterpriseNavItem, child = false) => {
+    const active = item.href === activeHref;
+    const itemLabel = adminChrome(t, item.label);
     const groupLabel = adminChrome(t, group.label);
-    const renderItem = (item: EnterpriseNavItem, child = false) => {
-      const active = item.href === activeHref;
-      const itemLabel = adminChrome(t, item.label);
-      return <Link className={`nav-item nav-subitem ${child ? 'nav-child' : ''} ${active ? 'active' : ''}`} href={item.href} key={`${group.id}-${item.href}`} aria-label={`${groupLabel}: ${itemLabel}`} aria-current={active ? 'page' : undefined}><span className="nav-icon nav-subicon" aria-hidden="true">{item.icon}</span><span className="nav-label">{itemLabel}</span></Link>;
-    };
-    return <details className={`enterprise-nav-group ${groupActive ? 'active' : ''}`} data-nav-group={group.id} data-nav-active={groupActive ? 'true' : 'false'} open={groupActive} key={group.id}>
-      <summary data-nav-group-summary={group.id} aria-label={`${groupLabel} menu`}><span className="nav-icon" aria-hidden="true">{group.icon}</span><span className="nav-group-label">{groupLabel}</span><span className="nav-chevron" aria-hidden="true">⌄</span></summary>
-      <div className="enterprise-nav-items">{group.items.map((item) => item.children?.length
-        ? <div className="nav-parent" key={`${group.id}-${item.href}-parent`}>{renderItem(item)}<div className="nav-children">{item.children.map((childItem) => renderItem(childItem, true))}</div></div>
-        : renderItem(item))}</div>
-    </details>;
-  })}</nav></aside>;
+    return (
+      <Link
+        className={`admin-menu-link${child ? ' is-child' : ''}${active ? ' active' : ''}`}
+        href={item.href}
+        key={`${group.id}-${item.href}`}
+        aria-label={`${groupLabel}: ${itemLabel}`}
+        aria-current={active ? 'page' : undefined}
+      >
+        <span className="admin-menu-icon" aria-hidden="true">{item.icon}</span>
+        <span>{itemLabel}</span>
+        {item.children?.length && !child ? <span className="admin-menu-chevron" aria-hidden="true">›</span> : null}
+      </Link>
+    );
+  };
+  return (
+    <aside className="admin-sidebar admin-sidebar-split" id="admin-primary-navigation">
+      <nav className="admin-rail" aria-label={t('admin.enterpriseNavAria', { defaultMessage: 'Enterprise administration navigation' })}>
+        <Link href="/admin" className="sidebar-brand-link" aria-label="Family House Connect admin home"><Brand dark={false} /></Link>
+        {groups.map((group) => {
+          const copy = NAV_GROUP_COPY[group.id];
+          const railLabel = copy?.rail ?? group.label;
+          const pressed = group.id === selected?.id && !searching;
+          return (
+            <button
+              type="button"
+              className={pressed ? 'active' : ''}
+              key={group.id}
+              aria-pressed={pressed}
+              onClick={() => {
+                setPickedGroupId(group.id);
+                setMenuQuery('');
+              }}
+            >
+              <span className="rail-icon" aria-hidden="true">{group.icon}</span>
+              <span className="rail-label">{adminChrome(t, railLabel)}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="admin-menu-panel">
+        <header className="admin-menu-heading">
+          <div>
+            <h2>{selected ? adminChrome(t, selected.label) : t('admin.menu', { defaultMessage: 'Menu' })}</h2>
+            <span>{t('admin.adminWorkspace', { defaultMessage: 'Admin' })}</span>
+          </div>
+          <p>{searching ? t('admin.searchAllMenus', { defaultMessage: 'Matches across every menu' }) : (selectedCopy?.blurb ?? t('admin.openASection', { defaultMessage: 'Choose a section' }))}</p>
+        </header>
+        <label className="admin-menu-search">
+          <span aria-hidden="true">⌕</span>
+          <input
+            value={menuQuery}
+            onChange={(event) => setMenuQuery(event.target.value)}
+            placeholder={t('admin.searchAllMenusPlaceholder', { defaultMessage: 'Search all menus' })}
+            aria-label={t('admin.searchAllMenusPlaceholder', { defaultMessage: 'Search all menus' })}
+          />
+        </label>
+        <div className="admin-menu-scroll">
+          {panels.length === 0 ? <p className="admin-menu-empty">{t('admin.noMenuMatches', { defaultMessage: 'No menu matches that search.' })}</p> : panels.map((group) => (
+            <nav key={group.id} aria-label={adminChrome(t, group.label)}>
+              {searching ? <h3>{adminChrome(t, group.label)}</h3> : null}
+              {group.items.map((item) => (
+                <div className="admin-menu-block" key={`${group.id}-${item.href}`}>
+                  {renderLink(group, item)}
+                  {item.children?.length ? item.children.map((child) => renderLink(group, child, true)) : null}
+                </div>
+              ))}
+            </nav>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
 }
 
 function Topbar({ screen }: { screen: AdminScreen }) {
@@ -610,7 +715,6 @@ function DashboardView({ screen, requestedScope }: { screen: AdminScreen; reques
       onRetry={dashboard.retry}
       preset={dashboard.preset}
       onPresetChange={dashboard.setPreset}
-      showModules
     >
       <DemoDatasetBanner />
       <LinkedMetricCards screenId={screen.id} metrics={dashboard.metrics} />

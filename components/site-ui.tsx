@@ -2055,6 +2055,11 @@ function Detail({ route }: { route: SiteRoute }) {
             Family House communities and ministry initiatives create places of worship, discipleship, prayer, and care. Whether you join
             onsite or online, you will find biblical teaching, warm fellowship, and clear next steps for your faith journey.
           </p>
+          {card.images && card.images.length > 0 ? (
+            <div className="crusade-gallery">
+              {card.images.map((src) => <img key={src} src={src} alt="" />)}
+            </div>
+          ) : null}
           <div className="info-grid">
             {[
               ['Location', card.body],

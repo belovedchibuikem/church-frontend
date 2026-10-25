@@ -98,10 +98,16 @@ export type PublicPressPublication = {
 export type PublicCrusade = {
   id: string;
   name: string;
+  theme?: string | null;
+  description?: string | null;
+  crusade_type?: string | null;
+  focus?: string | null;
+  venue?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
   location?: PublicLocation | null;
   image_url?: string | null;
+  images?: string[] | null;
 };
 
 export type PublicMissionLocation = {
@@ -273,15 +279,19 @@ export function crusadeToCard(crusade: PublicCrusade): ContentCard {
   const ends = crusade.ends_at ? new Date(crusade.ends_at) : null;
   const past = ends && !Number.isNaN(ends.getTime()) && ends.getTime() < Date.now();
   const upcoming = crusade.starts_at ? new Date(crusade.starts_at).getTime() > Date.now() : !past;
+  const images = (crusade.images ?? []).filter((item): item is string => Boolean(item));
+  const image = crusade.image_url ?? images[0];
+  const place = crusade.venue || locationLabel(crusade.location);
   return {
     title: crusade.name,
-    body: `${locationLabel(crusade.location)} · ${formatWhen(crusade.starts_at, crusade.ends_at)}`,
+    body: [crusade.crusade_type, crusade.focus, place, formatWhen(crusade.starts_at, crusade.ends_at), crusade.description].filter(Boolean).join(' · '),
     href: `/mission/crusades/${crusade.id}`,
-    meta: crusade.location?.country?.name ?? 'Mission',
+    meta: crusade.location?.country?.name ?? crusade.crusade_type ?? 'Mission',
     status: past ? 'Completed' : upcoming ? 'Upcoming' : 'In Progress',
     icon: '🌍',
     action: past ? 'View Impact' : 'Support',
-    image: crusade.image_url ?? undefined,
+    image,
+    images: images.length > 0 ? images : image ? [image] : undefined,
   };
 }
 
@@ -467,7 +477,7 @@ export async function loadCrusades(query?: Record<string, string | number | unde
   return withFixtureFallback(
     async () => {
       const data = await publicRequest<unknown>('mission/crusades', {
-        query: { per_page: query?.per_page ?? 50, ...query },
+        query: { status: 'all', sort: '-starts_at', per_page: query?.per_page ?? 50, ...query },
       });
       return asList<PublicCrusade>(data).map(crusadeToCard);
     },

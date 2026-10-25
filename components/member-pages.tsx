@@ -6,7 +6,7 @@ import { useLocale } from '@/components/locale-provider';
 import type { SiteRoute } from '@/lib/site-routes';
 import type { ContentCard, EventItem, Metric } from '@/lib/site-content';
 import { journeySteps, memberActivity, memberEvents, memberGlance, quickActions, sermons as fixtureSermons } from '@/lib/site-content';
-import { designFixturesEnabled, loadChurch, loadEvents, loadSermons } from '@/lib/site-api';
+import { designFixturesEnabled, loadChurch, loadCrusades, loadEvents, loadSermons } from '@/lib/site-api';
 import {
   displayNameFromUser,
   fetchCurrentUser,
@@ -1996,15 +1996,17 @@ export function LiveMissionMemberPage({ route }: { route: SiteRoute }) {
   const [error, setError] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<Array<{ id: string; status: string }>>([]);
   const [supportRequests, setSupportRequests] = useState<UserMissionSupportRequest[]>([]);
+  const [crusades, setCrusades] = useState<ContentCard[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void Promise.allSettled([fetchMissionInvitations(), fetchMissionSupportRequests()])
-      .then(([inviteResult, supportResult]) => {
+    void Promise.allSettled([fetchMissionInvitations(), fetchMissionSupportRequests(), loadCrusades({ per_page: 12 })])
+      .then(([inviteResult, supportResult, crusadeResult]) => {
         if (cancelled) return;
         if (inviteResult.status === 'fulfilled') setInvitations(inviteResult.value);
         if (supportResult.status === 'fulfilled') setSupportRequests(supportResult.value);
+        if (crusadeResult.status === 'fulfilled') setCrusades(crusadeResult.value.data);
         if (inviteResult.status === 'rejected' && supportResult.status === 'rejected') {
           setError(t('member.unableToLoadMission', { defaultMessage: 'Unable to load your mission requests.' }));
         } else {
@@ -2027,7 +2029,7 @@ export function LiveMissionMemberPage({ route }: { route: SiteRoute }) {
       <MemberHero
         action={{ href: '/mission/crusades/invite', label: t('member.inviteCrusade', { defaultMessage: 'Invite a crusade' }) }}
         body={t('member.missionMemberBody', {
-          defaultMessage: 'Track crusade invitations and support requests you submitted. Soul follow-up and team assignment stay on the admin and worker surfaces.',
+          defaultMessage: 'See published crusades and the pictures from each programme, and track invitations and support requests you submitted.',
         })}
         eyebrow={t('member.missionEyebrow', { defaultMessage: 'MISSION' })}
         secondary={{ href: '/mission/support', label: t('member.supportMission', { defaultMessage: 'Support a mission' }) }}
@@ -2035,6 +2037,27 @@ export function LiveMissionMemberPage({ route }: { route: SiteRoute }) {
       />
       {loading ? <p className="panel">{t('member.loadingMission', { defaultMessage: 'Loading mission requests…' })}</p> : null}
       {error ? <p className="panel">{error}</p> : null}
+      <section className="panel table-panel">
+        <h3>{t('member.publishedCrusades', { defaultMessage: 'Published crusades' })}</h3>
+        {crusades.length === 0 && !loading ? (
+          <p>{t('member.noPublishedCrusades', { defaultMessage: 'No published crusades yet.' })}</p>
+        ) : null}
+        {crusades.map((card) => (
+          <div className="list-row rich-row" key={card.href}>
+            <span className="thumb">
+              {card.image ? <img src={card.image} alt="" /> : '🌍'}
+            </span>
+            <div>
+              <b>{card.title}</b>
+              <small>{card.body}</small>
+            </div>
+            <MemberStatus toneFrom={card.status ?? 'published'}>{card.status ?? t('member.published', { defaultMessage: 'Published' })}</MemberStatus>
+            <Link className="ghost-link" href={card.href}>
+              {t('member.viewCrusade', { defaultMessage: 'View' })}
+            </Link>
+          </div>
+        ))}
+      </section>
       {showInvites ? (
         <section className="panel table-panel">
           <h3>{t('member.crusadeInvitations', { defaultMessage: 'Crusade invitations' })}</h3>

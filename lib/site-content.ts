@@ -1,4 +1,4 @@
-export type ContentCard = { title: string; body: string; href: string; icon?: string; meta?: string; status?: string; image?: string; action?: string };
+export type ContentCard = { title: string; body: string; href: string; icon?: string; meta?: string; status?: string; image?: string; images?: string[]; action?: string };
 export type Metric = { value: string; label: string; change?: string };
 export type FaqItem = { q: string; a: string };
 export type FormField = {

@@ -40,6 +40,37 @@ import {
 import { useAdminDashboard } from '../lib/use-admin-dashboard';
 import { DashboardQuickLinks, DashboardShell, LinkedMetricCards } from './admin-dashboard-chrome';
 import { EntitySearchSelect } from './entity-search-select';
+import {
+  createLocation,
+  listCountriesPage,
+  listLocationsPage,
+  organizationErrorMessage,
+  type AdminCountry,
+  type AdminLocation,
+} from '../lib/admin-organization-api';
+import { platformErrorMessage, uploadMediaAttachment } from '../lib/admin-platform-api';
+
+const CRUSADE_TYPES = [
+  'Open Air Crusade',
+  'Indoor Crusade',
+  'City Outreach',
+  'Campus Outreach',
+  'Healing Crusade',
+  'Street Evangelism',
+  'Conference',
+];
+
+const CRUSADE_FOCUSES = [
+  'Salvation',
+  'Healing',
+  'Salvation & Healing',
+  'Discipleship',
+  'Youth',
+  'Family',
+  'Community Care',
+];
+
+const CRUSADE_WIZARD_STEPS = ['Basics', 'Review'];
 
 function isPublicId(value: string | undefined | null): boolean {
   return Boolean(value && /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(value.trim()));
@@ -736,35 +767,123 @@ function CrusadeDetail({ screen }: { screen: AdminScreen }) {
 
 function MissionWizard({ screen }: { screen: AdminScreen }) {
   const { t } = useLocale();
-  const details = Object.entries(screen.details ?? {});
-  const steps = screen.tabs ?? [];
-  const wizard = useAdminWizardStep(steps);
+  const wizard = useAdminWizardStep(CRUSADE_WIZARD_STEPS);
+  const live = shouldUseOperationsLiveData();
+  const [locations, setLocations] = useState<AdminLocation[]>([]);
+  const [countries, setCountries] = useState<AdminCountry[]>([]);
+  const [catalogReady, setCatalogReady] = useState(!live);
+  const [catalogNote, setCatalogNote] = useState<string | null>(live ? 'Loading places…' : null);
+  const [name, setName] = useState('');
+  const [theme, setTheme] = useState('');
+  const [crusadeType, setCrusadeType] = useState('');
+  const [focus, setFocus] = useState('');
+  const [locationId, setLocationId] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [countryId, setCountryId] = useState('');
+  const [venue, setVenue] = useState('');
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
+  const [description, setDescription] = useState('');
+  const [concluded, setConcluded] = useState(true);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const live = shouldUseOperationsLiveData();
-  const visibleDetails = wizard.currentStep === 0
-    ? details
-    : wizard.currentStep === 1
-      ? details.slice(0, Math.ceil(details.length / 2))
-      : wizard.currentStep === 2
-        ? details.slice(Math.ceil(details.length / 2))
-        : details;
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    void Promise.all([
+      listLocationsPage({ perPage: 100, sort: 'name' }),
+      listCountriesPage({ perPage: 100, sort: 'name' }),
+    ]).then(([locationPage, countryPage]) => {
+      if (cancelled) return;
+      setLocations(locationPage.items);
+      setCountries(countryPage.items);
+      setCatalogReady(true);
+      setCountryId((current) => current || countryPage.items[0]?.id || '');
+      setCatalogNote(
+        locationPage.items.length === 0
+          ? 'No saved places yet. Choose a country and type the venue — the crusade does not need a place uploaded first.'
+          : `${locationPage.items.length} saved place${locationPage.items.length === 1 ? '' : 's'} loaded. If yours is missing, type the venue below.`,
+      );
+    }).catch((err) => {
+      if (cancelled) return;
+      setCatalogReady(true);
+      setCatalogNote(organizationErrorMessage(err) || 'Saved places could not be loaded. You can still type the venue.');
+    });
+    return () => { cancelled = true; };
+  }, [live]);
+
+  const filteredLocations = locations.filter((location) => {
+    const needle = locationFilter.trim().toLowerCase();
+    if (!needle) return true;
+    return `${location.name} ${location.address?.locality ?? ''} ${location.country?.name ?? ''}`.toLowerCase().includes(needle);
+  });
+  const selectedLocation = locations.find((location) => location.id === locationId);
+  const selectedCountry = countries.find((country) => country.id === countryId);
 
   async function onFinish() {
-    if (!live) return;
-    const form = document.querySelector('.mission-wizard') as HTMLElement | null;
-    const nameInput = form?.querySelector<HTMLInputElement>('input[name="name"]');
-    const name = nameInput?.value.trim() || form?.querySelector<HTMLInputElement>('input')?.value.trim() || '';
-    if (!name || name.toLowerCase().includes('enter crusade')) {
+    if (!live || createdId) return;
+    if (!name.trim()) {
       setError('Enter a crusade name before creating the record.');
+      wizard.goToStep(0);
+      return;
+    }
+    if (!crusadeType || !focus) {
+      setError('Choose a crusade type and a focus. Those lists are ready — nothing needs to be uploaded first.');
+      wizard.goToStep(0);
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const created = await createCrusade({ name }, defaultOpsScope(screen.scope));
+      let resolvedLocationId = locationId || null;
+      if (!resolvedLocationId && venue.trim() && countryId) {
+        try {
+          const createdLocation = await createLocation({
+            country_id: countryId,
+            name: venue.trim(),
+            timezone: selectedCountry?.default_timezone || 'Africa/Lagos',
+            locality: venue.trim(),
+          });
+          resolvedLocationId = createdLocation.id;
+        } catch (locationError) {
+          setCatalogNote(`${organizationErrorMessage(locationError)} The crusade will still be saved with the venue name.`);
+        }
+      }
+      const created = await createCrusade({
+        name: name.trim(),
+        theme: theme.trim() || null,
+        crusade_type: crusadeType,
+        focus,
+        venue: venue.trim() || null,
+        description: description.trim() || null,
+        location_id: resolvedLocationId,
+        timezone: selectedCountry?.default_timezone || selectedLocation?.timezone || 'Africa/Lagos',
+        starts_at: startsAt || null,
+        ends_at: endsAt || null,
+        publish_completed: concluded,
+      }, defaultOpsScope(screen.scope));
+      const photoErrors: string[] = [];
+      for (let index = 0; index < photos.length; index += 1) {
+        const payload = new FormData();
+        payload.append('file', photos[index]);
+        payload.append('attachable_type', 'crusade');
+        payload.append('attachable_id', created.id);
+        payload.append('role', index === 0 ? 'cover' : 'gallery');
+        payload.append('purpose', 'media.public');
+        payload.append('classification', 'public');
+        try {
+          await uploadMediaAttachment(payload);
+        } catch (photoErrorValue) {
+          photoErrors.push(platformErrorMessage(photoErrorValue, `Picture ${index + 1} was not attached.`));
+        }
+      }
       setCreatedId(created.id);
+      if (photoErrors.length > 0) {
+        setError(`Crusade saved. ${photoErrors[0]}`);
+      }
     } catch (err) {
       setError(operationsErrorMessage(err, 'Unable to create crusade.'));
     } finally {
@@ -772,28 +891,120 @@ function MissionWizard({ screen }: { screen: AdminScreen }) {
     }
   }
 
+  const reviewRows: Array<[string, string]> = [
+    ['Crusade name', name || '—'],
+    ['Theme', theme || '—'],
+    ['Crusade type', crusadeType || '—'],
+    ['Focus', focus || '—'],
+    ['Location', selectedLocation?.name || 'New place from the venue'],
+    ['Venue', venue || '—'],
+    ['Country', selectedCountry?.name || '—'],
+    ['Starts', startsAt || '—'],
+    ['Ends', endsAt || '—'],
+    ['Pictures', photos.length ? `${photos.length} selected` : 'None'],
+    ['Publish', concluded ? 'Publish as a concluded crusade' : 'Save as a draft'],
+  ];
+
   return (
     <div className="mission-wizard" data-admin-wizard="true">
-      <AdminWizardStepper steps={steps} currentStep={wizard.currentStep} className="mission-stepper" itemClassName="" activeClassName="active" />
+      <AdminWizardStepper steps={CRUSADE_WIZARD_STEPS} currentStep={wizard.currentStep} className="mission-stepper" itemClassName="" activeClassName="active" />
       <section className="mission-form-card">
         <header><h2>{wizard.currentLabel}</h2><p>{screen.subtitle}</p></header>
+        {catalogNote ? <p className="field-help" role="status">{catalogNote}</p> : null}
         {error ? <p className="field-help" role="alert" style={{ color: '#dc2626' }}>{error}</p> : null}
-        {createdId ? <p role="status">Created crusade {createdId}.</p> : null}
-        {wizard.currentStep < steps.length - 1 ? (
+        {createdId ? <p role="status">Crusade saved{concluded ? ' and published' : ''}. Reference {createdId}.</p> : null}
+        {wizard.currentStep === 0 ? (
           <div className="mission-form-grid">
-            {visibleDetails.map(([label, value], index) => (
-              <label className={index === visibleDetails.length - 1 || label === 'Description' ? 'mission-field-wide' : ''} key={label}>
-                <span>{label}{index < 8 && <em aria-hidden="true">*</em>}</span>
-                {label === 'Description' ? <textarea name={label === 'Crusade Name' ? 'name' : undefined} required={index < 8} defaultValue="" placeholder={value} /> : /Date/.test(label) ? <input required={index < 8} type="date" defaultValue="" /> : /Location|Type|Focus/.test(label) ? <select required={index < 8}><option value="">{value}</option></select> : <input name={label === 'Crusade Name' ? 'name' : undefined} required={index < 8} defaultValue="" placeholder={value} />}
-              </label>
-            ))}
+            <label>
+              <span>Crusade name<em aria-hidden="true">*</em></span>
+              <input name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Enter crusade name" required />
+            </label>
+            <label>
+              <span>Theme</span>
+              <input value={theme} onChange={(event) => setTheme(event.target.value)} placeholder="Enter theme" />
+            </label>
+            <label>
+              <span>Crusade type<em aria-hidden="true">*</em></span>
+              <select value={crusadeType} onChange={(event) => setCrusadeType(event.target.value)} required>
+                <option value="">Select type</option>
+                {CRUSADE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Focus<em aria-hidden="true">*</em></span>
+              <select value={focus} onChange={(event) => setFocus(event.target.value)} required>
+                <option value="">Select focus</option>
+                {CRUSADE_FOCUSES.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Saved location</span>
+              <input value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} placeholder="Filter saved places" />
+            </label>
+            <label>
+              <span>Location</span>
+              <select value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+                <option value="">{!catalogReady ? 'Loading places…' : filteredLocations.length === 0 ? 'No saved place matches' : 'Select a saved location'}</option>
+                {filteredLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}{location.country?.name ? ` · ${location.country.name}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Venue</span>
+              <input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Ground, hall, or city" />
+            </label>
+            <label>
+              <span>Country for a new place</span>
+              <select value={countryId} onChange={(event) => setCountryId(event.target.value)} disabled={countries.length === 0}>
+                {countries.length === 0 ? <option value="">{catalogReady ? 'No countries available' : 'Countries are still loading'}</option> : null}
+                {countries.map((country) => <option key={country.id} value={country.id}>{country.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Start date</span>
+              <input type="date" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+            </label>
+            <label>
+              <span>End date</span>
+              <input type="date" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
+            </label>
+            <label className="mission-field-wide">
+              <span>Description</span>
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What happened at the programme" />
+            </label>
+            <label className="mission-field-wide">
+              <span>Pictures from the programme</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                onChange={(event) => setPhotos(Array.from(event.target.files ?? []).slice(0, 12))}
+              />
+            </label>
+            <label className="mission-field-wide">
+              <span>Already concluded</span>
+              <select value={concluded ? 'yes' : 'no'} onChange={(event) => setConcluded(event.target.value === 'yes')}>
+                <option value="yes">Yes — publish this concluded crusade</option>
+                <option value="no">No — save it as a draft</option>
+              </select>
+            </label>
           </div>
         ) : (
           <dl className="wizard-review-summary">
-            {details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+            {reviewRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
         )}
-        <AdminWizardFooter wizard={wizard} nextLabel={screen.action} finishLabel={busy ? t('common.saving', { defaultMessage: 'Saving…' }) : t('mission.createCrusade', { defaultMessage: 'Create crusade' })} primaryClassName="mission-primary-button" secondaryClassName="mission-secondary-button" onFinish={() => void onFinish()} />
+        <AdminWizardFooter
+          wizard={wizard}
+          nextLabel="Review"
+          finishLabel={busy ? t('common.saving', { defaultMessage: 'Saving…' }) : t('mission.createCrusade', { defaultMessage: 'Create crusade' })}
+          primaryClassName="mission-primary-button"
+          secondaryClassName="mission-secondary-button"
+          onFinish={() => void onFinish()}
+        />
       </section>
     </div>
   );

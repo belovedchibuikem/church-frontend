@@ -65,7 +65,7 @@ export const missionScreens: AdminScreen[] = [
   },
   {
     id: 'I-04', batch: 'I', route: '/admin/mission/crusades/create', title: 'Create Crusade',
-    subtitle: 'Step 1 of 4 · Basic information.', kind: 'wizard',
+    subtitle: 'Record the crusade, where it happened, and the pictures from the programme.', kind: 'wizard',
     permission: 'mission.crusade.create', scope: 'assigned', nav: 'crusades', action: 'Next: Planning',
     tabs: ['Basics', 'Planning', 'Teams', 'Review'],
     details: {
